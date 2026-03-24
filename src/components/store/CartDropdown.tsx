@@ -67,8 +67,9 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
                 </button>
                 <span className="text-xs font-medium w-5 text-center">{item.quantity}</span>
                 <button
-                  onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                  className="w-5 h-5 flex items-center justify-center rounded border text-muted-foreground hover:bg-muted/50 transition-colors"
+                  onClick={() => updateQuantity(item.product.id, Math.min(item.product.stock ?? Infinity, item.quantity + 1))}
+                  disabled={item.product.stock !== undefined && item.quantity >= item.product.stock}
+                  className="w-5 h-5 flex items-center justify-center rounded border text-muted-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
                 >
                   <Plus className="h-2.5 w-2.5" />
                 </button>
