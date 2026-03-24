@@ -131,6 +131,7 @@ export default function HomePage() {
             </Link>
           </div>
         ))}
+      </section>
 
       {/* Benefits */}
       <section className="bg-secondary">
