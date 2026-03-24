@@ -32,14 +32,14 @@ export default function HomePage() {
 
   useEffect(() => { fetchProducts(); }, []);
 
-  // Group products by category, pick up to 3 categories with products
+  // Group products by category
   const categoryMap = new Map<string, Product[]>();
   products.forEach((p) => {
     if (!p.category) return;
     if (!categoryMap.has(p.category)) categoryMap.set(p.category, []);
     categoryMap.get(p.category)!.push(p);
   });
-  const featuredCategories = [...categoryMap.entries()].slice(0, 3);
+  const allCategories = [...categoryMap.entries()];
 
   return (
     <>
@@ -72,7 +72,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured by category */}
+      {/* Products sections */}
       <section className="container mx-auto px-4 py-20 space-y-16">
         {loading && <Loader text="Cargando productos..." />}
         {error && <ErrorState message={error} onRetry={fetchProducts} />}
@@ -80,13 +80,37 @@ export default function HomePage() {
           <EmptyState title="Sin productos aún" description="El catálogo se poblará cuando haya productos disponibles en la API." />
         )}
 
-        {!loading && !error && featuredCategories.map(([category, catProducts]) => (
+        {/* Productos destacados — all products together */}
+        {!loading && !error && products.length > 0 && (
+          <div>
+            <div className="flex items-end justify-between mb-8">
+              <h2 className="text-3xl font-bold text-foreground">Productos destacados</h2>
+              <Link
+                to="/products"
+                className="text-sm font-medium text-primary hover:underline hidden md:block"
+              >
+                Ver todos →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {products.slice(0, 8).map((p, i) => (
+                <ProductCard key={p.id} product={p} index={i} />
+              ))}
+            </div>
+            <Link
+              to="/products"
+              className="mt-4 text-sm font-medium text-primary hover:underline md:hidden block text-center"
+            >
+              Ver todos →
+            </Link>
+          </div>
+        )}
+
+        {/* Sections per category */}
+        {!loading && !error && allCategories.map(([category, catProducts]) => (
           <div key={category}>
             <div className="flex items-end justify-between mb-8">
-              <div>
-                <h2 className="text-3xl font-bold text-foreground">Productos destacados</h2>
-                <p className="text-primary mt-1 text-sm font-medium">{category}</p>
-              </div>
+              <h2 className="text-3xl font-bold text-foreground">{category}</h2>
               <Link
                 to={`/products?category=${encodeURIComponent(category)}`}
                 className="text-sm font-medium text-primary hover:underline hidden md:block"
@@ -107,7 +131,6 @@ export default function HomePage() {
             </Link>
           </div>
         ))}
-      </section>
 
       {/* Benefits */}
       <section className="bg-secondary">
