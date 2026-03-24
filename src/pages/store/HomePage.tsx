@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Zap, Shield, Globe, TrendingUp } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
-import { Loader, ErrorState } from "@/components/shared/Loader";
+import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
+import heroBg from "@/assets/hero-bg.jpg";
+import bannerCta from "@/assets/banner-cta.jpg";
 
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
@@ -33,7 +35,9 @@ export default function HomePage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative gradient-hero overflow-hidden">
+      <section className="relative overflow-hidden">
+        <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" width={1920} height={1080} />
+        <div className="absolute inset-0 bg-gradient-to-r from-secondary/90 to-secondary/60" />
         <div className="container mx-auto px-4 py-24 lg:py-36 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -41,24 +45,21 @@ export default function HomePage() {
             transition={{ duration: 0.7 }}
             className="max-w-2xl"
           >
-            <h1 className="text-4xl lg:text-6xl font-bold text-white leading-tight mb-6">
+            <h1 className="text-4xl lg:text-6xl font-bold text-secondary-foreground leading-tight mb-6">
               Distribución digital<br />
               <span className="text-gradient">de alto rendimiento</span>
             </h1>
-            <p className="text-lg text-white/70 mb-8 max-w-lg">
+            <p className="text-lg text-secondary-foreground/70 mb-8 max-w-lg">
               Accede a productos digitales premium con la confianza y tecnología de Tradexpar.
             </p>
             <Link
               to="/products"
-              className="inline-flex items-center gap-2 px-8 py-4 gradient-celeste text-white font-semibold rounded-2xl hover:opacity-90 transition-opacity shadow-brand"
+              className="inline-flex items-center gap-2 px-8 py-4 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 transition-opacity shadow-brand"
             >
               Explorar productos
               <ArrowRight className="h-5 w-5" />
             </Link>
           </motion.div>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center opacity-10 text-white text-xl">
-          [imagen hero Tradexpar]
         </div>
       </section>
 
@@ -76,7 +77,10 @@ export default function HomePage() {
 
         {loading && <Loader text="Cargando productos..." />}
         {error && <ErrorState message={error} onRetry={fetchProducts} />}
-        {!loading && !error && (
+        {!loading && !error && products.length === 0 && (
+          <EmptyState title="Sin productos aún" description="El catálogo se poblará cuando haya productos disponibles en la API." />
+        )}
+        {!loading && !error && products.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {products.slice(0, 8).map((p, i) => (
               <ProductCard key={p.id} product={p} index={i} />
@@ -102,7 +106,7 @@ export default function HomePage() {
                 className="text-center"
               >
                 <div className="w-14 h-14 rounded-2xl gradient-celeste flex items-center justify-center mx-auto mb-4">
-                  <b.icon className="h-6 w-6 text-white" />
+                  <b.icon className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <h3 className="font-semibold text-secondary-foreground mb-2">{b.title}</h3>
                 <p className="text-sm text-secondary-foreground/70">{b.desc}</p>
@@ -114,20 +118,19 @@ export default function HomePage() {
 
       {/* CTA Banner */}
       <section className="container mx-auto px-4 py-20">
-        <div className="gradient-hero rounded-3xl p-12 text-center relative overflow-hidden">
-          <div className="absolute inset-0 flex items-center justify-center opacity-5 text-white text-lg">
-            [imagen banner ecommerce]
-          </div>
-          <div className="relative z-10">
-            <h2 className="text-3xl font-bold text-white mb-4">
+        <div className="rounded-3xl overflow-hidden relative">
+          <img src={bannerCta} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" width={1920} height={640} />
+          <div className="absolute inset-0 bg-secondary/70" />
+          <div className="relative z-10 p-12 text-center">
+            <h2 className="text-3xl font-bold text-secondary-foreground mb-4">
               Empieza a distribuir hoy
             </h2>
-            <p className="text-white/70 mb-8 max-w-md mx-auto">
+            <p className="text-secondary-foreground/70 mb-8 max-w-md mx-auto">
               Explora nuestro catálogo completo de productos digitales.
             </p>
             <Link
               to="/products"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-secondary font-semibold rounded-2xl hover:bg-white/90 transition-colors"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-card text-foreground font-semibold rounded-2xl hover:bg-card/90 transition-colors"
             >
               Ver catálogo
               <ArrowRight className="h-5 w-5" />

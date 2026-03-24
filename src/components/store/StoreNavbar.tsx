@@ -3,6 +3,7 @@ import { ShoppingCart, Menu, X } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import logoIcon from "@/assets/logo-icon.png";
 
 export function StoreNavbar() {
   const { totalItems } = useCart();
@@ -18,7 +19,7 @@ export function StoreNavbar() {
     <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-xl border-b">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-celeste" />
+          <img src={logoIcon} alt="Tradexpar" className="w-8 h-8" width={32} height={32} />
           <span className="text-xl font-bold tracking-tight text-foreground">
             TRADE<span className="text-gradient">XPAR</span>
           </span>
@@ -51,10 +52,7 @@ export function StoreNavbar() {
             )}
           </Link>
 
-          <button
-            className="md:hidden p-2"
-            onClick={() => setMobileOpen(!mobileOpen)}
-          >
+          <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>

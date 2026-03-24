@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import logoIcon from "@/assets/logo-icon.png";
 
 export function StoreFooter() {
   return (
@@ -7,7 +8,7 @@ export function StoreFooter() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-lg gradient-celeste" />
+              <img src={logoIcon} alt="Tradexpar" className="w-7 h-7" width={28} height={28} />
               <span className="text-lg font-bold tracking-tight">TRADEXPAR</span>
             </div>
             <p className="text-sm text-secondary-foreground/70 max-w-xs">

@@ -1,5 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tan-trout-550053.hostingersite.com";
-const API_KEY = import.meta.env.VITE_API_KEY || "";
+const API_KEY = import.meta.env.VITE_API_KEY || "neura_mdUMuZ51HJq77ROG2WpWo1qhcdkDkcMi";
 
 const headers: HeadersInit = {
   "x-api-key": API_KEY,
@@ -22,7 +22,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 import type { Product, Order, CreateOrderPayload, PaymentResponse, PaymentStatus } from "@/types";
 
 export const api = {
-  getProducts: () => apiFetch<Product[]>("/api/public/products"),
+  getProducts: async (): Promise<Product[]> => {
+    const data = await apiFetch<{ products: Product[] }>("/api/public/products");
+    return data.products;
+  },
 
   createOrder: (data: CreateOrderPayload) =>
     apiFetch<Order>("/api/public/orders", {
