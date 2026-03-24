@@ -7,7 +7,7 @@ import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
 import { HeroProductSlideshow } from "@/components/store/HeroProductSlideshow";
-import bannerCta from "@/assets/banner-cta.jpg";
+
 
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
