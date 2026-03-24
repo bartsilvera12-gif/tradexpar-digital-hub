@@ -1,11 +1,12 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, Menu, X, Search, ChevronDown } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
 import logoIcon from "@/assets/logo-icon.png";
+import { CartDropdown } from "@/components/store/CartDropdown";
 
 export function StoreNavbar() {
   const { totalItems } = useCart();
