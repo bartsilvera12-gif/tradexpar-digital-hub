@@ -60,7 +60,7 @@ export default function CartPage() {
                 </button>
               </div>
               <p className="font-semibold text-foreground w-24 text-right">
-                ${(item.product.price * item.quantity).toLocaleString("es-PY")}
+                ₲{(item.product.price * item.quantity).toLocaleString("es-PY")}
               </p>
               <button onClick={() => removeItem(item.product.id)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
                 <Trash2 className="h-4 w-4" />
