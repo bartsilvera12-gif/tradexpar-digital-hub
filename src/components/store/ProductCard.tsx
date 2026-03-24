@@ -21,8 +21,8 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     >
       <Link to={`/products/${product.id}`} className="block">
         <div className="aspect-square bg-muted/30 flex items-center justify-center p-6 relative overflow-hidden">
-          {product.image ? (
-            <img src={product.image} alt={product.name} className="w-full h-full object-contain" loading="lazy" />
+          {(product.images?.[0] || product.image) ? (
+            <img src={product.images?.[0] || product.image} alt={product.name} className="w-full h-full object-contain" loading="lazy" />
           ) : (
             <div className="text-sm text-muted-foreground font-medium text-center">
               Sin imagen

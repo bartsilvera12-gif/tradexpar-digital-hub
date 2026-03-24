@@ -9,7 +9,7 @@ interface Props {
 export function HeroProductSlideshow({ products }: Props) {
   const [index, setIndex] = useState(0);
 
-  const validProducts = products.filter((p) => p.image);
+  const validProducts = products.filter((p) => (p.images && p.images.length > 0) || p.image);
 
   const advance = useCallback(() => {
     if (validProducts.length === 0) return;
@@ -30,7 +30,7 @@ export function HeroProductSlideshow({ products }: Props) {
     <AnimatePresence mode="wait">
       <motion.img
         key={current.id}
-        src={current.image!}
+        src={current.images?.[0] || current.image!}
         alt={current.name}
         initial={{ opacity: 0, scale: 1.08 }}
         animate={{ opacity: 1, scale: 1 }}
