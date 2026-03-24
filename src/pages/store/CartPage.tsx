@@ -75,7 +75,7 @@ export default function CartPage() {
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="text-foreground">${totalPrice.toLocaleString("es-PY")}</span>
+              <span className="text-foreground">₲{totalPrice.toLocaleString("es-PY")}</span>
             </div>
             <div className="border-t my-4" />
             <div className="flex justify-between font-semibold text-lg">
