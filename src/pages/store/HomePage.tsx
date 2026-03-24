@@ -6,7 +6,7 @@ import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
-import heroBg from "@/assets/hero-bg.jpg";
+import { HeroProductSlideshow } from "@/components/store/HeroProductSlideshow";
 import bannerCta from "@/assets/banner-cta.jpg";
 
 const benefits = [
@@ -35,9 +35,9 @@ export default function HomePage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" width={1920} height={1080} />
-        <div className="absolute inset-0 bg-gradient-to-r from-secondary/90 to-secondary/60" />
+      <section className="relative overflow-hidden min-h-[500px]">
+        <HeroProductSlideshow products={products} />
+        <div className="absolute inset-0 bg-gradient-to-r from-secondary/95 to-secondary/70" />
         <div className="container mx-auto px-4 py-24 lg:py-36 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
