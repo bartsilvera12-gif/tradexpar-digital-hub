@@ -1,19 +1,6 @@
-import { Search } from "lucide-react";
-import { useState } from "react";
-
-const mockUsers = [
-  { id: "1", name: "Juan Pérez", email: "juan@mail.com", role: "Admin", created_at: "2026-01-15" },
-  { id: "2", name: "María López", email: "maria@mail.com", role: "Usuario", created_at: "2026-02-10" },
-  { id: "3", name: "Carlos Ruiz", email: "carlos@mail.com", role: "Usuario", created_at: "2026-02-22" },
-  { id: "4", name: "Ana García", email: "ana@mail.com", role: "Moderador", created_at: "2026-03-01" },
-];
+import { AlertCircle } from "lucide-react";
 
 export default function AdminUsersPage() {
-  const [search, setSearch] = useState("");
-  const filtered = mockUsers.filter(
-    (u) => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())
-  );
-
   return (
     <div className="space-y-6">
       <div>
@@ -21,54 +8,25 @@ export default function AdminUsersPage() {
         <p className="text-sm text-muted-foreground">Gestión de usuarios del sistema</p>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text" placeholder="Buscar usuario..." value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
-
-      <div className="bg-card rounded-2xl border shadow-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/30">
-                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Usuario</th>
-                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Rol</th>
-                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Registro</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id} className="border-t hover:bg-muted/20 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
-                        {u.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{u.name}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      u.role === "Admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                    }`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-muted-foreground">{u.created_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-4 border-t">
-          <p className="text-xs text-muted-foreground">* Datos mock. Endpoint: GET /api/admin/users (debe ser implementado en backend)</p>
+      <div className="bg-card rounded-2xl border shadow-card p-12">
+        <div className="flex flex-col items-center justify-center text-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <AlertCircle className="h-7 w-7 text-primary" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">Módulo preparado</h2>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Este módulo está listo para conectarse al endpoint de gestión de usuarios.
+            La tabla se poblará automáticamente cuando el endpoint esté disponible.
+          </p>
+          <div className="mt-4 bg-muted/30 rounded-xl p-4 text-left w-full max-w-md">
+            <p className="text-xs font-mono text-muted-foreground mb-1">Endpoints pendientes:</p>
+            <ul className="text-xs font-mono text-foreground space-y-1">
+              <li>• GET /api/admin/users</li>
+              <li>• GET /api/admin/users/:id</li>
+              <li>• PUT /api/admin/users/:id</li>
+              <li>• DELETE /api/admin/users/:id</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
