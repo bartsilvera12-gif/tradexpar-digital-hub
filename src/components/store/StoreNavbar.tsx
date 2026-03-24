@@ -13,6 +13,7 @@ export function StoreNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
