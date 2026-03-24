@@ -21,10 +21,14 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     >
       <Link to={`/products/${product.id}`} className="block">
         <div className="aspect-square bg-muted/30 flex items-center justify-center p-6 relative overflow-hidden">
-          <div className="text-sm text-muted-foreground font-medium text-center">
-            [imagen producto: {product.name}]
-          </div>
-          {product.stock <= 0 && (
+          {product.image ? (
+            <img src={product.image} alt={product.name} className="w-full h-full object-contain" loading="lazy" />
+          ) : (
+            <div className="text-sm text-muted-foreground font-medium text-center">
+              Sin imagen
+            </div>
+          )}
+          {product.stock !== undefined && product.stock <= 0 && (
             <div className="absolute inset-0 bg-secondary/70 flex items-center justify-center">
               <span className="text-secondary-foreground font-semibold text-sm">Agotado</span>
             </div>
@@ -33,9 +37,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       </Link>
 
       <div className="p-4 space-y-2">
-        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-          {product.category}
-        </p>
+        {product.category && (
+          <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+            {product.category}
+          </p>
+        )}
         <Link to={`/products/${product.id}`}>
           <h3 className="font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
             {product.name}
@@ -43,11 +49,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         </Link>
         <div className="flex items-center justify-between pt-2">
           <span className="text-lg font-bold text-foreground">
-            ${product.price.toLocaleString("es-PY")}
+            ${typeof product.price === "number" ? product.price.toLocaleString("es-PY") : product.price}
           </span>
           <button
             onClick={() => addItem(product)}
-            disabled={product.stock <= 0}
+            disabled={product.stock !== undefined && product.stock <= 0}
             className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ShoppingCart className="h-4 w-4" />
