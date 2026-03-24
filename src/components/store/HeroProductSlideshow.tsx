@@ -10,44 +10,48 @@ interface Props {
 export function HeroProductSlideshow({ products }: Props) {
   const [index, setIndex] = useState(0);
 
-  const validProducts = products.filter((p) => (p.images && p.images.length > 0) || p.image);
+  const allImages = products.flatMap((p) => {
+    if (p.images && p.images.length > 0) return p.images;
+    if (p.image) return [p.image];
+    return [];
+  });
 
   const advance = useCallback(() => {
-    if (validProducts.length === 0) return;
-    setIndex((prev) => (prev + 1) % validProducts.length);
-  }, [validProducts.length]);
+    if (allImages.length === 0) return;
+    setIndex((prev) => (prev + 1) % allImages.length);
+  }, [allImages.length]);
 
   const goBack = useCallback(() => {
-    if (validProducts.length === 0) return;
-    setIndex((prev) => (prev - 1 + validProducts.length) % validProducts.length);
-  }, [validProducts.length]);
+    if (allImages.length === 0) return;
+    setIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
+  }, [allImages.length]);
 
   useEffect(() => {
-    if (validProducts.length <= 1) return;
+    if (allImages.length <= 1) return;
     const id = setInterval(advance, 3000);
     return () => clearInterval(id);
-  }, [advance, validProducts.length]);
+  }, [advance, allImages.length]);
 
-  if (validProducts.length === 0) return null;
+  if (allImages.length === 0) return null;
 
-  const current = validProducts[index];
+  const safeIndex = index % allImages.length;
 
   return (
     <>
       <AnimatePresence mode="wait">
         <motion.img
-          key={current.id}
-          src={current.images?.[0] || current.image!}
-          alt={current.name}
+          key={safeIndex}
+          src={allImages[safeIndex]}
+          alt={`Producto ${safeIndex + 1}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          className="absolute inset-0 w-full h-full object-contain object-center"
         />
       </AnimatePresence>
 
-      {validProducts.length > 1 && (
+      {allImages.length > 1 && (
         <>
           <button
             onClick={goBack}
