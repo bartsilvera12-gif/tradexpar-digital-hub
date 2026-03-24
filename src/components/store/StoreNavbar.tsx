@@ -1,17 +1,19 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, Menu, X, Search, ChevronDown } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
 import logoIcon from "@/assets/logo-icon.png";
+import { CartDropdown } from "@/components/store/CartDropdown";
 
 export function StoreNavbar() {
   const { totalItems } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -174,15 +176,20 @@ export function StoreNavbar() {
 
         {/* Cart + mobile toggle */}
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            to="/cart"
-            className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
-          >
-            <ShoppingCart className="h-5 w-5 text-foreground" />
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
-              {totalItems}
-            </span>
-          </Link>
+          <div className="relative">
+            <button
+              onClick={() => setCartOpen(!cartOpen)}
+              className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
+            >
+              <ShoppingCart className="h-5 w-5 text-foreground" />
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                {totalItems}
+              </span>
+            </button>
+            <AnimatePresence>
+              <CartDropdown open={cartOpen} onClose={useCallback(() => setCartOpen(false), [])} />
+            </AnimatePresence>
+          </div>
 
           <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
