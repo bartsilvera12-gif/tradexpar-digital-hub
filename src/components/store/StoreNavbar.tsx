@@ -176,15 +176,20 @@ export function StoreNavbar() {
 
         {/* Cart + mobile toggle */}
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            to="/cart"
-            className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
-          >
-            <ShoppingCart className="h-5 w-5 text-foreground" />
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
-              {totalItems}
-            </span>
-          </Link>
+          <div className="relative">
+            <button
+              onClick={() => setCartOpen(!cartOpen)}
+              className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
+            >
+              <ShoppingCart className="h-5 w-5 text-foreground" />
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                {totalItems}
+              </span>
+            </button>
+            <AnimatePresence>
+              <CartDropdown open={cartOpen} onClose={useCallback(() => setCartOpen(false), [])} />
+            </AnimatePresence>
+          </div>
 
           <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
