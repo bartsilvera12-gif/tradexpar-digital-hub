@@ -45,8 +45,12 @@ export default function ProductDetailPage() {
         className="grid grid-cols-1 lg:grid-cols-2 gap-12"
       >
         {/* Image */}
-        <div className="aspect-square bg-muted/30 rounded-3xl flex items-center justify-center border">
-          <span className="text-muted-foreground text-sm">[imagen producto: {product.name}]</span>
+        <div className="aspect-square bg-muted/30 rounded-3xl flex items-center justify-center border overflow-hidden">
+          {product.image ? (
+            <img src={product.image} alt={product.name} className="w-full h-full object-contain p-4" />
+          ) : (
+            <span className="text-muted-foreground text-sm">Sin imagen</span>
+          )}
         </div>
 
         {/* Details */}
