@@ -52,7 +52,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         </Link>
         <div className="flex items-center justify-between pt-2">
           <span className="text-lg font-bold text-foreground">
-            ${typeof product.price === "number" ? product.price.toLocaleString("es-PY") : product.price}
+            ₲{typeof product.price === "number" ? product.price.toLocaleString("es-PY") : product.price}
           </span>
           <div className="relative">
             <button
