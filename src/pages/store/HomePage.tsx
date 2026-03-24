@@ -6,7 +6,7 @@ import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
-import heroBg from "@/assets/hero-bg.jpg";
+import { HeroProductSlideshow } from "@/components/store/HeroProductSlideshow";
 import bannerCta from "@/assets/banner-cta.jpg";
 
 const benefits = [
