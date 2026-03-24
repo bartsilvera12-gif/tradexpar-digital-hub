@@ -94,14 +94,14 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={onClose}
-              className="px-3 py-2 text-xs font-medium border rounded-xl text-foreground hover:bg-muted/50 transition-colors"
+              className="px-3 py-2.5 text-xs font-medium border rounded-xl text-foreground hover:bg-muted/50 transition-colors flex items-center justify-center"
             >
               Seguir comprando
             </button>
             <Link
               to="/cart"
               onClick={onClose}
-              className="px-3 py-2 text-xs font-medium text-center gradient-celeste text-primary-foreground rounded-xl hover:opacity-90 transition-opacity"
+              className="px-3 py-2.5 text-xs font-medium text-center gradient-celeste text-primary-foreground rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center"
             >
               Finalizar compra
             </Link>
