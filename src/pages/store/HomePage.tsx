@@ -47,7 +47,7 @@ export default function HomePage() {
         <img
           src="https://res.cloudinary.com/drupicep5/image/upload/v1774384987/6b7b8009-8b0c-4d66-8b6e-7c4393582258.png"
           alt="Tradexpar Hero"
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          className="absolute inset-0 w-full h-full object-cover object-top"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-secondary/90 via-secondary/60 to-transparent" />
         <div className="container mx-auto px-4 py-24 lg:py-36 relative z-10">
