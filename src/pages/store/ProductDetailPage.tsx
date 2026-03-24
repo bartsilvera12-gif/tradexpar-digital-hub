@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,6 +22,11 @@ export default function ProductDetailPage() {
   const [activeImg, setActiveImg] = useState(0);
   const { addItem } = useCart();
 
+  // Zoom state
+  const imgContainerRef = useRef<HTMLDivElement>(null);
+  const [zooming, setZooming] = useState(false);
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+
   const fetchProduct = () => {
     setLoading(true);
     setError(null);
@@ -37,10 +42,19 @@ export default function ProductDetailPage() {
 
   useEffect(() => { fetchProduct(); }, [id]);
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!imgContainerRef.current) return;
+    const rect = imgContainerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setZoomPos({ x, y });
+  };
+
   if (loading) return <div className="container mx-auto px-4 py-10"><Loader /></div>;
   if (error || !product) return <div className="container mx-auto px-4 py-10"><ErrorState message={error || "Producto no encontrado"} onRetry={fetchProduct} /></div>;
 
   const images = getProductImages(product);
+  const maxQty = product.stock > 0 ? product.stock : 1;
 
   return (
     <div className="container mx-auto px-4 py-10">
@@ -55,7 +69,16 @@ export default function ProductDetailPage() {
       >
         {/* Image Gallery */}
         <div className="space-y-3">
-          <div className="relative aspect-square bg-muted/30 rounded-3xl flex items-center justify-center border overflow-hidden">
+          <div
+            ref={imgContainerRef}
+            onMouseEnter={() => setZooming(true)}
+            onMouseLeave={() => setZooming(false)}
+            onMouseMove={handleMouseMove}
+            className="relative aspect-square rounded-3xl flex items-center justify-center border overflow-hidden cursor-crosshair"
+            style={{
+              background: "linear-gradient(145deg, hsl(var(--muted) / 0.4), hsl(var(--muted) / 0.15))",
+            }}
+          >
             {images.length > 0 ? (
               <>
                 <AnimatePresence mode="wait">
@@ -67,20 +90,30 @@ export default function ProductDetailPage() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="w-full h-full object-contain p-4"
+                    className="w-full h-full object-contain p-6"
+                    style={
+                      zooming
+                        ? {
+                            transform: "scale(2)",
+                            transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
+                            transition: "transform-origin 0.1s ease",
+                          }
+                        : { transform: "scale(1)", transition: "transform 0.3s ease" }
+                    }
+                    draggable={false}
                   />
                 </AnimatePresence>
                 {images.length > 1 && (
                   <>
                     <button
                       onClick={() => setActiveImg((prev) => (prev - 1 + images.length) % images.length)}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-background/80 border flex items-center justify-center hover:bg-background transition-colors"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => setActiveImg((prev) => (prev + 1) % images.length)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-background/80 border flex items-center justify-center hover:bg-background transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
@@ -125,7 +158,7 @@ export default function ProductDetailPage() {
           </div>
 
           <p className="text-4xl font-bold text-foreground mb-8">
-            ${product.price.toLocaleString("es-PY")}
+            ₲{product.price.toLocaleString("es-PY")}
           </p>
 
           <div className="flex items-center gap-4">
@@ -134,7 +167,7 @@ export default function ProductDetailPage() {
                 <Minus className="h-4 w-4" />
               </button>
               <span className="w-12 text-center font-medium text-sm">{qty}</span>
-              <button onClick={() => setQty(qty + 1)} className="w-10 h-10 flex items-center justify-center hover:bg-muted/50 transition-colors">
+              <button onClick={() => setQty(Math.min(maxQty, qty + 1))} className="w-10 h-10 flex items-center justify-center hover:bg-muted/50 transition-colors disabled:opacity-40" disabled={qty >= maxQty}>
                 <Plus className="h-4 w-4" />
               </button>
             </div>

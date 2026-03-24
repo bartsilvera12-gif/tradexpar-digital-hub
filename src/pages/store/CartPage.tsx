@@ -48,19 +48,19 @@ export default function CartPage() {
               )}
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-foreground truncate">{item.product.name}</h3>
-                <p className="text-sm text-muted-foreground">${item.product.price.toLocaleString("es-PY")}</p>
+                <p className="text-sm text-muted-foreground">₲{item.product.price.toLocaleString("es-PY")}</p>
               </div>
               <div className="flex items-center border rounded-lg overflow-hidden">
                 <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted/50">
                   <Minus className="h-3 w-3" />
                 </button>
                 <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted/50">
+                <button onClick={() => updateQuantity(item.product.id, Math.min(item.product.stock ?? Infinity, item.quantity + 1))} disabled={item.product.stock !== undefined && item.quantity >= item.product.stock} className="w-8 h-8 flex items-center justify-center hover:bg-muted/50 disabled:opacity-40">
                   <Plus className="h-3 w-3" />
                 </button>
               </div>
               <p className="font-semibold text-foreground w-24 text-right">
-                ${(item.product.price * item.quantity).toLocaleString("es-PY")}
+                ₲{(item.product.price * item.quantity).toLocaleString("es-PY")}
               </p>
               <button onClick={() => removeItem(item.product.id)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
                 <Trash2 className="h-4 w-4" />
@@ -75,12 +75,12 @@ export default function CartPage() {
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="text-foreground">${totalPrice.toLocaleString("es-PY")}</span>
+              <span className="text-foreground">₲{totalPrice.toLocaleString("es-PY")}</span>
             </div>
             <div className="border-t my-4" />
             <div className="flex justify-between font-semibold text-lg">
               <span className="text-foreground">Total</span>
-              <span className="text-foreground">${totalPrice.toLocaleString("es-PY")}</span>
+              <span className="text-foreground">₲{totalPrice.toLocaleString("es-PY")}</span>
             </div>
           </div>
           <Link

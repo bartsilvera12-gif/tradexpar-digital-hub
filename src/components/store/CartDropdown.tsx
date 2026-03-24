@@ -55,7 +55,7 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{item.product.name}</p>
               <p className="text-xs text-muted-foreground">
-                ${item.product.price.toLocaleString("es-PY")} x {item.quantity}
+                ₲{item.product.price.toLocaleString("es-PY")} x {item.quantity}
               </p>
               {/* Quantity controls */}
               <div className="flex items-center gap-1 mt-1">
@@ -67,8 +67,9 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
                 </button>
                 <span className="text-xs font-medium w-5 text-center">{item.quantity}</span>
                 <button
-                  onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                  className="w-5 h-5 flex items-center justify-center rounded border text-muted-foreground hover:bg-muted/50 transition-colors"
+                  onClick={() => updateQuantity(item.product.id, Math.min(item.product.stock ?? Infinity, item.quantity + 1))}
+                  disabled={item.product.stock !== undefined && item.quantity >= item.product.stock}
+                  className="w-5 h-5 flex items-center justify-center rounded border text-muted-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
                 >
                   <Plus className="h-2.5 w-2.5" />
                 </button>
@@ -89,7 +90,7 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
         <div className="border-t px-4 py-3 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal:</span>
-            <span className="font-bold text-primary">${totalPrice.toLocaleString("es-PY")}</span>
+            <span className="font-bold text-primary">₲{totalPrice.toLocaleString("es-PY")}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button

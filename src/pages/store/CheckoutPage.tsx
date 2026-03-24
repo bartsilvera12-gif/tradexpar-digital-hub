@@ -91,12 +91,12 @@ export default function CheckoutPage() {
             {items.map((item) => (
               <div key={item.product.id} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{item.product.name} × {item.quantity}</span>
-                <span className="text-foreground">${(item.product.price * item.quantity).toLocaleString("es-PY")}</span>
+                <span className="text-foreground">₲{(item.product.price * item.quantity).toLocaleString("es-PY")}</span>
               </div>
             ))}
             <div className="border-t pt-3 flex justify-between font-semibold text-lg">
               <span>Total</span>
-              <span>${totalPrice.toLocaleString("es-PY")}</span>
+              <span>₲{totalPrice.toLocaleString("es-PY")}</span>
             </div>
           </div>
         </div>

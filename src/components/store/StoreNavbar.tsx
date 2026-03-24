@@ -111,7 +111,7 @@ export function StoreNavbar() {
                       <p className="text-xs text-muted-foreground">{p.category}</p>
                     </div>
                     <span className="text-sm font-bold text-foreground shrink-0">
-                      ${p.price.toLocaleString("es-PY")}
+                      ₲{p.price.toLocaleString("es-PY")}
                     </span>
                   </button>
                 ))}
@@ -241,7 +241,7 @@ export function StoreNavbar() {
                             <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                           </div>
                           <span className="text-sm font-bold text-foreground shrink-0">
-                            ${p.price.toLocaleString("es-PY")}
+                            ₲{p.price.toLocaleString("es-PY")}
                           </span>
                         </button>
                       ))}

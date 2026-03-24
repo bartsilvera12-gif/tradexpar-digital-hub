@@ -52,7 +52,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         </Link>
         <div className="flex items-center justify-between pt-2">
           <span className="text-lg font-bold text-foreground">
-            ${typeof product.price === "number" ? product.price.toLocaleString("es-PY") : product.price}
+            ₲{typeof product.price === "number" ? product.price.toLocaleString("es-PY") : product.price}
           </span>
           <div className="relative">
             <button
@@ -82,8 +82,9 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                     </button>
                     <span className="flex-1 text-center text-sm font-semibold text-foreground">{qty}</span>
                     <button
-                      onClick={() => setQty(qty + 1)}
-                      className="w-7 h-7 rounded-lg border flex items-center justify-center text-foreground hover:bg-muted/50 transition-colors"
+                      onClick={() => setQty(Math.min((product.stock ?? Infinity), qty + 1))}
+                      disabled={product.stock !== undefined && qty >= product.stock}
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
