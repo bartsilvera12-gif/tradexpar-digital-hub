@@ -39,9 +39,13 @@ export default function CartPage() {
               exit={{ opacity: 0 }}
               className="flex items-center gap-4 p-4 bg-card rounded-2xl border shadow-card"
             >
-              <div className="w-20 h-20 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
-                <span className="text-[10px] text-muted-foreground text-center">[imagen producto]</span>
-              </div>
+              {item.product.image ? (
+                <img src={item.product.image} alt={item.product.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
+              ) : (
+                <div className="w-20 h-20 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] text-muted-foreground text-center">[imagen producto]</span>
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-foreground truncate">{item.product.name}</h3>
                 <p className="text-sm text-muted-foreground">${item.product.price.toLocaleString("es-PY")}</p>
