@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
@@ -10,7 +11,8 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const category = searchParams.get("category") || "all";
 
   const fetchProducts = () => {
     setLoading(true);
@@ -30,14 +32,22 @@ export default function ProductsPage() {
     return matchSearch && matchCat;
   });
 
+  const setCategory = (cat: string) => {
+    if (cat === "all") {
+      searchParams.delete("category");
+    } else {
+      searchParams.set("category", cat);
+    }
+    setSearchParams(searchParams);
+  };
+
   return (
     <div className="container mx-auto px-4 py-10">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold text-foreground">Productos</h1>
+        <h1 className="text-3xl font-bold text-foreground">Catálogo</h1>
         <p className="text-muted-foreground mt-2">Explora nuestro catálogo completo</p>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-8">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

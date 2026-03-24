@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, Menu, X, Search } from "lucide-react";
+import { ShoppingCart, Menu, X, Search, ChevronDown } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,24 +16,18 @@ export function StoreNavbar() {
   const [results, setResults] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [showResults, setShowResults] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const catRef = useRef<HTMLDivElement>(null);
 
-  const links = [
-    { to: "/", label: "Inicio" },
-    { to: "/products", label: "Productos" },
-  ];
+  const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))];
 
-  // Load products once for search
   useEffect(() => {
     api.getProducts().then(setAllProducts).catch(() => {});
   }, []);
 
-  // Filter on query change
   useEffect(() => {
-    if (query.trim().length === 0) {
-      setResults([]);
-      return;
-    }
+    if (query.trim().length === 0) { setResults([]); return; }
     const q = query.toLowerCase();
     const filtered = allProducts.filter(
       (p) =>
@@ -44,12 +38,10 @@ export function StoreNavbar() {
     setResults(filtered.slice(0, 6));
   }, [query, allProducts]);
 
-  // Close dropdown on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowResults(false);
-      }
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowResults(false);
+      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -58,7 +50,14 @@ export function StoreNavbar() {
   const handleSelect = (product: Product) => {
     setQuery("");
     setShowResults(false);
+    setMobileOpen(false);
     navigate(`/products/${product.id}`);
+  };
+
+  const handleCategorySelect = (cat: string) => {
+    setCatOpen(false);
+    setMobileOpen(false);
+    navigate(`/products?category=${encodeURIComponent(cat)}`);
   };
 
   return (
@@ -78,10 +77,7 @@ export function StoreNavbar() {
             <input
               type="text"
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setShowResults(true);
-              }}
+              onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
               onFocus={() => query.trim() && setShowResults(true)}
               placeholder="Estoy buscando..."
               className="flex-1 px-4 py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none"
@@ -92,7 +88,6 @@ export function StoreNavbar() {
             </button>
           </div>
 
-          {/* Search results dropdown */}
           <AnimatePresence>
             {showResults && results.length > 0 && (
               <motion.div
@@ -108,11 +103,7 @@ export function StoreNavbar() {
                     onClick={() => handleSelect(p)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                   >
-                    <img
-                      src={p.images?.[0] || p.image}
-                      alt={p.name}
-                      className="w-12 h-12 rounded-lg object-contain bg-muted/20 shrink-0"
-                    />
+                    <img src={p.images?.[0] || p.image} alt={p.name} className="w-12 h-12 rounded-lg object-contain bg-muted/20 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                       <p className="text-xs text-muted-foreground">{p.category}</p>
@@ -128,18 +119,57 @@ export function StoreNavbar() {
         </div>
 
         {/* Nav links */}
-        <nav className="hidden md:flex items-center gap-8 shrink-0">
-          {links.map((l) => (
-            <Link
-              key={l.to}
-              to={l.to}
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                location.pathname === l.to ? "text-primary" : "text-muted-foreground"
+        <nav className="hidden md:flex items-center gap-6 shrink-0">
+          <Link
+            to="/"
+            className={`text-sm font-medium transition-colors hover:text-primary ${
+              location.pathname === "/" ? "text-primary" : "text-muted-foreground"
+            }`}
+          >
+            Inicio
+          </Link>
+          <Link
+            to="/products"
+            className={`text-sm font-medium transition-colors hover:text-primary ${
+              location.pathname.startsWith("/products") ? "text-primary" : "text-muted-foreground"
+            }`}
+          >
+            Catálogo
+          </Link>
+
+          {/* Categorías dropdown */}
+          <div ref={catRef} className="relative">
+            <button
+              onClick={() => setCatOpen(!catOpen)}
+              className={`text-sm font-medium transition-colors hover:text-primary flex items-center gap-1 ${
+                catOpen ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              {l.label}
-            </Link>
-          ))}
+              Categorías
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${catOpen ? "rotate-180" : ""}`} />
+            </button>
+            <AnimatePresence>
+              {catOpen && categories.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full right-0 mt-2 w-48 bg-card border rounded-xl shadow-lg overflow-hidden z-50"
+                >
+                  {categories.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => handleCategorySelect(c)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </nav>
 
         {/* Cart + mobile toggle */}
@@ -149,11 +179,9 @@ export function StoreNavbar() {
             className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
           >
             <ShoppingCart className="h-5 w-5 text-foreground" />
-            {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
-                {totalItems}
-              </span>
-            )}
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+              {totalItems}
+            </span>
           </Link>
 
           <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
@@ -173,15 +201,12 @@ export function StoreNavbar() {
           >
             <div className="p-4 space-y-3">
               {/* Mobile search */}
-              <div className="relative" ref={searchRef}>
+              <div className="relative">
                 <div className="flex w-full border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-ring">
                   <input
                     type="text"
                     value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      setShowResults(true);
-                    }}
+                    onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
                     onFocus={() => query.trim() && setShowResults(true)}
                     placeholder="Estoy buscando..."
                     className="flex-1 px-4 py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none"
@@ -201,17 +226,10 @@ export function StoreNavbar() {
                       {results.map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => {
-                            handleSelect(p);
-                            setMobileOpen(false);
-                          }}
+                          onClick={() => handleSelect(p)}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                         >
-                          <img
-                            src={p.images?.[0] || p.image}
-                            alt={p.name}
-                            className="w-10 h-10 rounded-lg object-contain bg-muted/20 shrink-0"
-                          />
+                          <img src={p.images?.[0] || p.image} alt={p.name} className="w-10 h-10 rounded-lg object-contain bg-muted/20 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                           </div>
@@ -226,20 +244,26 @@ export function StoreNavbar() {
               </div>
 
               <nav className="flex flex-col gap-2">
-                {links.map((l) => (
-                  <Link
-                    key={l.to}
-                    to={l.to}
-                    onClick={() => setMobileOpen(false)}
-                    className={`text-sm font-medium py-2 px-3 rounded-lg transition-colors ${
-                      location.pathname === l.to
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted/50"
-                    }`}
-                  >
-                    {l.label}
-                  </Link>
-                ))}
+                <Link to="/" onClick={() => setMobileOpen(false)} className={`text-sm font-medium py-2 px-3 rounded-lg transition-colors ${location.pathname === "/" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
+                  Inicio
+                </Link>
+                <Link to="/products" onClick={() => setMobileOpen(false)} className={`text-sm font-medium py-2 px-3 rounded-lg transition-colors ${location.pathname.startsWith("/products") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
+                  Catálogo
+                </Link>
+                {categories.length > 0 && (
+                  <div className="pl-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1">Categorías</p>
+                    {categories.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => handleCategorySelect(c)}
+                        className="w-full text-left text-sm font-medium py-2 px-3 rounded-lg text-muted-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </nav>
             </div>
           </motion.div>

@@ -32,6 +32,15 @@ export default function HomePage() {
 
   useEffect(() => { fetchProducts(); }, []);
 
+  // Group products by category, pick up to 3 categories with products
+  const categoryMap = new Map<string, Product[]>();
+  products.forEach((p) => {
+    if (!p.category) return;
+    if (!categoryMap.has(p.category)) categoryMap.set(p.category, []);
+    categoryMap.get(p.category)!.push(p);
+  });
+  const featuredCategories = [...categoryMap.entries()].slice(0, 3);
+
   return (
     <>
       {/* Hero */}
@@ -56,37 +65,48 @@ export default function HomePage() {
               to="/products"
               className="inline-flex items-center gap-2 px-8 py-4 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 transition-opacity shadow-brand"
             >
-              Explorar productos
+              Explorar catálogo
               <ArrowRight className="h-5 w-5" />
             </Link>
           </motion.div>
         </div>
       </section>
 
-      {/* Featured */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="flex items-end justify-between mb-10">
-          <div>
-            <h2 className="text-3xl font-bold text-foreground">Productos destacados</h2>
-            <p className="text-muted-foreground mt-2">Lo más nuevo de nuestro catálogo</p>
-          </div>
-          <Link to="/products" className="text-sm font-medium text-primary hover:underline hidden md:block">
-            Ver todos →
-          </Link>
-        </div>
-
+      {/* Featured by category */}
+      <section className="container mx-auto px-4 py-20 space-y-16">
         {loading && <Loader text="Cargando productos..." />}
         {error && <ErrorState message={error} onRetry={fetchProducts} />}
         {!loading && !error && products.length === 0 && (
           <EmptyState title="Sin productos aún" description="El catálogo se poblará cuando haya productos disponibles en la API." />
         )}
-        {!loading && !error && products.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products.slice(0, 8).map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
-            ))}
+
+        {!loading && !error && featuredCategories.map(([category, catProducts]) => (
+          <div key={category}>
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <h2 className="text-3xl font-bold text-foreground">Productos destacados</h2>
+                <p className="text-primary mt-1 text-sm font-medium">{category}</p>
+              </div>
+              <Link
+                to={`/products?category=${encodeURIComponent(category)}`}
+                className="text-sm font-medium text-primary hover:underline hidden md:block"
+              >
+                Ver todos →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {catProducts.slice(0, 4).map((p, i) => (
+                <ProductCard key={p.id} product={p} index={i} />
+              ))}
+            </div>
+            <Link
+              to={`/products?category=${encodeURIComponent(category)}`}
+              className="mt-4 text-sm font-medium text-primary hover:underline md:hidden block text-center"
+            >
+              Ver todos →
+            </Link>
           </div>
-        )}
+        ))}
       </section>
 
       {/* Benefits */}

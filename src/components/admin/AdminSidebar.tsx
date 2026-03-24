@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Users, Settings, LogOut, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
+import logoIcon from "@/assets/logo-icon.png";
 
 const navItems = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -18,24 +19,43 @@ export function AdminSidebar() {
 
   return (
     <aside
-      className={`sticky top-0 h-screen flex flex-col bg-secondary text-secondary-foreground border-r border-secondary-foreground/10 transition-all duration-300 ${
+      className={`sticky top-0 h-screen flex flex-col bg-secondary border-r border-border transition-all duration-300 ${
         collapsed ? "w-[72px]" : "w-64"
       }`}
     >
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-secondary-foreground/10">
         {!collapsed && (
-          <span className="text-lg font-bold tracking-tight">
-            TRADE<span className="text-primary">XPAR</span>
-          </span>
+          <Link to="/admin/dashboard" className="flex items-center gap-2">
+            <img src={logoIcon} alt="Tradexpar" className="w-7 h-7" width={28} height={28} />
+            <span className="text-lg font-bold tracking-tight text-secondary-foreground">
+              TRADE<span className="text-gradient">XPAR</span>
+            </span>
+          </Link>
+        )}
+        {collapsed && (
+          <Link to="/admin/dashboard" className="mx-auto">
+            <img src={logoIcon} alt="Tradexpar" className="w-7 h-7" width={28} height={28} />
+          </Link>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-secondary-foreground/10 transition-colors text-secondary-foreground/70"
+          className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-secondary-foreground/10 transition-colors text-secondary-foreground/70 ${collapsed ? "hidden" : ""}`}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          <ChevronLeft className="h-4 w-4" />
         </button>
       </div>
+
+      {collapsed && (
+        <div className="flex justify-center py-2">
+          <button
+            onClick={() => setCollapsed(false)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-secondary-foreground/10 transition-colors text-secondary-foreground/70"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 py-4 space-y-1 px-3">
@@ -47,7 +67,7 @@ export function AdminSidebar() {
               to={item.to}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 active
-                  ? "bg-primary text-primary-foreground shadow-brand"
+                  ? "gradient-celeste text-primary-foreground shadow-brand"
                   : "text-secondary-foreground/70 hover:bg-secondary-foreground/10 hover:text-secondary-foreground"
               }`}
               title={collapsed ? item.label : undefined}
