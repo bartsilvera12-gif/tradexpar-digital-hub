@@ -30,7 +30,7 @@ export function HeroProductSlideshow({ products }: Props) {
     <AnimatePresence mode="wait">
       <motion.img
         key={current.id}
-        src={current.image!}
+        src={current.images?.[0] || current.image!}
         alt={current.name}
         initial={{ opacity: 0, scale: 1.08 }}
         animate={{ opacity: 1, scale: 1 }}
