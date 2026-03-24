@@ -22,10 +22,14 @@ export default function ProductDetailPage() {
   const [activeImg, setActiveImg] = useState(0);
   const { addItem } = useCart();
 
-  // Zoom state
+  // Zoom lens state (nissei-style: lens on image + zoomed panel to the right)
   const imgContainerRef = useRef<HTMLDivElement>(null);
   const [zooming, setZooming] = useState(false);
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+  const [lensPos, setLensPos] = useState({ left: 0, top: 0 });
+
+  const LENS_SIZE = 150; // px
+  const ZOOM_FACTOR = 2.5;
 
   const fetchProduct = () => {
     setLoading(true);
@@ -48,6 +52,12 @@ export default function ProductDetailPage() {
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     setZoomPos({ x, y });
+
+    // Position the lens centered on cursor, clamped inside the container
+    const lensHalf = LENS_SIZE / 2;
+    const left = Math.max(0, Math.min(e.clientX - rect.left - lensHalf, rect.width - LENS_SIZE));
+    const top = Math.max(0, Math.min(e.clientY - rect.top - lensHalf, rect.height - LENS_SIZE));
+    setLensPos({ left, top });
   };
 
   if (loading) return <div className="container mx-auto px-4 py-10"><Loader /></div>;
@@ -69,59 +79,84 @@ export default function ProductDetailPage() {
       >
         {/* Image Gallery */}
         <div className="space-y-3">
-          <div
-            ref={imgContainerRef}
-            onMouseEnter={() => setZooming(true)}
-            onMouseLeave={() => setZooming(false)}
-            onMouseMove={handleMouseMove}
-            className="relative aspect-square rounded-3xl flex items-center justify-center border overflow-hidden cursor-crosshair"
-            style={{
-              background: "linear-gradient(145deg, hsl(var(--muted) / 0.4), hsl(var(--muted) / 0.15))",
-            }}
-          >
-            {images.length > 0 ? (
-              <>
-                <AnimatePresence mode="wait">
-                  <motion.img
-                    key={activeImg}
-                    src={images[activeImg]}
-                    alt={`${product.name} - imagen ${activeImg + 1}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="w-full h-full object-contain p-6"
-                    style={
-                      zooming
-                        ? {
-                            transform: "scale(2)",
-                            transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
-                            transition: "transform-origin 0.1s ease",
-                          }
-                        : { transform: "scale(1)", transition: "transform 0.3s ease" }
-                    }
-                    draggable={false}
-                  />
-                </AnimatePresence>
-                {images.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => setActiveImg((prev) => (prev - 1 + images.length) % images.length)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setActiveImg((prev) => (prev + 1) % images.length)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </>
-                )}
-              </>
-            ) : (
-              <span className="text-muted-foreground text-sm">Sin imagen</span>
+          <div className="relative flex gap-4">
+            {/* Main image container */}
+            <div
+              ref={imgContainerRef}
+              onMouseEnter={() => setZooming(true)}
+              onMouseLeave={() => setZooming(false)}
+              onMouseMove={handleMouseMove}
+              className="relative aspect-square rounded-3xl flex items-center justify-center border overflow-hidden cursor-crosshair flex-1"
+              style={{
+                background: "linear-gradient(145deg, hsl(var(--muted) / 0.4), hsl(var(--muted) / 0.15))",
+              }}
+            >
+              {images.length > 0 ? (
+                <>
+                  <AnimatePresence mode="wait">
+                    <motion.img
+                      key={activeImg}
+                      src={images[activeImg]}
+                      alt={`${product.name} - imagen ${activeImg + 1}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="w-full h-full object-contain p-6"
+                      draggable={false}
+                    />
+                  </AnimatePresence>
+
+                  {/* Lens overlay */}
+                  {zooming && (
+                    <div
+                      className="absolute border-2 border-primary/40 bg-primary/5 pointer-events-none z-20 rounded-sm"
+                      style={{
+                        width: LENS_SIZE,
+                        height: LENS_SIZE,
+                        left: lensPos.left,
+                        top: lensPos.top,
+                      }}
+                    />
+                  )}
+
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => setActiveImg((prev) => (prev - 1 + images.length) % images.length)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setActiveImg((prev) => (prev + 1) % images.length)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="text-muted-foreground text-sm">Sin imagen</span>
+              )}
+            </div>
+
+            {/* Zoom preview panel (appears on hover, to the right) */}
+            {zooming && images.length > 0 && (
+              <div
+                className="hidden lg:block absolute left-[calc(100%+16px)] top-0 w-[400px] h-[400px] border rounded-2xl overflow-hidden bg-background shadow-xl z-30"
+              >
+                <div
+                  className="w-full h-full"
+                  style={{
+                    backgroundImage: `url(${images[activeImg]})`,
+                    backgroundSize: `${ZOOM_FACTOR * 100}%`,
+                    backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`,
+                    backgroundRepeat: "no-repeat",
+                  }}
+                />
+              </div>
             )}
           </div>
 

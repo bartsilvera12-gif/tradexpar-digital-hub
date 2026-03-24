@@ -7,7 +7,7 @@ import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
 import { HeroProductSlideshow } from "@/components/store/HeroProductSlideshow";
-import bannerCta from "@/assets/banner-cta.jpg";
+
 
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
@@ -160,28 +160,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Banner */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="rounded-3xl overflow-hidden relative">
-          <img src={bannerCta} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" width={1920} height={640} />
-          <div className="absolute inset-0 bg-secondary/70" />
-          <div className="relative z-10 p-12 text-center">
-            <h2 className="text-3xl font-bold text-secondary-foreground mb-4">
-              Empieza a distribuir hoy
-            </h2>
-            <p className="text-secondary-foreground/70 mb-8 max-w-md mx-auto">
-              Explora nuestro catálogo completo de productos digitales.
-            </p>
-            <Link
-              to="/products"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-card text-foreground font-semibold rounded-2xl hover:bg-card/90 transition-colors"
-            >
-              Ver catálogo
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-          </div>
-        </div>
-      </section>
     </>
   );
 }
