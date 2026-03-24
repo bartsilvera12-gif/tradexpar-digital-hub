@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Zap, Shield, Globe, TrendingUp } from "lucide-react";
+import { Zap, Shield, Globe, TrendingUp } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
-import { HeroProductSlideshow } from "@/components/store/HeroProductSlideshow";
 
 
 const benefits = [
