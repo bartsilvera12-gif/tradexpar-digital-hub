@@ -134,26 +134,32 @@ export default function HomePage() {
       </section>
 
       {/* Benefits */}
-      <section className="bg-secondary">
-        <div className="container mx-auto px-4 py-20">
-          <h2 className="text-3xl font-bold text-secondary-foreground text-center mb-12">
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-secondary/40 to-secondary" />
+        <div className="container mx-auto px-4 py-24 relative z-10">
+          <motion.h2
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-3xl lg:text-4xl font-bold text-foreground text-center mb-16"
+          >
             ¿Por qué Tradexpar?
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          </motion.h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {benefits.map((b, i) => (
               <motion.div
                 key={b.title}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 25 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="text-center"
+                transition={{ delay: i * 0.12, duration: 0.5 }}
+                className="group relative bg-card/60 backdrop-blur-sm border border-border/50 rounded-2xl p-8 text-center hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
               >
-                <div className="w-14 h-14 rounded-2xl gradient-celeste flex items-center justify-center mx-auto mb-4">
-                  <b.icon className="h-6 w-6 text-primary-foreground" />
+                <div className="w-16 h-16 rounded-2xl gradient-celeste flex items-center justify-center mx-auto mb-5 shadow-md shadow-primary/20 group-hover:scale-110 transition-transform duration-300">
+                  <b.icon className="h-7 w-7 text-primary-foreground" />
                 </div>
-                <h3 className="font-semibold text-secondary-foreground mb-2">{b.title}</h3>
-                <p className="text-sm text-secondary-foreground/70">{b.desc}</p>
+                <h3 className="font-bold text-foreground mb-2 text-lg">{b.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{b.desc}</p>
               </motion.div>
             ))}
           </div>
