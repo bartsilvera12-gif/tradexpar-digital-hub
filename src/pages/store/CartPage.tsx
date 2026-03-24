@@ -80,7 +80,7 @@ export default function CartPage() {
             <div className="border-t my-4" />
             <div className="flex justify-between font-semibold text-lg">
               <span className="text-foreground">Total</span>
-              <span className="text-foreground">${totalPrice.toLocaleString("es-PY")}</span>
+              <span className="text-foreground">₲{totalPrice.toLocaleString("es-PY")}</span>
             </div>
           </div>
           <Link

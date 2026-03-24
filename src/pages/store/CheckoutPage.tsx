@@ -96,7 +96,7 @@ export default function CheckoutPage() {
             ))}
             <div className="border-t pt-3 flex justify-between font-semibold text-lg">
               <span>Total</span>
-              <span>${totalPrice.toLocaleString("es-PY")}</span>
+              <span>₲{totalPrice.toLocaleString("es-PY")}</span>
             </div>
           </div>
         </div>

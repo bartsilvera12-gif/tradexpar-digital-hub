@@ -90,7 +90,7 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
         <div className="border-t px-4 py-3 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal:</span>
-            <span className="font-bold text-primary">${totalPrice.toLocaleString("es-PY")}</span>
+            <span className="font-bold text-primary">₲{totalPrice.toLocaleString("es-PY")}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
