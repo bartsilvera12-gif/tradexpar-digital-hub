@@ -55,7 +55,7 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{item.product.name}</p>
               <p className="text-xs text-muted-foreground">
-                ${item.product.price.toLocaleString("es-PY")} x {item.quantity}
+                ₲{item.product.price.toLocaleString("es-PY")} x {item.quantity}
               </p>
               {/* Quantity controls */}
               <div className="flex items-center gap-1 mt-1">
