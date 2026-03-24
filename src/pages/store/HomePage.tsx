@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Shield, Globe, TrendingUp } from "lucide-react";
+import { ArrowRight, Zap, Shield, Globe, TrendingUp } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
@@ -43,12 +43,36 @@ export default function HomePage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden">
+      <section className="relative overflow-hidden min-h-[500px]">
         <img
           src="https://res.cloudinary.com/drupicep5/image/upload/v1774384987/6b7b8009-8b0c-4d66-8b6e-7c4393582258.png"
           alt="Tradexpar Hero"
-          className="w-full h-auto block"
+          className="absolute inset-0 w-full h-full object-cover object-center"
         />
+        <div className="absolute inset-0 bg-gradient-to-r from-secondary/90 via-secondary/60 to-transparent" />
+        <div className="container mx-auto px-4 py-24 lg:py-36 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7 }}
+            className="max-w-2xl"
+          >
+            <h1 className="text-4xl lg:text-6xl font-bold text-secondary-foreground leading-tight mb-6">
+              Distribución digital<br />
+              <span className="text-gradient">de alto rendimiento</span>
+            </h1>
+            <p className="text-lg text-secondary-foreground/70 mb-8 max-w-lg">
+              Accede a productos digitales premium con la confianza y tecnología de Tradexpar.
+            </p>
+            <Link
+              to="/products"
+              className="inline-flex items-center gap-2 px-8 py-4 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 transition-opacity shadow-brand"
+            >
+              Explorar catálogo
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          </motion.div>
+        </div>
       </section>
 
       {/* Products sections */}
