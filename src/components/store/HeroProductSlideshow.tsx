@@ -10,7 +10,12 @@ interface Props {
 export function HeroProductSlideshow({ products }: Props) {
   const [index, setIndex] = useState(0);
 
-  const validProducts = products.filter((p) => (p.images && p.images.length > 0) || p.image);
+  // Collect all images from all products
+  const allImages = products.flatMap((p) => {
+    if (p.images && p.images.length > 0) return p.images;
+    if (p.image) return [p.image];
+    return [];
+  });
 
   const advance = useCallback(() => {
     if (validProducts.length === 0) return;
