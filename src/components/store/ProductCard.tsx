@@ -1,9 +1,18 @@
 import { Link } from "react-router-dom";
 import type { Product } from "@/types";
-import { ShoppingCart, Plus, Minus } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Heart, MessageCircle } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { toastCartAdded } from "@/lib/cartToast";
+import { useWishlist } from "@/contexts/WishlistContext";
+import {
+  getEffectivePrice,
+  getDiscountPercentage,
+  isNewProduct,
+  getStockLabel,
+  buildWhatsAppProductLink,
+} from "@/lib/productHelpers";
 
 interface ProductCardProps {
   product: Product;
@@ -12,11 +21,16 @@ interface ProductCardProps {
 
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem } = useCart();
+  const { has, toggle } = useWishlist();
   const [showQty, setShowQty] = useState(false);
   const [qty, setQty] = useState(1);
+  const discountPct = getDiscountPercentage(product);
+  const effectivePrice = getEffectivePrice(product);
 
   const handleAddToCart = () => {
-    addItem(product, qty);
+    if (addItem(product, qty)) {
+      toastCartAdded(product.name, qty);
+    }
     setShowQty(false);
     setQty(1);
   };
@@ -30,6 +44,35 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     >
       <Link to={`/products/${product.id}`} className="block">
         <div className="aspect-square bg-muted/30 flex items-center justify-center p-6 relative overflow-hidden">
+          <div className="absolute top-3 left-0 z-10 flex flex-col gap-2">
+            {discountPct > 0 && (
+              <span className="px-3 py-1 text-xs rounded-r-md bg-[#E97A00] text-white font-bold shadow-sm">
+                -{discountPct}%
+              </span>
+            )}
+            {isNewProduct(product) && (
+              <span className="px-3 py-1 text-xs rounded-r-md bg-[#E4002B] text-white font-bold shadow-sm uppercase">
+                Nuevo!
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void toggle(product.id);
+            }}
+            className={`absolute top-3 right-3 z-10 w-9 h-9 rounded-full border bg-card/90 backdrop-blur flex items-center justify-center transition-colors ${
+              has(product.id)
+                ? "text-primary border-primary/30 bg-primary/5"
+                : "text-muted-foreground border-border hover:text-primary hover:bg-muted/40"
+            }`}
+            aria-label="Agregar a favoritos"
+          >
+            <Heart className={`h-4 w-4 ${has(product.id) ? "fill-current" : ""}`} />
+          </button>
+
           {(product.images?.[0] || product.image) ? (
             <img src={product.images?.[0] || product.image} alt={product.name} className="w-full h-full object-contain" loading="lazy" />
           ) : (
@@ -43,18 +86,39 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         </div>
       </Link>
 
-      <div className="p-4 space-y-2">
+      <div className="p-4 flex flex-col min-h-[170px]">
         {product.category && (
-          <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{product.category}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">{product.category}</p>
         )}
         <Link to={`/products/${product.id}`}>
-          <h3 className="font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">{product.name}</h3>
+          <h3 className="font-semibold text-foreground line-clamp-2 min-h-[3rem] group-hover:text-primary transition-colors">{product.name}</h3>
         </Link>
-        <div className="flex items-center justify-between pt-2">
-          <span className="text-lg font-bold text-foreground">
-            ₲{typeof product.price === "number" ? product.price.toLocaleString("es-PY") : product.price}
+        <div className="text-xs font-medium mt-2">
+          <span className={product.stock > 0 ? "text-green-600" : "text-destructive"}>
+            {getStockLabel(product)}
           </span>
-          <div className="relative">
+        </div>
+        <div className="flex items-end justify-between pt-2 mt-auto">
+          <div className="flex flex-col">
+            {discountPct > 0 && (
+              <span className="text-xs text-muted-foreground line-through">
+                Gs {(Number(product.price) || 0).toLocaleString("es-PY")}
+              </span>
+            )}
+            <span className="text-2xl leading-none font-bold text-foreground whitespace-nowrap">
+              Gs {effectivePrice.toLocaleString("es-PY")}
+            </span>
+          </div>
+          <div className="relative flex items-center gap-2">
+            <a
+              href={buildWhatsAppProductLink(product)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-9 h-9 rounded-full border text-foreground flex items-center justify-center hover:bg-muted/40 transition-colors"
+              aria-label="Consultar por WhatsApp"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </a>
             <button
               onClick={() => setShowQty(!showQty)}
               disabled={product.stock !== undefined && product.stock <= 0}

@@ -3,7 +3,8 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+/** Tiempo tras cerrarse antes de desmontar del DOM (animación de salida). */
+const TOAST_REMOVE_DELAY = 800;
 
 type ToasterToast = ToastProps & {
   id: string;

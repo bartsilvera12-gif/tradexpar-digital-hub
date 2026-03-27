@@ -13,6 +13,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const category = searchParams.get("category") || "all";
+  const source = searchParams.get("source") || "all";
 
   const fetchProducts = () => {
     setLoading(true);
@@ -29,7 +30,8 @@ export default function ProductsPage() {
   const filtered = products.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchCat = category === "all" || p.category === category;
-    return matchSearch && matchCat;
+    const matchSource = source === "all" || p.product_source_type === source;
+    return matchSearch && matchCat && matchSource;
   });
 
   const setCategory = (cat: string) => {
@@ -60,6 +62,23 @@ export default function ProductsPage() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
+          {(["all", "tradexpar", "dropi"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => {
+                if (s === "all") searchParams.delete("source");
+                else searchParams.set("source", s);
+                setSearchParams(searchParams);
+              }}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                source === s
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card border text-muted-foreground hover:border-primary/30"
+              }`}
+            >
+              {s === "all" ? "Todos" : s === "dropi" ? "Dropi" : "Tradexpar"}
+            </button>
+          ))}
           {categories.map((c) => (
             <button
               key={c}

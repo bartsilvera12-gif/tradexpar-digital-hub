@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Trash2, Minus, Plus } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { motion } from "framer-motion";
+import { getEffectivePrice } from "@/lib/productHelpers";
 
 interface CartDropdownProps {
   open: boolean;
@@ -55,7 +56,7 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{item.product.name}</p>
               <p className="text-xs text-muted-foreground">
-                ₲{item.product.price.toLocaleString("es-PY")} x {item.quantity}
+                ₲{getEffectivePrice(item.product).toLocaleString("es-PY")} x {item.quantity}
               </p>
               {/* Quantity controls */}
               <div className="flex items-center gap-1 mt-1">

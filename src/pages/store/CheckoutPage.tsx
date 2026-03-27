@@ -1,15 +1,38 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { api } from "@/services/api";
 import { Loader2 } from "lucide-react";
+import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
+import { deriveCheckoutTypeFromItems, getEffectivePrice } from "@/lib/productHelpers";
+import { getAffiliateCookie } from "@/lib/affiliate";
+import type { CustomerLocation } from "@/types";
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
+  const { user } = useCustomerAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", locationUrl: "", locationLabel: "" });
+  const [locations, setLocations] = useState<CustomerLocation[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      api.getCustomerLocations(user.id).then((res) => {
+        setLocations(res.locations);
+        const defaultLoc = res.locations.find((l) => l.is_default) || res.locations[0];
+        if (defaultLoc) {
+          setSelectedLocationId(defaultLoc.id);
+          setForm((prev) => ({ ...prev, locationUrl: defaultLoc.location_url }));
+        }
+      }).catch(() => {});
+      setForm((prev) => ({ ...prev, email: user.email, name: user.name }));
+    }
+  }, [user]);
+
+  const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,13 +41,38 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
+      if (checkoutType === null) {
+        throw new Error(
+          "No puedes combinar productos Tradexpar y Dropi en el mismo pedido. Quita ítems de un origen o vacía el carrito."
+        );
+      }
+      if (!form.locationUrl.trim()) {
+        throw new Error("La ubicación URL es obligatoria.");
+      }
+      if (!form.phone.trim()) {
+        throw new Error("El teléfono es obligatorio.");
+      }
+
+      let customerLocationId = selectedLocationId || undefined;
+      if (user && !customerLocationId && form.locationLabel.trim()) {
+        const created = await api.createCustomerLocation(user.id, {
+          label: form.locationLabel.trim(),
+          location_url: form.locationUrl.trim(),
+        });
+        customerLocationId = created.id;
+      }
+
       const order = await api.createOrder({
         items: items.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
-          price: i.product.price,
+          price: getEffectivePrice(i.product),
         })),
-        customer: { name: form.name, email: form.email, phone: form.phone || undefined },
+        customer: { name: form.name, email: form.email || undefined, phone: form.phone.trim() },
+        location_url: form.locationUrl.trim(),
+        customer_location_id: customerLocationId,
+        checkout_type: checkoutType,
+        affiliate_ref: getAffiliateCookie() || undefined,
       });
 
       const payment = await api.createPayment(order.id);
@@ -69,29 +117,86 @@ export default function CheckoutPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Email *</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Email {user ? "*" : "(opcional)"}</label>
             <input
-              type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              type="email" required={Boolean(user)} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Teléfono</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Teléfono *</label>
             <input
-              type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              type="tel"
+              required
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="Ej. 0981 123456"
               className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
+          {user && locations.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Ubicaciones guardadas</label>
+              <select
+                value={selectedLocationId}
+                onChange={(e) => {
+                  const selected = locations.find((l) => l.id === e.target.value);
+                  setSelectedLocationId(e.target.value);
+                  if (selected) setForm((prev) => ({ ...prev, locationUrl: selected.location_url }));
+                }}
+                className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Seleccionar...</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>{loc.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">URL de ubicación *</label>
+            <input
+              type="url"
+              required
+              value={form.locationUrl}
+              onChange={(e) => setForm({ ...form, locationUrl: e.target.value })}
+              placeholder="https://maps.google.com/..."
+              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          {user && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Guardar ubicación como (opcional)</label>
+              <input
+                type="text"
+                value={form.locationLabel}
+                onChange={(e) => setForm({ ...form, locationLabel: e.target.value })}
+                placeholder="Casa, Oficina, Depósito..."
+                className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          )}
         </div>
 
         {/* Order summary */}
         <div className="bg-card rounded-2xl border shadow-card p-6">
-          <h2 className="font-semibold text-foreground mb-4">Resumen del pedido</h2>
+          <h2 className="font-semibold text-foreground mb-2">Resumen del pedido</h2>
+          {checkoutType === null ? (
+            <p className="text-sm text-destructive mb-4">
+              Este carrito mezcla productos Tradexpar y Dropi. Deja solo un tipo de origen para continuar (ajusta cantidades o vacía el carrito).
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mb-4">
+              {checkoutType === "dropi"
+                ? "Pedido Dropi (todos los ítems son de catálogo Dropi)."
+                : "Pedido Tradexpar (todos los ítems son propios)."}
+            </p>
+          )}
           <div className="space-y-3">
             {items.map((item) => (
               <div key={item.product.id} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{item.product.name} × {item.quantity}</span>
-                <span className="text-foreground">₲{(item.product.price * item.quantity).toLocaleString("es-PY")}</span>
+                <span className="text-foreground">₲{(getEffectivePrice(item.product) * item.quantity).toLocaleString("es-PY")}</span>
               </div>
             ))}
             <div className="border-t pt-3 flex justify-between font-semibold text-lg">
@@ -107,7 +212,7 @@ export default function CheckoutPage() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || checkoutType === null}
           className="w-full flex items-center justify-center gap-2 px-6 py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-60"
         >
           {loading ? <><Loader2 className="h-5 w-5 animate-spin" /> Procesando...</> : "Confirmar y pagar"}

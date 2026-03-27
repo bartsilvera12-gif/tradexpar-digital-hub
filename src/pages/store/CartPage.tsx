@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getEffectivePrice } from "@/lib/productHelpers";
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, totalPrice } = useCart();
@@ -14,8 +15,18 @@ export default function CartPage() {
   const [waForm, setWaForm] = useState({ name: "", phone: "", message: "" });
 
   const handleWhatsAppSubmit = () => {
+    const baseUrl =
+      import.meta.env.VITE_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+
     const productLines = items
-      .map((item) => `• ${item.product.name} x${item.quantity} — ₲${(item.product.price * item.quantity).toLocaleString("es-PY")}`)
+      .map((item) => {
+        const productUrl = `${baseUrl}/products/${item.product.id}`;
+        return [
+          `• ${item.product.name} x${item.quantity} — ₲${(getEffectivePrice(item.product) * item.quantity).toLocaleString("es-PY")}`,
+          `  ${productUrl}`,
+        ].filter(Boolean).join("\n");
+      })
       .join("\n");
 
     const text = [
@@ -29,7 +40,7 @@ export default function CartPage() {
       waForm.message ? `\nMensaje: ${waForm.message}` : "",
     ].filter(Boolean).join("\n");
 
-    const waNumber = "595991234567"; // Replace with actual WhatsApp number
+    const waNumber = import.meta.env.VITE_WHATSAPP_NUMBER || "595982487844";
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`, "_blank");
     setShowWhatsApp(false);
   };
@@ -75,7 +86,7 @@ export default function CartPage() {
               )}
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-foreground truncate">{item.product.name}</h3>
-                <p className="text-sm text-muted-foreground">₲{item.product.price.toLocaleString("es-PY")}</p>
+                <p className="text-sm text-muted-foreground">₲{getEffectivePrice(item.product).toLocaleString("es-PY")}</p>
               </div>
               <div className="flex items-center border rounded-lg overflow-hidden">
                 <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted/50">
@@ -87,7 +98,7 @@ export default function CartPage() {
                 </button>
               </div>
               <p className="font-semibold text-foreground w-24 text-right">
-                ₲{(item.product.price * item.quantity).toLocaleString("es-PY")}
+                ₲{(getEffectivePrice(item.product) * item.quantity).toLocaleString("es-PY")}
               </p>
               <button onClick={() => removeItem(item.product.id)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
                 <Trash2 className="h-4 w-4" />
@@ -166,7 +177,7 @@ export default function CartPage() {
                   {items.map((item) => (
                     <div key={item.product.id} className="flex justify-between text-sm">
                       <span className="text-foreground truncate mr-2">{item.product.name} x{item.quantity}</span>
-                      <span className="text-foreground font-medium shrink-0">₲{(item.product.price * item.quantity).toLocaleString("es-PY")}</span>
+                      <span className="text-foreground font-medium shrink-0">₲{(getEffectivePrice(item.product) * item.quantity).toLocaleString("es-PY")}</span>
                     </div>
                   ))}
                   <div className="border-t pt-2 flex justify-between font-semibold text-sm">

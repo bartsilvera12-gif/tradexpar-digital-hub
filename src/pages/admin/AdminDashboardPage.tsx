@@ -31,9 +31,23 @@ export default function AdminDashboardPage() {
     return acc;
   }, {});
   const chartData = Object.entries(categoryData).map(([name, count]) => ({ name, count }));
+  const lowStockProducts = products.filter((p) => (p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5).slice(0, 5);
 
   return (
     <div className="space-y-8">
+      {lowStockProducts.length > 0 && (
+        <div className="fixed top-6 right-6 z-40 w-80 bg-card border shadow-xl rounded-2xl p-4">
+          <p className="font-semibold text-foreground mb-2">Alerta de stock bajo</p>
+          <ul className="space-y-1">
+            {lowStockProducts.map((p) => (
+              <li key={p.id} className="text-sm text-muted-foreground flex justify-between gap-3">
+                <span className="truncate">{p.name}</span>
+                <span className="text-destructive font-semibold">{p.stock}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground text-sm">Resumen general del sistema</p>

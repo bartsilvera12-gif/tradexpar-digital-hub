@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { api } from "@/services/api";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -13,17 +14,20 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    // TODO: Este endpoint debe ser implementado en backend (POST /api/admin/login)
-    // Mock login for UI demonstration
-    setTimeout(() => {
-      if (email && password) {
+    try {
+      const res = await api.adminLogin({ email, password });
+      if (res.token) {
+        sessionStorage.setItem("tradexpar_admin_token", res.token);
         sessionStorage.setItem("tradexpar_admin", "true");
         navigate("/admin/dashboard");
-      } else {
-        setError("Credenciales inválidas");
+        return;
       }
+      setError("Credenciales inválidas");
+    } catch (err: any) {
+      setError(err.message || "Credenciales inválidas");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -60,9 +64,7 @@ export default function AdminLoginPage() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Iniciar sesión
           </button>
-          <p className="text-xs text-center text-muted-foreground">
-            Este endpoint debe ser implementado en backend
-          </p>
+          <p className="text-xs text-center text-muted-foreground">Acceso solo para panel administrador.</p>
         </form>
       </div>
     </div>

@@ -1,11 +1,19 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/services/api";
 import { useCart } from "@/contexts/CartContext";
 import { Loader, ErrorState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
+import { toastCartAdded } from "@/lib/cartToast";
+import {
+  getDiscountPercentage,
+  getEffectivePrice,
+  getStockLabel,
+  buildWhatsAppProductLink,
+  isNewProduct,
+} from "@/lib/productHelpers";
 
 function getProductImages(product: Product): string[] {
   if (product.images && product.images.length > 0) return product.images;
@@ -65,6 +73,8 @@ export default function ProductDetailPage() {
 
   const images = getProductImages(product);
   const maxQty = product.stock > 0 ? product.stock : 1;
+  const discountPct = getDiscountPercentage(product);
+  const effectivePrice = getEffectivePrice(product);
 
   return (
     <div className="container mx-auto px-4 py-10">
@@ -181,22 +191,31 @@ export default function ProductDetailPage() {
         {/* Details */}
         <div className="flex flex-col justify-center">
           <p className="text-xs uppercase tracking-wider text-primary font-semibold mb-2">{product.category}</p>
+          {isNewProduct(product) && (
+            <span className="inline-flex w-fit mb-2 px-2.5 py-1 text-xs rounded-full bg-primary text-primary-foreground font-semibold">
+              Nuevo
+            </span>
+          )}
           <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">{product.name}</h1>
           <p className="text-muted-foreground mb-6 leading-relaxed">{product.description}</p>
 
           <div className="flex items-center gap-3 mb-2 text-sm text-muted-foreground">
             <span>SKU: {product.sku}</span>
             <span>•</span>
-            <span className={product.stock > 0 ? "text-green-600" : "text-destructive"}>
-              {product.stock > 0 ? `${product.stock} en stock` : "Agotado"}
-            </span>
+            <span className={product.stock > 0 ? "text-green-600" : "text-destructive"}>{getStockLabel(product)}</span>
           </div>
 
-          <p className="text-4xl font-bold text-foreground mb-8">
-            ₲{product.price.toLocaleString("es-PY")}
-          </p>
+          <div className="mb-8">
+            {discountPct > 0 && (
+              <>
+                <p className="text-sm text-muted-foreground line-through">₲{(Number(product.price) || 0).toLocaleString("es-PY")}</p>
+                <p className="text-sm text-destructive font-semibold">-{discountPct}%</p>
+              </>
+            )}
+            <p className="text-4xl font-bold text-foreground">₲{effectivePrice.toLocaleString("es-PY")}</p>
+          </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
             <div className="flex items-center border rounded-xl overflow-hidden">
               <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-10 h-10 flex items-center justify-center hover:bg-muted/50 transition-colors">
                 <Minus className="h-4 w-4" />
@@ -208,13 +227,26 @@ export default function ProductDetailPage() {
             </div>
 
             <button
-              onClick={() => { addItem(product, qty); }}
+              onClick={() => {
+                if (addItem(product, qty)) {
+                  toastCartAdded(product.name, qty);
+                }
+              }}
               disabled={product.stock <= 0}
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ShoppingCart className="h-5 w-5" />
               Agregar al carrito
             </button>
+            <a
+              href={buildWhatsAppProductLink(product)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-12 px-4 rounded-xl border flex items-center justify-center text-foreground hover:bg-muted/50 transition-colors"
+              aria-label="Consultar este producto por WhatsApp"
+            >
+              <MessageCircle className="h-5 w-5" />
+            </a>
           </div>
         </div>
       </motion.div>

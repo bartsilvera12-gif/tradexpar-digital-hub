@@ -39,6 +39,7 @@ export default function HomePage() {
     categoryMap.get(p.category)!.push(p);
   });
   const allCategories = [...categoryMap.entries()];
+  const viralDropi = products.filter((p) => p.product_source_type === "dropi").slice(0, 4);
 
   return (
     <>
@@ -106,6 +107,25 @@ export default function HomePage() {
             >
               Ver todos →
             </Link>
+          </div>
+        )}
+
+        {!loading && !error && viralDropi.length > 0 && (
+          <div>
+            <div className="flex items-end justify-between mb-8">
+              <h2 className="text-3xl font-bold text-foreground">Los más virales</h2>
+              <Link
+                to="/products?source=dropi"
+                className="text-sm font-medium text-primary hover:underline hidden md:block"
+              >
+                Ver todos →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {viralDropi.map((p, i) => (
+                <ProductCard key={p.id} product={p} index={i} />
+              ))}
+            </div>
           </div>
         )}
 

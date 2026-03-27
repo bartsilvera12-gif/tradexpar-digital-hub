@@ -83,6 +83,10 @@ export function AdminSidebar() {
       <div className="p-3 border-t border-secondary-foreground/10">
         <Link
           to="/admin/login"
+          onClick={() => {
+            sessionStorage.removeItem("tradexpar_admin");
+            sessionStorage.removeItem("tradexpar_admin_token");
+          }}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-secondary-foreground/50 hover:bg-secondary-foreground/10 hover:text-secondary-foreground transition-all"
         >
           <LogOut className="h-5 w-5 shrink-0" />

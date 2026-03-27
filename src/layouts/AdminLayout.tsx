@@ -1,7 +1,10 @@
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
 export function AdminLayout() {
+  const isLogged = sessionStorage.getItem("tradexpar_admin") === "true";
+  if (!isLogged) return <Navigate to="/admin/login" replace />;
+
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar />

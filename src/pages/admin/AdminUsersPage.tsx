@@ -1,6 +1,24 @@
-import { AlertCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api } from "@/services/api";
+import type { CustomerUser } from "@/types";
+import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 
 export default function AdminUsersPage() {
+  const [users, setUsers] = useState<CustomerUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchUsers = () => {
+    setLoading(true);
+    setError(null);
+    api.adminGetUsers()
+      .then((res) => setUsers(res.users))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -8,27 +26,37 @@ export default function AdminUsersPage() {
         <p className="text-sm text-muted-foreground">Gestión de usuarios del sistema</p>
       </div>
 
-      <div className="bg-card rounded-2xl border shadow-card p-12">
-        <div className="flex flex-col items-center justify-center text-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <AlertCircle className="h-7 w-7 text-primary" />
-          </div>
-          <h2 className="text-lg font-semibold text-foreground">Módulo preparado</h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Este módulo está listo para conectarse al endpoint de gestión de usuarios.
-            La tabla se poblará automáticamente cuando el endpoint esté disponible.
-          </p>
-          <div className="mt-4 bg-muted/30 rounded-xl p-4 text-left w-full max-w-md">
-            <p className="text-xs font-mono text-muted-foreground mb-1">Endpoints pendientes:</p>
-            <ul className="text-xs font-mono text-foreground space-y-1">
-              <li>• GET /api/admin/users</li>
-              <li>• GET /api/admin/users/:id</li>
-              <li>• PUT /api/admin/users/:id</li>
-              <li>• DELETE /api/admin/users/:id</li>
-            </ul>
+      {loading && <Loader text="Cargando usuarios..." />}
+      {error && <ErrorState message={error} onRetry={fetchUsers} />}
+      {!loading && !error && users.length === 0 && (
+        <EmptyState title="Sin usuarios" description="Aún no hay usuarios registrados." />
+      )}
+      {!loading && !error && users.length > 0 && (
+        <div className="bg-card rounded-2xl border shadow-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/30">
+                  <th className="text-left py-3 px-4">ID</th>
+                  <th className="text-left py-3 px-4">Nombre</th>
+                  <th className="text-left py-3 px-4">Email</th>
+                  <th className="text-left py-3 px-4">Creado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-t">
+                    <td className="py-3 px-4 font-mono text-xs">{u.id}</td>
+                    <td className="py-3 px-4">{u.name}</td>
+                    <td className="py-3 px-4">{u.email}</td>
+                    <td className="py-3 px-4">{u.created_at ? new Date(u.created_at).toLocaleDateString("es-PY") : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, Menu, X, Search, ChevronDown } from "lucide-react";
+import { ShoppingCart, Menu, X, Search, ChevronDown, Heart, User } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,9 +7,13 @@ import { api } from "@/services/api";
 import type { Product } from "@/types";
 import logoIcon from "@/assets/logo-icon.png";
 import { CartDropdown } from "@/components/store/CartDropdown";
+import { useWishlist } from "@/contexts/WishlistContext";
+import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 
 export function StoreNavbar() {
   const { totalItems } = useCart();
+  const { count: wishlistCount } = useWishlist();
+  const { user, logout } = useCustomerAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -21,6 +25,7 @@ export function StoreNavbar() {
   const [catOpen, setCatOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const catRef = useRef<HTMLDivElement>(null);
+  const closeCart = useCallback(() => setCartOpen(false), []);
 
   const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))];
 
@@ -111,7 +116,7 @@ export function StoreNavbar() {
                       <p className="text-xs text-muted-foreground">{p.category}</p>
                     </div>
                     <span className="text-sm font-bold text-foreground shrink-0">
-                      ₲{p.price.toLocaleString("es-PY")}
+                      ₲{(Number(p.price) || 0).toLocaleString("es-PY")}
                     </span>
                   </button>
                 ))}
@@ -176,6 +181,25 @@ export function StoreNavbar() {
 
         {/* Cart + mobile toggle */}
         <div className="flex items-center gap-3 shrink-0">
+          <Link
+            to={user ? "/account" : "/login"}
+            className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
+            title={user ? "Mi cuenta" : "Ingresar"}
+          >
+            <User className="h-5 w-5 text-foreground" />
+          </Link>
+          <Link
+            to="/wishlist"
+            className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors"
+            title="Favoritos"
+          >
+            <Heart
+              className={`h-5 w-5 ${location.pathname === "/wishlist" ? "text-primary" : "text-foreground"}`}
+            />
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+              {wishlistCount}
+            </span>
+          </Link>
           <div className="relative">
             <button
               onClick={() => setCartOpen(!cartOpen)}
@@ -187,7 +211,7 @@ export function StoreNavbar() {
               </span>
             </button>
             <AnimatePresence>
-              <CartDropdown open={cartOpen} onClose={useCallback(() => setCartOpen(false), [])} />
+              <CartDropdown open={cartOpen} onClose={closeCart} />
             </AnimatePresence>
           </div>
 
@@ -241,7 +265,7 @@ export function StoreNavbar() {
                             <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                           </div>
                           <span className="text-sm font-bold text-foreground shrink-0">
-                            ₲{p.price.toLocaleString("es-PY")}
+                            ₲{(Number(p.price) || 0).toLocaleString("es-PY")}
                           </span>
                         </button>
                       ))}
@@ -257,6 +281,23 @@ export function StoreNavbar() {
                 <Link to="/products" onClick={() => setMobileOpen(false)} className={`text-sm font-medium py-2 px-3 rounded-lg transition-colors ${location.pathname.startsWith("/products") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
                   Catálogo
                 </Link>
+                <Link to="/wishlist" onClick={() => setMobileOpen(false)} className={`text-sm font-medium py-2 px-3 rounded-lg transition-colors ${location.pathname === "/wishlist" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
+                  Favoritos ({wishlistCount})
+                </Link>
+                {!user ? (
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2 px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50">
+                    Ingresar / Registro
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/account" onClick={() => setMobileOpen(false)} className="text-sm font-medium py-2 px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50">
+                      Mi cuenta
+                    </Link>
+                    <button onClick={() => { logout(); setMobileOpen(false); }} className="text-left text-sm font-medium py-2 px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50">
+                      Cerrar sesión
+                    </button>
+                  </>
+                )}
                 {categories.length > 0 && (
                   <div className="pl-3 space-y-1">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1">Categorías</p>
