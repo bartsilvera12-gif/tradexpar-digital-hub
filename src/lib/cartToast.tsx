@@ -9,10 +9,10 @@ export function toastCartAdded(productName: string, qty: number) {
   toast({
     duration: DURATION_SUCCESS_MS,
     variant: "success",
-    title: (
+    description: (
       <span className="flex items-start gap-3">
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full gradient-celeste text-white shadow-brand ring-2 ring-primary/15"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full gradient-celeste text-primary-foreground shadow-brand ring-2 ring-primary/15"
           aria-hidden
         >
           <Check className="h-4 w-4 stroke-[3]" />

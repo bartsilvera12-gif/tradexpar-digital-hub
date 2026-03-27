@@ -7,7 +7,7 @@
 @layer base {
   :root {
     /* Tradexpar Brand */
-    --background: 210 20% 98%;
+    --background: 220 20% 97%;
     --foreground: 213 63% 17%;
 
     --card: 0 0% 100%;
@@ -22,8 +22,8 @@
     --secondary: 213 63% 17%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 40 4% 76%;
-    --muted-foreground: 197 10% 42%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 215 16% 47%;
 
     --accent: 195 89% 47%;
     --accent-foreground: 0 0% 100%;
@@ -31,8 +31,8 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 40 4% 86%;
-    --input: 40 4% 86%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
     --ring: 195 89% 47%;
 
     --radius: 0.75rem;
@@ -40,8 +40,8 @@
     /* Custom tokens */
     --brand-dark: 213 63% 17%;
     --brand-celeste: 195 89% 47%;
-    --brand-gray: 197 10% 52%;
-    --brand-gray-light: 40 4% 76%;
+    --brand-gray: 215 16% 47%;
+    --brand-gray-light: 220 14% 94%;
 
     --sidebar-background: 213 63% 12%;
     --sidebar-foreground: 210 20% 90%;
@@ -51,6 +51,10 @@
     --sidebar-accent-foreground: 210 20% 95%;
     --sidebar-border: 213 50% 22%;
     --sidebar-ring: 195 89% 47%;
+
+    /* Surface tokens for layered design */
+    --surface-raised: 0 0% 100%;
+    --surface-sunken: 220 20% 95%;
   }
 }
 
@@ -71,7 +75,7 @@
     background: linear-gradient(135deg, hsl(195 89% 47%) 0%, hsl(195 89% 55%) 100%);
   }
   .gradient-card {
-    background: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 97%) 100%);
+    background: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 20% 97%) 100%);
   }
   .text-gradient {
     background: linear-gradient(135deg, hsl(195 89% 47%) 0%, hsl(195 89% 60%) 100%);
@@ -80,9 +84,17 @@
     background-clip: text;
   }
   .shadow-brand {
-    box-shadow: 0 4px 24px -4px hsl(195 89% 47% / 0.15);
+    box-shadow: 0 4px 24px -4px hsl(195 89% 47% / 0.18);
   }
   .shadow-card {
-    box-shadow: 0 1px 3px hsl(213 63% 17% / 0.06), 0 8px 24px hsl(213 63% 17% / 0.04);
+    box-shadow: 0 1px 2px hsl(213 63% 17% / 0.04), 0 4px 16px hsl(213 63% 17% / 0.06);
+  }
+  .shadow-card-hover {
+    box-shadow: 0 8px 30px hsl(213 63% 17% / 0.1), 0 2px 8px hsl(195 89% 47% / 0.08);
+  }
+  .glass-card {
+    background: hsl(0 0% 100% / 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 }
