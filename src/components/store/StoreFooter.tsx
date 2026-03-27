@@ -13,13 +13,13 @@ export function StoreFooter() {
   return (
     <>
       {/* Trust bar */}
-      <div className="bg-secondary border-b border-secondary-foreground/10">
+      <div className="bg-card border-b">
         <div className="container mx-auto px-4 py-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {trustItems.map((item) => (
               <div key={item.label} className="flex items-center justify-center gap-3">
                 <item.icon className="h-6 w-6 text-primary shrink-0" />
-                <span className="text-xs font-bold tracking-wider text-secondary-foreground uppercase">{item.label}</span>
+                <span className="text-xs font-bold tracking-wider text-foreground uppercase">{item.label}</span>
               </div>
             ))}
           </div>
