@@ -68,7 +68,7 @@ export function StoreNavbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-xl border-b">
+    <header className="sticky top-0 z-50 bg-card/95 backdrop-blur-xl border-b shadow-sm">
       <div className="container mx-auto flex items-center justify-between h-16 px-4 gap-4">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
