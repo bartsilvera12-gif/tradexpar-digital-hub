@@ -82,5 +82,6 @@ export function StoreFooter() {
         </div>
       </div>
     </footer>
+    </>
   );
 }
