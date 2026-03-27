@@ -74,30 +74,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Category pills */}
-      {!loading && !error && allCategories.length > 0 && (
-        <section className="bg-card border-b">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
-              <Link
-                to="/products"
-                className="shrink-0 px-5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold transition-all hover:opacity-90"
-              >
-                Ver todo
-              </Link>
-              {allCategories.map(([cat]) => (
-                <Link
-                  key={cat}
-                  to={`/products?category=${encodeURIComponent(cat)}`}
-                  className="shrink-0 px-5 py-2 rounded-full border text-sm font-medium text-foreground hover:border-primary hover:text-primary transition-all"
-                >
-                  {cat}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {/* Banner promocional */}
+      <section className="w-full">
+        <img
+          src="https://res.cloudinary.com/dfxz2hxgr/image/upload/v1774643340/4fb44af5-a76d-4173-9ada-c5639e798edd.png"
+          alt="Promoción Tradexpar"
+          className="w-full h-auto block"
+        />
+      </section>
 
       {/* Products */}
       <section className="container mx-auto px-4 py-14 space-y-16">

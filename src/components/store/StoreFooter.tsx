@@ -1,9 +1,30 @@
 import { Link } from "react-router-dom";
 import logoIcon from "@/assets/logo-icon.png";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, Truck, ShieldCheck, Headphones, CheckCircle } from "lucide-react";
+
+const trustItems = [
+  { icon: Truck, label: "ENVÍO SEGURO" },
+  { icon: ShieldCheck, label: "GARANTÍA" },
+  { icon: Headphones, label: "SOPORTE 24/7" },
+  { icon: CheckCircle, label: "100% SEGURO" },
+];
 
 export function StoreFooter() {
   return (
+    <>
+      {/* Trust bar */}
+      <div className="bg-secondary border-b border-secondary-foreground/10">
+        <div className="container mx-auto px-4 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {trustItems.map((item) => (
+              <div key={item.label} className="flex items-center justify-center gap-3">
+                <item.icon className="h-6 w-6 text-primary shrink-0" />
+                <span className="text-xs font-bold tracking-wider text-secondary-foreground uppercase">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     <footer className="bg-secondary text-secondary-foreground">
       <div className="container mx-auto px-4 pt-14 pb-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
