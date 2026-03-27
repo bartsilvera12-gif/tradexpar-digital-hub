@@ -35,38 +35,43 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     setQty(1);
   };
 
+  const soldOut = product.stock !== undefined && product.stock <= 0;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.05 }}
-      className="group relative bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-brand transition-all duration-300 border"
+      transition={{ duration: 0.35, delay: index * 0.04 }}
+      className="group relative bg-card rounded-xl overflow-hidden border hover:shadow-card-hover transition-shadow duration-300"
     >
-      <Link to={`/products/${product.id}`} className="block">
-        <div className="aspect-square bg-muted/30 flex items-center justify-center p-6 relative overflow-hidden">
-          <div className="absolute top-3 left-0 z-10 flex flex-col gap-2">
+      {/* Image area */}
+      <Link to={`/products/${product.id}`} className="block relative">
+        <div className="aspect-square bg-muted/20 flex items-center justify-center p-5 relative overflow-hidden">
+          {/* Badges */}
+          <div className="absolute top-2.5 left-0 z-10 flex flex-col gap-1.5">
             {discountPct > 0 && (
-              <span className="px-3 py-1 text-xs rounded-r-md bg-[#E97A00] text-white font-bold shadow-sm">
+              <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-destructive text-destructive-foreground font-bold">
                 -{discountPct}%
               </span>
             )}
             {isNewProduct(product) && (
-              <span className="px-3 py-1 text-xs rounded-r-md bg-[#E4002B] text-white font-bold shadow-sm uppercase">
-                Nuevo!
+              <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-primary text-primary-foreground font-bold uppercase">
+                Nuevo
               </span>
             )}
           </div>
 
+          {/* Wishlist */}
           <button
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               void toggle(product.id);
             }}
-            className={`absolute top-3 right-3 z-10 w-9 h-9 rounded-full border bg-card/90 backdrop-blur flex items-center justify-center transition-colors ${
+            className={`absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
               has(product.id)
-                ? "text-primary border-primary/30 bg-primary/5"
-                : "text-muted-foreground border-border hover:text-primary hover:bg-muted/40"
+                ? "bg-primary/10 text-primary"
+                : "bg-card/80 backdrop-blur text-muted-foreground opacity-0 group-hover:opacity-100"
             }`}
             aria-label="Agregar a favoritos"
           >
@@ -74,57 +79,65 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
           </button>
 
           {(product.images?.[0] || product.image) ? (
-            <img src={product.images?.[0] || product.image} alt={product.name} className="w-full h-full object-contain" loading="lazy" />
+            <img
+              src={product.images?.[0] || product.image}
+              alt={product.name}
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+              loading="lazy"
+            />
           ) : (
             <div className="text-sm text-muted-foreground font-medium text-center">Sin imagen</div>
           )}
-          {product.stock !== undefined && product.stock <= 0 && (
-            <div className="absolute inset-0 bg-secondary/70 flex items-center justify-center">
-              <span className="text-secondary-foreground font-semibold text-sm">Agotado</span>
+
+          {soldOut && (
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+              <span className="text-foreground font-semibold text-sm px-4 py-1.5 rounded-full border">Agotado</span>
             </div>
           )}
         </div>
       </Link>
 
-      <div className="p-4 flex flex-col min-h-[170px]">
+      {/* Info */}
+      <div className="p-3.5 flex flex-col gap-1.5 min-h-[140px]">
         {product.category && (
-          <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">{product.category}</p>
+          <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">{product.category}</p>
         )}
         <Link to={`/products/${product.id}`}>
-          <h3 className="font-semibold text-foreground line-clamp-2 min-h-[3rem] group-hover:text-primary transition-colors">{product.name}</h3>
+          <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+            {product.name}
+          </h3>
         </Link>
-        <div className="text-xs font-medium mt-2">
-          <span className={product.stock > 0 ? "text-green-600" : "text-destructive"}>
-            {getStockLabel(product)}
-          </span>
-        </div>
-        <div className="flex items-end justify-between pt-2 mt-auto">
+        <span className={`text-[11px] font-medium ${product.stock > 0 ? "text-green-600" : "text-destructive"}`}>
+          {getStockLabel(product)}
+        </span>
+
+        <div className="flex items-end justify-between mt-auto pt-1">
           <div className="flex flex-col">
             {discountPct > 0 && (
-              <span className="text-xs text-muted-foreground line-through">
-                Gs {(Number(product.price) || 0).toLocaleString("es-PY")}
+              <span className="text-[11px] text-muted-foreground line-through">
+                ₲ {(Number(product.price) || 0).toLocaleString("es-PY")}
               </span>
             )}
-            <span className="text-2xl leading-none font-bold text-foreground whitespace-nowrap">
-              Gs {effectivePrice.toLocaleString("es-PY")}
+            <span className="text-lg font-bold text-foreground leading-none">
+              ₲ {effectivePrice.toLocaleString("es-PY")}
             </span>
           </div>
-          <div className="relative flex items-center gap-2">
+          <div className="relative flex items-center gap-1.5">
             <a
               href={buildWhatsAppProductLink(product)}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full border text-foreground flex items-center justify-center hover:bg-muted/40 transition-colors"
+              className="w-8 h-8 rounded-full border text-muted-foreground flex items-center justify-center hover:text-primary hover:border-primary/30 transition-colors"
               aria-label="Consultar por WhatsApp"
             >
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-3.5 w-3.5" />
             </a>
             <button
               onClick={() => setShowQty(!showQty)}
-              disabled={product.stock !== undefined && product.stock <= 0}
-              className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={soldOut}
+              className="w-8 h-8 rounded-full gradient-celeste text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed shadow-brand"
             >
-              <ShoppingCart className="h-4 w-4" />
+              <ShoppingCart className="h-3.5 w-3.5" />
             </button>
 
             <AnimatePresence>
@@ -140,7 +153,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                   <div className="flex items-center gap-2 mb-3">
                     <button
                       onClick={() => setQty(Math.max(1, qty - 1))}
-                      className="w-7 h-7 rounded-lg border flex items-center justify-center text-foreground hover:bg-muted/50 transition-colors"
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center text-foreground hover:bg-muted transition-colors"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
@@ -148,14 +161,14 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                     <button
                       onClick={() => setQty(Math.min((product.stock ?? Infinity), qty + 1))}
                       disabled={product.stock !== undefined && qty >= product.stock}
-                      className="w-7 h-7 rounded-lg border flex items-center justify-center text-foreground hover:bg-muted/50 transition-colors disabled:opacity-40"
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center text-foreground hover:bg-muted transition-colors disabled:opacity-40"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>
                   <button
                     onClick={handleAddToCart}
-                    className="w-full py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                    className="w-full py-1.5 rounded-lg gradient-celeste text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity"
                   >
                     Añadir al carrito
                   </button>

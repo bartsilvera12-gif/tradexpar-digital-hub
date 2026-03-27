@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Zap, Shield, Globe, TrendingUp } from "lucide-react";
+import { ArrowRight, Zap, Shield, Globe, TrendingUp, ChevronRight } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
 import type { Product } from "@/types";
-
 
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
@@ -31,7 +30,6 @@ export default function HomePage() {
 
   useEffect(() => { fetchProducts(); }, []);
 
-  // Group products by category
   const categoryMap = new Map<string, Product[]>();
   products.forEach((p) => {
     if (!p.category) return;
@@ -43,7 +41,7 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Hero */}
+      {/* Hero — untouched */}
       <section className="relative overflow-hidden">
         <img
           src="https://res.cloudinary.com/drupicep5/image/upload/v1774384987/6b7b8009-8b0c-4d66-8b6e-7c4393582258.png"
@@ -58,11 +56,11 @@ export default function HomePage() {
             transition={{ duration: 0.7 }}
             className="max-w-xl"
           >
-            <h1 className="text-3xl lg:text-5xl font-bold text-white leading-tight mb-4">
+            <h1 className="text-3xl lg:text-5xl font-bold text-primary-foreground leading-tight mb-4">
               Distribución digital<br />
               <span className="text-gradient">de alto rendimiento</span>
             </h1>
-            <p className="text-base text-white/70 mb-6 max-w-md">
+            <p className="text-base text-primary-foreground/70 mb-6 max-w-md">
               Accede a productos digitales premium con la confianza y tecnología de Tradexpar.
             </p>
             <Link
@@ -76,119 +74,147 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Products sections */}
-      <section className="container mx-auto px-4 py-20 space-y-16">
+      {/* Category pills */}
+      {!loading && !error && allCategories.length > 0 && (
+        <section className="bg-card border-b">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+              <Link
+                to="/products"
+                className="shrink-0 px-5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold transition-all hover:opacity-90"
+              >
+                Ver todo
+              </Link>
+              {allCategories.map(([cat]) => (
+                <Link
+                  key={cat}
+                  to={`/products?category=${encodeURIComponent(cat)}`}
+                  className="shrink-0 px-5 py-2 rounded-full border text-sm font-medium text-foreground hover:border-primary hover:text-primary transition-all"
+                >
+                  {cat}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Products */}
+      <section className="container mx-auto px-4 py-14 space-y-16">
         {loading && <Loader text="Cargando productos..." />}
         {error && <ErrorState message={error} onRetry={fetchProducts} />}
         {!loading && !error && products.length === 0 && (
           <EmptyState title="Sin productos aún" description="El catálogo se poblará cuando haya productos disponibles en la API." />
         )}
 
-        {/* Productos destacados — all products together */}
+        {/* Productos destacados */}
         {!loading && !error && products.length > 0 && (
-          <div>
-            <div className="flex items-end justify-between mb-8">
-              <h2 className="text-3xl font-bold text-foreground">Productos destacados</h2>
-              <Link
-                to="/products"
-                className="text-sm font-medium text-primary hover:underline hidden md:block"
-              >
-                Ver todos →
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {products.slice(0, 8).map((p, i) => (
-                <ProductCard key={p.id} product={p} index={i} />
-              ))}
-            </div>
-            <Link
-              to="/products"
-              className="mt-4 text-sm font-medium text-primary hover:underline md:hidden block text-center"
-            >
-              Ver todos →
-            </Link>
-          </div>
+          <ProductSection
+            title="Productos destacados"
+            linkTo="/products"
+            products={products.slice(0, 8)}
+          />
         )}
 
+        {/* Los más virales */}
         {!loading && !error && viralDropi.length > 0 && (
-          <div>
-            <div className="flex items-end justify-between mb-8">
-              <h2 className="text-3xl font-bold text-foreground">Los más virales</h2>
-              <Link
-                to="/products?source=dropi"
-                className="text-sm font-medium text-primary hover:underline hidden md:block"
-              >
-                Ver todos →
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {viralDropi.map((p, i) => (
-                <ProductCard key={p.id} product={p} index={i} />
-              ))}
-            </div>
-          </div>
+          <ProductSection
+            title="Los más virales"
+            subtitle="Tendencias del momento"
+            linkTo="/products?source=dropi"
+            products={viralDropi}
+          />
         )}
 
-        {/* Sections per category */}
+        {/* Por categoría */}
         {!loading && !error && allCategories.map(([category, catProducts]) => (
-          <div key={category}>
-            <div className="flex items-end justify-between mb-8">
-              <h2 className="text-3xl font-bold text-foreground">{category}</h2>
-              <Link
-                to={`/products?category=${encodeURIComponent(category)}`}
-                className="text-sm font-medium text-primary hover:underline hidden md:block"
-              >
-                Ver todos →
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {catProducts.slice(0, 4).map((p, i) => (
-                <ProductCard key={p.id} product={p} index={i} />
-              ))}
-            </div>
-            <Link
-              to={`/products?category=${encodeURIComponent(category)}`}
-              className="mt-4 text-sm font-medium text-primary hover:underline md:hidden block text-center"
-            >
-              Ver todos →
-            </Link>
-          </div>
+          <ProductSection
+            key={category}
+            title={category}
+            linkTo={`/products?category=${encodeURIComponent(category)}`}
+            products={catProducts.slice(0, 4)}
+          />
         ))}
       </section>
 
       {/* Benefits */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-background via-secondary/40 to-secondary" />
-        <div className="container mx-auto px-4 py-24 relative z-10">
-          <motion.h2
+      <section className="bg-secondary">
+        <div className="container mx-auto px-4 py-20">
+          <motion.div
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-3xl lg:text-4xl font-bold text-foreground text-center mb-16"
+            className="text-center mb-14"
           >
-            ¿Por qué Tradexpar?
-          </motion.h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <h2 className="text-3xl lg:text-4xl font-bold text-secondary-foreground mb-3">
+              ¿Por qué Tradexpar?
+            </h2>
+            <p className="text-secondary-foreground/60 max-w-lg mx-auto">
+              Confianza, tecnología y soporte que respaldan cada compra
+            </p>
+          </motion.div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {benefits.map((b, i) => (
               <motion.div
                 key={b.title}
                 initial={{ opacity: 0, y: 25 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.12, duration: 0.5 }}
-                className="group relative bg-card/60 backdrop-blur-sm border border-border/50 rounded-2xl p-8 text-center hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
+                transition={{ delay: i * 0.1, duration: 0.45 }}
+                className="group relative rounded-2xl p-7 text-center border border-secondary-foreground/10 bg-secondary-foreground/5 hover:bg-secondary-foreground/10 transition-all duration-300"
               >
-                <div className="w-16 h-16 rounded-2xl gradient-celeste flex items-center justify-center mx-auto mb-5 shadow-md shadow-primary/20 group-hover:scale-110 transition-transform duration-300">
-                  <b.icon className="h-7 w-7 text-primary-foreground" />
+                <div className="w-14 h-14 rounded-xl gradient-celeste flex items-center justify-center mx-auto mb-5 shadow-brand group-hover:scale-105 transition-transform duration-300">
+                  <b.icon className="h-6 w-6 text-primary-foreground" />
                 </div>
-                <h3 className="font-bold text-foreground mb-2 text-lg">{b.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{b.desc}</p>
+                <h3 className="font-bold text-secondary-foreground mb-2">{b.title}</h3>
+                <p className="text-sm text-secondary-foreground/60 leading-relaxed">{b.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
-
     </>
+  );
+}
+
+/* ─── Reusable section component ─── */
+function ProductSection({
+  title,
+  subtitle,
+  linkTo,
+  products,
+}: {
+  title: string;
+  subtitle?: string;
+  linkTo: string;
+  products: Product[];
+}) {
+  return (
+    <div>
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">{title}</h2>
+          {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+        </div>
+        <Link
+          to={linkTo}
+          className="hidden md:inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+        >
+          Ver todos
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+        {products.map((p, i) => (
+          <ProductCard key={p.id} product={p} index={i} />
+        ))}
+      </div>
+      <Link
+        to={linkTo}
+        className="mt-4 text-sm font-medium text-primary hover:underline md:hidden flex items-center justify-center gap-1"
+      >
+        Ver todos <ChevronRight className="h-4 w-4" />
+      </Link>
+    </div>
   );
 }
