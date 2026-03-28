@@ -72,12 +72,20 @@ export function StoreFooter() {
           </div>
         </div>
 
-        <div className="pt-6 border-t border-secondary-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="pt-6 border-t border-secondary-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-secondary-foreground/40">
             © {new Date().getFullYear()} Tradexpar. Todos los derechos reservados.
           </p>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-secondary-foreground/40">Distribución Digital</span>
+          <div className="flex items-center gap-3">
+            {/* Payment icons */}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>VISA</span>
+              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>MC</span>
+              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>PayPal</span>
+              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>AMEX</span>
+            </div>
+            <span className="w-px h-4 bg-secondary-foreground/20" />
+            <span className="text-xs text-secondary-foreground/40">Desarrollado por Neura</span>
           </div>
         </div>
       </div>
