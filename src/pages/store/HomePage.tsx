@@ -171,6 +171,60 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Nuestro Proceso */}
+      <section className="bg-background py-20">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-14"
+          >
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-foreground uppercase tracking-tight mb-3">
+              Nuestro Proceso
+            </h2>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              Rápido, sencillo y directo a la puerta de tu casa.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { img: processStep1, icon: ShoppingCart, title: "Realizas el pedido en la web" },
+              { img: processStep2, icon: Warehouse, title: "Lo preparamos en el depósito" },
+              { img: processStep3, icon: Truck, title: "¡Lo recibís en tu casa!" },
+            ].map((step, i) => (
+              <motion.div
+                key={step.title}
+                initial={{ opacity: 0, y: 25 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.15, duration: 0.5 }}
+                className="group relative rounded-2xl overflow-hidden aspect-[5/4] shadow-card hover:shadow-card-hover transition-shadow duration-500"
+              >
+                <img
+                  src={step.img}
+                  alt={step.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  loading="lazy"
+                  width={640}
+                  height={512}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute top-5 left-5">
+                  <div className="w-12 h-12 rounded-xl gradient-celeste flex items-center justify-center shadow-brand">
+                    <step.icon className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                </div>
+                <div className="absolute bottom-5 left-5 right-5">
+                  <h3 className="text-xl font-bold text-primary-foreground">{step.title}</h3>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
     </>
   );
 }
