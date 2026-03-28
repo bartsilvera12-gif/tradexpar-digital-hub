@@ -81,7 +81,7 @@ export function StoreFooter() {
             <img src="https://img.icons8.com/color/48/mastercard-logo.png" alt="Mastercard" className="h-7" />
             <img src="https://img.icons8.com/color/48/paypal.png" alt="PayPal" className="h-7" />
             <img src="https://img.icons8.com/color/48/amex.png" alt="American Express" className="h-7" />
-            <img src="https://img.icons8.com/fluency/48/visa-electron.png" alt="Visa Electron" className="h-7" />
+            <img src="https://img.icons8.com/officel/48/visa-electron.png" alt="Visa Electron" className="h-7" />
             <img src="https://img.icons8.com/color/48/maestro.png" alt="Maestro" className="h-7" />
           </div>
         </div>
