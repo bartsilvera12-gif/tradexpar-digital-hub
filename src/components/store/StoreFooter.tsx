@@ -74,18 +74,15 @@ export function StoreFooter() {
 
         <div className="pt-6 border-t border-secondary-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-secondary-foreground/40">
-            © {new Date().getFullYear()} Tradexpar. Todos los derechos reservados.
+            Desarrollado por Neura
           </p>
-          <div className="flex items-center gap-3">
-            {/* Payment icons */}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>VISA</span>
-              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>MC</span>
-              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>PayPal</span>
-              <span className="inline-flex items-center justify-center bg-primary-foreground/90 rounded px-1.5 py-0.5 text-[9px] font-bold text-secondary tracking-tight" style={{ fontFamily: 'system-ui' }}>AMEX</span>
-            </div>
-            <span className="w-px h-4 bg-secondary-foreground/20" />
-            <span className="text-xs text-secondary-foreground/40">Desarrollado por Neura</span>
+          <div className="flex items-center gap-2">
+            <img src="https://img.icons8.com/color/48/visa.png" alt="Visa" className="h-7" />
+            <img src="https://img.icons8.com/color/48/mastercard-logo.png" alt="Mastercard" className="h-7" />
+            <img src="https://img.icons8.com/color/48/paypal.png" alt="PayPal" className="h-7" />
+            <img src="https://img.icons8.com/color/48/amex.png" alt="American Express" className="h-7" />
+            <img src="https://img.icons8.com/color/48/visa-electron.png" alt="Visa Electron" className="h-7" />
+            <img src="https://img.icons8.com/color/48/maestro.png" alt="Maestro" className="h-7" />
           </div>
         </div>
       </div>
