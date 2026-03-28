@@ -122,36 +122,47 @@ export default function HomePage() {
       </section>
 
       {/* Benefits */}
-      <section className="bg-secondary">
-        <div className="container mx-auto px-4 py-20">
+      <section className="relative overflow-hidden">
+        {/* Background with gradient mesh */}
+        <div className="absolute inset-0 gradient-hero" />
+        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, hsl(195 89% 47%) 0%, transparent 50%), radial-gradient(circle at 80% 20%, hsl(195 89% 60%) 0%, transparent 40%)' }} />
+        
+        <div className="container mx-auto px-4 py-24 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-14"
+            className="text-center mb-16"
           >
-            <h2 className="text-3xl lg:text-4xl font-bold text-secondary-foreground mb-3">
-              ¿Por qué Tradexpar?
+            <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-widest uppercase gradient-celeste text-primary-foreground mb-5">
+              Nuestra promesa
+            </span>
+            <h2 className="text-3xl lg:text-5xl font-bold text-primary-foreground mb-4">
+              ¿Por qué <span className="text-gradient">Tradexpar</span>?
             </h2>
-            <p className="text-secondary-foreground/60 max-w-lg mx-auto">
+            <p className="text-primary-foreground/50 max-w-lg mx-auto text-lg">
               Confianza, tecnología y soporte que respaldan cada compra
             </p>
           </motion.div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {benefits.map((b, i) => (
               <motion.div
                 key={b.title}
-                initial={{ opacity: 0, y: 25 }}
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1, duration: 0.45 }}
-                className="group relative rounded-2xl p-7 text-center border border-secondary-foreground/10 bg-secondary-foreground/5 hover:bg-secondary-foreground/10 transition-all duration-300"
+                transition={{ delay: i * 0.12, duration: 0.5 }}
+                className="group relative rounded-2xl p-8 text-center backdrop-blur-md bg-primary-foreground/[0.04] border border-primary-foreground/10 hover:border-primary/40 hover:bg-primary-foreground/[0.08] transition-all duration-500 hover:shadow-[0_0_40px_-10px_hsl(195_89%_47%/0.25)]"
               >
-                <div className="w-14 h-14 rounded-xl gradient-celeste flex items-center justify-center mx-auto mb-5 shadow-brand group-hover:scale-105 transition-transform duration-300">
-                  <b.icon className="h-6 w-6 text-primary-foreground" />
+                {/* Glow dot */}
+                <div className="absolute -top-px left-1/2 -translate-x-1/2 w-16 h-[2px] gradient-celeste rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                <div className="w-16 h-16 rounded-2xl gradient-celeste flex items-center justify-center mx-auto mb-6 shadow-brand group-hover:scale-110 group-hover:shadow-[0_0_30px_-5px_hsl(195_89%_47%/0.4)] transition-all duration-500">
+                  <b.icon className="h-7 w-7 text-primary-foreground" />
                 </div>
-                <h3 className="font-bold text-secondary-foreground mb-2">{b.title}</h3>
-                <p className="text-sm text-secondary-foreground/60 leading-relaxed">{b.desc}</p>
+                <h3 className="font-bold text-primary-foreground text-lg mb-2">{b.title}</h3>
+                <p className="text-sm text-primary-foreground/50 leading-relaxed">{b.desc}</p>
               </motion.div>
             ))}
           </div>
