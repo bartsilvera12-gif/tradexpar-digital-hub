@@ -212,11 +212,6 @@ export default function HomePage() {
                   height={512}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                <div className="absolute top-5 left-5">
-                  <div className="w-12 h-12 rounded-xl gradient-celeste flex items-center justify-center shadow-brand">
-                    <step.icon className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                </div>
                 <div className="absolute bottom-5 left-5 right-5">
                   <h3 className="text-xl font-bold text-primary-foreground">{step.title}</h3>
                 </div>
