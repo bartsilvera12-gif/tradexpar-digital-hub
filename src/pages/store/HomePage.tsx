@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Zap, Shield, Globe, TrendingUp, ChevronRight } from "lucide-react";
+import { ArrowRight, Zap, Shield, Globe, TrendingUp, ChevronRight, ShoppingCart, Warehouse, Truck } from "lucide-react";
+import processStep1 from "@/assets/process-step1.jpg";
+import processStep2 from "@/assets/process-step2.jpg";
+import processStep3 from "@/assets/process-step3.jpg";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { api } from "@/services/api";
