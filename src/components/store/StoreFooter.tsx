@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import logoIcon from "@/assets/logo-icon.png";
+import paymentMethods from "@/assets/payment-methods.png";
 import { Mail, Phone, MapPin, Truck, ShieldCheck, Headphones, CheckCircle } from "lucide-react";
 
 const trustItems = [
@@ -76,13 +77,8 @@ export function StoreFooter() {
           <p className="text-xs text-secondary-foreground/40">
             Desarrollado por Neura
           </p>
-          <div className="flex items-center gap-2">
-            <img src="https://img.icons8.com/color/48/visa.png" alt="Visa" className="h-7" />
-            <img src="https://img.icons8.com/color/48/mastercard-logo.png" alt="Mastercard" className="h-7" />
-            <img src="https://img.icons8.com/color/48/paypal.png" alt="PayPal" className="h-7" />
-            <img src="https://img.icons8.com/color/48/amex.png" alt="American Express" className="h-7" />
-            <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/Visa_Electron.svg" alt="Visa Electron" className="h-7" />
-            <img src="https://img.icons8.com/color/48/maestro.png" alt="Maestro" className="h-7" />
+          <div className="flex items-center">
+            <img src={paymentMethods} alt="Métodos de pago: Visa, Mastercard, PayPal, American Express, Visa Electron, Maestro" className="h-6" />
           </div>
         </div>
       </div>
