@@ -1,10 +1,158 @@
+import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
+import { Loader } from "@/components/shared/Loader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { isOAuthCallbackUrl, isOAuthReturnPending, tradexpar } from "@/services/tradexpar";
+
+import type { CustomerUser } from "@/types";
+
+const CUSTOMER_STORAGE_KEY = "tradexpar_customer_user";
+
+function readStoredCustomer(): CustomerUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CUSTOMER_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CustomerUser;
+  } catch {
+    return null;
+  }
+}
+
+function formatCooldownRemaining(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  const s = Math.floor((ms % 60_000) / 1000);
+  if (h > 0) return `${h} h ${m} min`;
+  if (m > 0) return `${m} min ${s} s`;
+  return `${s} s`;
+}
 
 export default function CustomerAccountPage() {
-  const { user, logout } = useCustomerAuth();
+  const { user, logout, initializing } = useCustomerAuth();
+  /** Respaldo si hubo carrera entre navigate y el estado del contexto. */
+  const effectiveUser = user ?? readStoredCustomer();
 
-  if (!user) return <Navigate to="/login" replace />;
+  /** Si ya hay usuario (p. ej. login recién hecho), no bloquear por la hidratación en segundo plano. */
+  if (effectiveUser) {
+    return (
+      <AccountContent user={effectiveUser} onLogout={() => void logout()} authHydrating={initializing} />
+    );
+  }
+
+  /**
+   * No redirigir a /login mientras la URL sigue siendo el callback OAuth: si Navigate corre antes
+   * de que GoTrue procese el hash, se pierde el token y la sesión nunca se registra.
+   */
+  if (isOAuthCallbackUrl() || isOAuthReturnPending()) {
+    return (
+      <div className="container mx-auto px-4 py-10 max-w-2xl">
+        <Loader text="Completando inicio de sesión..." />
+      </div>
+    );
+  }
+
+  if (initializing) {
+    return (
+      <div className="container mx-auto px-4 py-10 max-w-2xl">
+        <Loader text="Comprobando tu sesión..." />
+      </div>
+    );
+  }
+
+  return <Navigate to="/login" replace />;
+}
+
+function AccountContent({
+  user,
+  onLogout,
+  authHydrating,
+}: {
+  user: CustomerUser;
+  onLogout: () => void;
+  /** Evita competir con `syncStoreCustomer` por el lock de GoTrue al cargar estado de contraseña. */
+  authHydrating: boolean;
+}) {
+  const [pwStatus, setPwStatus] = useState<{
+    can_change: boolean;
+    reason?: string;
+    next_change_after?: string;
+  } | null>(null);
+  const [pwLoading, setPwLoading] = useState(true);
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  const loadPwStatus = useCallback(() => {
+    setPwLoading(true);
+    tradexpar
+      .customerPasswordChangeStatus()
+      .then(setPwStatus)
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : "Error";
+        if (/PGRST202|does not exist|Could not find|schema cache|customer_password_change_status/i.test(msg)) {
+          setPwStatus({ can_change: false, reason: "rpc_missing" });
+        } else {
+          toast.error(msg);
+          setPwStatus({ can_change: false, reason: "load_error" });
+        }
+      })
+      .finally(() => setPwLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (authHydrating) return;
+    void loadPwStatus();
+  }, [loadPwStatus, user.id, authHydrating]);
+
+  const inCooldown =
+    pwStatus?.can_change === false &&
+    pwStatus?.reason === "cooldown" &&
+    Boolean(pwStatus?.next_change_after);
+
+  useEffect(() => {
+    if (!inCooldown || !pwStatus?.next_change_after) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [inCooldown, pwStatus?.next_change_after]);
+
+  useEffect(() => {
+    if (!inCooldown || !pwStatus?.next_change_after) return;
+    const ms = new Date(pwStatus.next_change_after).getTime() - Date.now();
+    if (ms <= 0) void loadPwStatus();
+  }, [tick, inCooldown, pwStatus?.next_change_after, loadPwStatus]);
+
+  const savePassword = async () => {
+    const a = pw1.trim();
+    const b = pw2.trim();
+    if (a.length < 6) {
+      toast.error("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (a !== b) {
+      toast.error("Las contraseñas no coinciden.");
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await tradexpar.customerChangeOwnPassword(a);
+      toast.success("Contraseña actualizada. Recordá usarla en el próximo inicio de sesión.");
+      setPw1("");
+      setPw2("");
+      await loadPwStatus();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo actualizar.");
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-10 max-w-2xl">
@@ -14,7 +162,93 @@ export default function CustomerAccountPage() {
         <p className="font-semibold text-foreground">{user.name}</p>
         <p className="text-sm text-muted-foreground mt-3">Email</p>
         <p className="font-semibold text-foreground">{user.email}</p>
-        <button onClick={logout} className="mt-6 px-4 py-2 rounded-lg border text-sm hover:bg-muted/50">
+
+        <div className="border-t border-border pt-6 mt-6 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Contraseña</h2>
+          {pwLoading ? (
+            <p className="text-sm text-muted-foreground">Cargando…</p>
+          ) : pwStatus?.reason === "rpc_missing" ? (
+            <p className="text-sm text-muted-foreground">
+              El cambio de contraseña con cooldown no está disponible hasta que se ejecute en la base el archivo{" "}
+              <code className="text-xs rounded bg-muted px-1">supabase/tradexpar_customer_own_password.sql</code>.
+            </p>
+          ) : pwStatus?.reason === "no_customer" ? (
+            <p className="text-sm text-muted-foreground">
+              No encontramos tu perfil de tienda vinculado a esta sesión.
+            </p>
+          ) : pwStatus?.reason === "not_authenticated" ? (
+            <p className="text-sm text-muted-foreground">
+              La sesión de acceso no llegó al servidor. Cerrá sesión y volvé a iniciar sesión; si usás otra pestaña del
+              panel admin, probá en una ventana privada solo para la tienda.
+            </p>
+          ) : pwStatus?.reason === "load_error" ? (
+            <p className="text-sm text-muted-foreground">
+              Hubo un error de red o del servidor al consultar el estado. Reintentá en unos segundos o recargá la
+              página.
+            </p>
+          ) : pwStatus?.reason === "unknown_response" ? (
+            <p className="text-sm text-muted-foreground">
+              La respuesta del servidor no es la esperada. Recargá la página o contactá soporte si sigue igual.
+            </p>
+          ) : inCooldown && pwStatus?.next_change_after ? (
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                Por seguridad, solo podés cambiar la contraseña{" "}
+                <span className="font-medium text-foreground">una vez cada 24 horas</span>.
+              </p>
+              <p>
+                Próximo cambio posible:{" "}
+                <span className="font-medium text-foreground">
+                  {new Date(pwStatus.next_change_after).toLocaleString("es-PY")}
+                </span>
+              </p>
+              <p className="text-xs">
+                Tiempo restante:{" "}
+                <span className="font-mono text-foreground tabular-nums">
+                  {formatCooldownRemaining(pwStatus.next_change_after) || "…"}
+                </span>
+              </p>
+            </div>
+          ) : pwStatus?.can_change ? (
+            <div className="space-y-3 max-w-md">
+              <p className="text-xs text-muted-foreground">
+                Elegí una contraseña segura. Después de guardar, tendrás que esperar 24 horas para volver a
+                cambiarla.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="acct-pw1">Nueva contraseña</Label>
+                <Input
+                  id="acct-pw1"
+                  type="password"
+                  autoComplete="new-password"
+                  value={pw1}
+                  onChange={(e) => setPw1(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="acct-pw2">Repetir contraseña</Label>
+                <Input
+                  id="acct-pw2"
+                  type="password"
+                  autoComplete="new-password"
+                  value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                />
+              </div>
+              <Button type="button" onClick={() => void savePassword()} disabled={pwSaving}>
+                {pwSaving ? "Guardando…" : "Actualizar contraseña"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No se pudo cargar el estado del cambio de contraseña.</p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          className="mt-6 px-4 py-2 rounded-lg border text-sm hover:bg-muted/50"
+        >
           Cerrar sesión
         </button>
       </div>

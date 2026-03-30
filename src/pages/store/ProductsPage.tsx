@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
-import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
+import { normalizeProductSource } from "@/lib/productHelpers";
 import type { Product } from "@/types";
 
 export default function ProductsPage() {
@@ -19,7 +20,7 @@ export default function ProductsPage() {
   const fetchProducts = () => {
     setLoading(true);
     setError(null);
-    api.getProducts()
+    tradexpar.getProducts()
       .then((data) => setProducts(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -31,7 +32,8 @@ export default function ProductsPage() {
   const filtered = products.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchCat = category === "all" || p.category === category;
-    const matchSource = source === "all" || p.product_source_type === source;
+    const sourceKnown = source === "tradexpar" || source === "dropi";
+    const matchSource = source === "all" || !sourceKnown || normalizeProductSource(p) === source;
     return matchSearch && matchCat && matchSource;
   });
 
@@ -84,28 +86,6 @@ export default function ProductsPage() {
       {/* Filters panel */}
       {showFilters && (
         <div className="mb-6 p-4 bg-card rounded-xl border space-y-4">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Origen</p>
-            <div className="flex gap-2 flex-wrap">
-              {(["all", "tradexpar", "dropi"] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    if (s === "all") searchParams.delete("source");
-                    else searchParams.set("source", s);
-                    setSearchParams(searchParams);
-                  }}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    source === s
-                      ? "bg-primary text-primary-foreground"
-                      : "border text-muted-foreground hover:border-primary/30"
-                  }`}
-                >
-                  {s === "all" ? "Todos" : s === "dropi" ? "Dropi" : "Tradexpar"}
-                </button>
-              ))}
-            </div>
-          </div>
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Categoría</p>
             <div className="flex gap-2 flex-wrap">

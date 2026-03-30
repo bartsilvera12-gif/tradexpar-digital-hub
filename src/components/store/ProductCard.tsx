@@ -7,6 +7,10 @@ import { useState } from "react";
 import { toastCartAdded } from "@/lib/cartToast";
 import { useWishlist } from "@/contexts/WishlistContext";
 import {
+  useAffiliateBuyerDiscountOptional,
+  useTrackAffiliateBuyerProduct,
+} from "@/contexts/AffiliateBuyerDiscountContext";
+import {
   getEffectivePrice,
   getDiscountPercentage,
   isNewProduct,
@@ -22,10 +26,14 @@ interface ProductCardProps {
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem } = useCart();
   const { has, toggle } = useWishlist();
+  useTrackAffiliateBuyerProduct(product.id);
+  const aff = useAffiliateBuyerDiscountOptional();
   const [showQty, setShowQty] = useState(false);
   const [qty, setQty] = useState(1);
   const discountPct = getDiscountPercentage(product);
   const effectivePrice = getEffectivePrice(product);
+  const affiliateBuyerPct = aff ? aff.buyerPercentForProduct(product.id) : 0;
+  const displayUnitPrice = aff ? aff.lineUnitPrice(product) : effectivePrice;
 
   const handleAddToCart = () => {
     if (addItem(product, qty)) {
@@ -52,6 +60,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             {discountPct > 0 && (
               <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-destructive text-destructive-foreground font-bold">
                 -{discountPct}%
+              </span>
+            )}
+            {affiliateBuyerPct > 0 && (
+              <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-primary/90 text-primary-foreground font-bold">
+                -{Math.round(affiliateBuyerPct)}% ref
               </span>
             )}
             {isNewProduct(product) && (
@@ -118,8 +131,13 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                 ₲ {(Number(product.price) || 0).toLocaleString("es-PY")}
               </span>
             )}
+            {affiliateBuyerPct > 0 && displayUnitPrice < effectivePrice && (
+              <span className="text-[11px] text-muted-foreground line-through">
+                ₲ {effectivePrice.toLocaleString("es-PY")}
+              </span>
+            )}
             <span className="text-lg font-bold text-foreground leading-none">
-              ₲ {effectivePrice.toLocaleString("es-PY")}
+              ₲ {displayUnitPrice.toLocaleString("es-PY")}
             </span>
           </div>
           <div className="relative flex items-center gap-1.5">

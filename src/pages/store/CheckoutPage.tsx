@@ -2,14 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
 import { Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
-import { deriveCheckoutTypeFromItems, getEffectivePrice } from "@/lib/productHelpers";
-import { getAffiliateCookie } from "@/lib/affiliate";
+import { deriveCheckoutTypeFromItems } from "@/lib/productHelpers";
+import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
+import { getActiveAffiliateRef } from "@/lib/affiliate";
+import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
 import type { CustomerLocation } from "@/types";
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, clearCart } = useCart();
+  const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
+  const totalPrice = cartTotal(items);
   const { user } = useCustomerAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", email: "", phone: "", locationUrl: "", locationLabel: "" });
@@ -20,7 +32,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (user) {
-      api.getCustomerLocations(user.id).then((res) => {
+      tradexpar.getCustomerLocations(user.id).then((res) => {
         setLocations(res.locations);
         const defaultLoc = res.locations.find((l) => l.is_default) || res.locations[0];
         if (defaultLoc) {
@@ -55,25 +67,30 @@ export default function CheckoutPage() {
 
       let customerLocationId = selectedLocationId || undefined;
       if (user && !customerLocationId && form.locationLabel.trim()) {
-        const created = await api.createCustomerLocation(user.id, {
+        const created = await tradexpar.createCustomerLocation(user.id, {
           label: form.locationLabel.trim(),
           location_url: form.locationUrl.trim(),
         });
         customerLocationId = created.id;
       }
 
-      const order = await api.createOrder({
+      const order = await tradexpar.createOrder({
         items: items.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
-          price: getEffectivePrice(i.product),
+          price: lineUnitPrice(i.product),
+          product_name: i.product.name,
         })),
         customer: { name: form.name, email: form.email || undefined, phone: form.phone.trim() },
         location_url: form.locationUrl.trim(),
         customer_location_id: customerLocationId,
         checkout_type: checkoutType,
-        affiliate_ref: getAffiliateCookie() || undefined,
+        affiliate_ref: getActiveAffiliateRef() || undefined,
       });
+
+      if (affiliatesAvailable()) {
+        void finalizeAffiliateAttribution(order.id);
+      }
 
       const payment = await api.createPayment(order.id);
 
@@ -137,20 +154,30 @@ export default function CheckoutPage() {
           {user && locations.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Ubicaciones guardadas</label>
-              <select
-                value={selectedLocationId}
-                onChange={(e) => {
-                  const selected = locations.find((l) => l.id === e.target.value);
-                  setSelectedLocationId(e.target.value);
+              <Select
+                value={selectedLocationId || "__none"}
+                onValueChange={(v) => {
+                  if (v === "__none") {
+                    setSelectedLocationId("");
+                    return;
+                  }
+                  const selected = locations.find((l) => l.id === v);
+                  setSelectedLocationId(v);
                   if (selected) setForm((prev) => ({ ...prev, locationUrl: selected.location_url }));
                 }}
-                className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                <option value="">Seleccionar...</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>{loc.label}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-10 text-foreground text-sm">
+                  <SelectValue placeholder="Seleccionar…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Seleccionar…</SelectItem>
+                  {locations.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
           <div>
@@ -196,7 +223,7 @@ export default function CheckoutPage() {
             {items.map((item) => (
               <div key={item.product.id} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{item.product.name} × {item.quantity}</span>
-                <span className="text-foreground">₲{(getEffectivePrice(item.product) * item.quantity).toLocaleString("es-PY")}</span>
+                <span className="text-foreground">₲{lineSubtotal(item.product, item.quantity).toLocaleString("es-PY")}</span>
               </div>
             ))}
             <div className="border-t pt-3 flex justify-between font-semibold text-lg">

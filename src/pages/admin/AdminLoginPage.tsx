@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import { api } from "@/services/api";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  ADMIN_FORM_CONTROL,
+  ADMIN_FORM_FIELD,
+  ADMIN_FORM_LABEL,
+  ADMIN_PANEL,
+} from "@/lib/adminModuleLayout";
+import { tradexpar } from "@/services/tradexpar";
+import { cn } from "@/lib/utils";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -15,7 +24,7 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.adminLogin({ email, password });
+      const res = await tradexpar.adminLogin({ email, password });
       if (res.token) {
         sessionStorage.setItem("tradexpar_admin_token", res.token);
         sessionStorage.setItem("tradexpar_admin", "true");
@@ -39,20 +48,32 @@ export default function AdminLoginPage() {
           <p className="text-white/60 text-sm mt-1">Panel de Administración</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-card rounded-2xl shadow-card p-8 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Email</label>
-            <input
-              type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        <form onSubmit={handleSubmit} className={cn(ADMIN_PANEL, "p-8 space-y-5")}>
+          <div className={ADMIN_FORM_FIELD}>
+            <Label htmlFor="admin-email" className={ADMIN_FORM_LABEL}>
+              Email
+            </Label>
+            <Input
+              id="admin-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={ADMIN_FORM_CONTROL}
               placeholder="admin@tradexpar.com"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Contraseña</label>
-            <input
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          <div className={ADMIN_FORM_FIELD}>
+            <Label htmlFor="admin-password" className={ADMIN_FORM_LABEL}>
+              Contraseña
+            </Label>
+            <Input
+              id="admin-password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={ADMIN_FORM_CONTROL}
               placeholder="••••••••"
             />
           </div>

@@ -11,15 +11,19 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
 import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { ADMIN_PANEL } from "@/lib/adminModuleLayout";
 import { cn } from "@/lib/utils";
 import type { CustomerUser, Order, Product } from "@/types";
 
 const LOW_STOCK_MAX = 5;
 const STOCK_DISMISSED_KEY = "tradexpar_admin_stock_dismissed";
+/** Evita spinner eterno si PostgREST no responde. */
+const DASHBOARD_FETCH_MS = 22000;
 
 function loadDismissedStockIds(): Set<string> {
   try {
@@ -56,16 +60,32 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      api.getProducts().catch(() => [] as Product[]),
-      api.adminGetOrders().catch(() => ({ orders: [] as Order[] })),
-      api.adminGetUsers().catch(() => ({ users: [] as CustomerUser[] })),
+    const bundle = Promise.all([
+      tradexpar.getProducts().catch(() => [] as Product[]),
+      tradexpar.adminGetOrders().catch(() => ({ orders: [] as Order[] })),
+      tradexpar.adminGetUsers().catch(() => ({ users: [] as CustomerUser[] })),
+    ]);
+    Promise.race([
+      bundle,
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), DASHBOARD_FETCH_MS)),
     ])
-      .then(([prods, ordersRes, usersRes]) => {
+      .then((result) => {
         if (cancelled) return;
+        const [prods, ordersRes, usersRes] = result as [
+          Product[],
+          { orders: Order[] },
+          { users: CustomerUser[] },
+        ];
         setProducts(Array.isArray(prods) ? prods : []);
         setOrders(ordersRes.orders ?? []);
         setUsers(usersRes.users ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProducts([]);
+          setOrders([]);
+          setUsers([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -106,6 +126,16 @@ export default function AdminDashboardPage() {
       return next;
     });
     setStockPopoverOpen(false);
+  };
+
+  const markSingleStockRead = (productId: string) => {
+    setDismissedStockIds((prev) => {
+      if (prev.has(productId)) return prev;
+      const next = new Set(prev);
+      next.add(productId);
+      saveDismissedStockIds(next);
+      return next;
+    });
   };
 
   const totalProducts = products.length;
@@ -187,64 +217,124 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="relative space-y-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:pr-14">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">
-            Resumen operativo: inventario, pedidos y clientes en un solo vistazo.
-          </p>
-        </div>
+    <AdminPageShell
+      className="relative"
+      title="Dashboard"
+      description="Resumen operativo: inventario, pedidos y clientes en un solo vistazo."
+      actions={
         <Popover open={stockPopoverOpen} onOpenChange={setStockPopoverOpen}>
           <PopoverTrigger asChild>
-            <div className="fixed right-4 top-4 z-50 sm:absolute sm:right-0 sm:top-0">
+            <div className="fixed right-4 top-4 z-50 sm:static sm:right-auto sm:top-auto">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 className={cn(
-                  "relative h-11 w-11 shrink-0 rounded-xl border bg-card shadow-md",
-                  pendingStockCount > 0 && "border-amber-300/80 ring-2 ring-amber-400/30"
+                  "relative h-11 w-11 shrink-0 rounded-2xl border-border/80 bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/25",
+                  pendingStockCount > 0 &&
+                    "border-primary/30 bg-primary/[0.04] ring-1 ring-primary/15 hover:bg-primary/[0.07]"
                 )}
                 aria-label="Alertas de inventario"
               >
-                <Bell className="h-5 w-5 text-foreground" />
+                <Bell
+                  className={cn("h-5 w-5", pendingStockCount > 0 ? "text-primary" : "text-muted-foreground")}
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
                 {pendingStockCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground shadow-sm ring-2 ring-card">
                     {pendingStockCount > 99 ? "99+" : pendingStockCount}
                   </span>
                 ) : null}
               </Button>
             </div>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-0" align="end" sideOffset={8}>
-            <div className="border-b px-4 py-3">
-              <p className="font-semibold text-foreground">Inventario</p>
-              <p className="text-xs text-muted-foreground">
-                Productos con poco stock o agotados (hasta {LOW_STOCK_MAX} unidades).
-              </p>
+          <PopoverContent
+            className={cn(
+              "w-[min(22rem,calc(100vw-2rem))] p-0 overflow-hidden rounded-2xl border-border/60",
+              "bg-popover shadow-xl shadow-black/[0.06] dark:shadow-black/40"
+            )}
+            align="end"
+            sideOffset={10}
+          >
+            <div className="relative px-4 pt-4 pb-3.5 bg-gradient-to-b from-primary/[0.06] via-muted/30 to-transparent dark:from-primary/10 dark:via-muted/20">
+              <div className="flex gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15 dark:bg-primary/15">
+                  <Package className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                </div>
+                <div className="min-w-0 pt-0.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Alertas</p>
+                  <p className="text-[15px] font-semibold tracking-tight text-foreground">Inventario bajo</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Productos con stock ≤ {LOW_STOCK_MAX} u. o agotados.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="max-h-72 overflow-y-auto p-2">
+            <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mx-4" />
+            <div className="max-h-[min(18rem,50vh)] overflow-y-auto px-3 py-3">
               {lowStockProducts.length === 0 ? (
-                <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                  No hay alertas de stock en este momento.
-                </p>
+                <div className="flex flex-col items-center justify-center gap-2 px-2 py-10 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
+                    <Package className="h-6 w-6 opacity-70" aria-hidden />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Todo en orden</p>
+                  <p className="text-xs text-muted-foreground max-w-[14rem] leading-relaxed">
+                    No hay productos por debajo del umbral de stock.
+                  </p>
+                </div>
               ) : (
-                <ul className="space-y-1">
+                <ul className="space-y-2">
                   {lowStockProducts.map((p) => {
                     const unread = !dismissedStockIds.has(p.id);
+                    const stock = p.stock ?? 0;
+                    const out = stock === 0;
                     return (
-                      <li
-                        key={p.id}
-                        className={cn(
-                          "flex items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm",
-                          unread ? "bg-amber-500/10" : "text-muted-foreground"
-                        )}
-                      >
-                        <span className="truncate font-medium text-foreground">{p.name}</span>
-                        <span className={cn("shrink-0 font-semibold", (p.stock ?? 0) === 0 ? "text-destructive" : "text-amber-700 dark:text-amber-400")}>
-                          {p.stock ?? 0} u.
-                        </span>
+                      <li key={p.id} className="list-none">
+                        <button
+                          type="button"
+                          className={cn(
+                            "group w-full flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all",
+                            "border-border/60 bg-card/50 hover:bg-muted/35 hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            unread && "bg-primary/[0.03] ring-1 ring-primary/12 dark:bg-primary/[0.05]",
+                            !unread && "opacity-70 hover:opacity-90"
+                          )}
+                          onClick={() => markSingleStockRead(p.id)}
+                          title={unread ? "Clic para marcar como leída" : undefined}
+                          aria-label={
+                            unread
+                              ? `Alerta: ${p.name}, ${stock} unidades. Marcar como leída.`
+                              : `${p.name}, leída, ${stock} unidades`
+                          }
+                        >
+                          <span
+                            className={cn(
+                              "mt-2 h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+                              unread ? "bg-primary ring-4 ring-primary/15" : "bg-muted-foreground/25"
+                            )}
+                            aria-hidden
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">{p.name}</p>
+                            {out ? (
+                              <p className="text-[11px] text-destructive/90 font-medium mt-0.5">Sin unidades</p>
+                            ) : unread ? (
+                              <p className="text-[10px] text-muted-foreground mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                Clic para archivar
+                              </p>
+                            ) : null}
+                          </div>
+                          <span
+                            className={cn(
+                              "shrink-0 tabular-nums rounded-lg px-2 py-1 text-[11px] font-semibold leading-none",
+                              out
+                                ? "bg-destructive/12 text-destructive"
+                                : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+                            )}
+                          >
+                            {stock} u.
+                          </span>
+                        </button>
                       </li>
                     );
                   })}
@@ -252,21 +342,25 @@ export default function AdminDashboardPage() {
               )}
             </div>
             {lowStockProducts.length > 0 && pendingStockCount > 0 ? (
-              <div className="border-t p-2">
-                <Button type="button" variant="secondary" className="w-full gap-2" onClick={markStockNotificationsRead}>
-                  <CheckCheck className="h-4 w-4" />
+              <div className="border-t border-border/50 bg-muted/15 px-3 py-3">
+                <Button
+                  type="button"
+                  className="w-full gap-2 rounded-xl h-9 text-sm font-medium gradient-celeste text-primary-foreground shadow-sm hover:opacity-95"
+                  onClick={markStockNotificationsRead}
+                >
+                  <CheckCheck className="h-4 w-4 opacity-95" />
                   Marcar como leídas
                 </Button>
               </div>
             ) : null}
           </PopoverContent>
         </Popover>
-      </div>
-
+      }
+    >
       {loading ? (
         <Loader text="Cargando datos..." />
       ) : (
-        <>
+        <div className="space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {stats.map((s, i) => (
               <motion.div
@@ -274,7 +368,7 @@ export default function AdminDashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="bg-card rounded-2xl border shadow-card p-5"
+                className="bg-card rounded-2xl border border-border/80 shadow-card p-5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -291,7 +385,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {chartData.length > 0 && (
-            <div className="bg-card rounded-2xl border shadow-card p-6">
+            <div className={ADMIN_PANEL}>
               <h3 className="font-semibold text-foreground mb-4">Productos por categoría</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={chartData}>
@@ -306,7 +400,7 @@ export default function AdminDashboardPage() {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-card rounded-2xl border shadow-card p-6">
+            <div className={ADMIN_PANEL}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-foreground">Pedidos recientes</h3>
                 <Link to="/admin/orders" className="text-xs font-medium text-primary hover:underline">
@@ -316,9 +410,9 @@ export default function AdminDashboardPage() {
               {recentOrders.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">Aún no hay pedidos registrados.</p>
               ) : (
-                <ul className="space-y-3">
+                <ul className="space-y-0 divide-y divide-border/70">
                   {recentOrders.map((o) => (
-                    <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0">
+                    <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2 py-3 first:pt-0">
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">{o.customer?.name || "Cliente"}</p>
                         <p className="text-xs text-muted-foreground">
@@ -336,7 +430,7 @@ export default function AdminDashboardPage() {
                 </ul>
               )}
             </div>
-            <div className="bg-card rounded-2xl border shadow-card p-6">
+            <div className={ADMIN_PANEL}>
               <h3 className="font-semibold text-foreground mb-4">Facturación por mes (últimos 6)</h3>
               {monthlySalesChart.every((x) => x.total === 0) ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">Sin datos de ventas en ese período.</p>
@@ -353,8 +447,8 @@ export default function AdminDashboardPage() {
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </AdminPageShell>
   );
 }

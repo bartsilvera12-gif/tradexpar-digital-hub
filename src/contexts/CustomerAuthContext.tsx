@@ -1,30 +1,41 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { CustomerUser } from "@/types";
-import { api } from "@/services/api";
+import { clearOAuthReturnPending, isOAuthCallbackUrl, isOAuthReturnPending, tradexpar } from "@/services/tradexpar";
+import { getSupabaseAuth, runAuthExclusive, setDataClientAccessToken } from "@/lib/supabaseClient";
 
 interface CustomerAuthContextType {
   user: CustomerUser | null;
   loading: boolean;
+  /** Hasta sincronizar la sesión de Supabase (p. ej. tras volver de Google/Facebook) */
+  initializing: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const STORAGE_KEY = "tradexpar_customer_user";
 
 const CustomerAuthContext = createContext<CustomerAuthContextType | undefined>(undefined);
 
+function loadStoredUser(): CustomerUser | null {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CustomerUser;
+  } catch {
+    return null;
+  }
+}
+
 export function CustomerAuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<CustomerUser | null>(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as CustomerUser;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState<CustomerUser | null>(() => loadStoredUser());
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  /** Evita que onAuthStateChange vuelva a ejecutar syncStoreCustomer con sesión aún válida durante signOut(). */
+  const logoutInProgressRef = useRef(false);
+  /** Login/registro con email+contraseña: si syncStoreCustomer corre en paralelo con signIn/signUp, GoTrue puede bloquearse. */
+  const credentialAuthInProgressRef = useRef(false);
 
   const persistUser = (next: CustomerUser | null) => {
     setUser(next);
@@ -35,31 +46,141 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    /** Si syncStoreCustomer o getSession colgaban, el catch hacía await getSession otra vez y nunca se ejecutaba finally → "Comprobando tu sesión" eterno. */
+    const hydrateTimeoutMs = 12000;
+    /** OAuth puede tardar (PKCE, red); si no hay tope, initialize/getSession puede colgar la UI. */
+    const oauthHydrateTimeoutMs = 45000;
+
+    const trySync = async () => {
+      const oauthFlow =
+        typeof window !== "undefined" && (isOAuthCallbackUrl() || isOAuthReturnPending());
+      const timeoutMs = oauthFlow ? oauthHydrateTimeoutMs : hydrateTimeoutMs;
+      try {
+        const synced = await Promise.race([
+          tradexpar.syncStoreCustomer(),
+          new Promise<CustomerUser | null>((_, rej) =>
+            setTimeout(() => rej(new Error("hydrate_timeout")), timeoutMs)
+          ),
+        ]);
+        if (cancelled) return;
+        if (synced) persistUser(synced);
+      } catch {
+        clearOAuthReturnPending();
+        /* timeout u error: onAuthStateChange puede completar el sync después. */
+      } finally {
+        if (!cancelled) setInitializing(false);
+      }
+    };
+
+    void trySync();
+
+    const { data: { subscription } } = getSupabaseAuth().auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") {
+        persistUser(null);
+        return;
+      }
+      if (logoutInProgressRef.current) return;
+      if (!session?.user) return;
+      /** No competir con signInWithPassword / signUp: el flujo ya persiste el usuario al terminar. */
+      if (credentialAuthInProgressRef.current && event === "SIGNED_IN") {
+        return;
+      }
+      /** USER_UPDATED: metadatos/identidades OAuth tras redirect. */
+      if (
+        event === "INITIAL_SESSION" ||
+        event === "SIGNED_IN" ||
+        event === "USER_UPDATED"
+      ) {
+        try {
+          const synced = await tradexpar.syncStoreCustomer();
+          if (synced) persistUser(synced);
+        } catch {
+          /* RLS u otro error: el usuario puede seguir en Auth sin fila customers */
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const login = async (email: string, password: string) => {
+    credentialAuthInProgressRef.current = true;
     setLoading(true);
+    const LOGIN_TIMEOUT_MS = 25_000;
     try {
-      const response = await api.customerLogin({ email, password });
-      persistUser(response.user);
+      const response = await Promise.race([
+        tradexpar.customerLogin({ email, password }),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "El inicio de sesión tardó demasiado. Revisá tu conexión o intentá de nuevo."
+                )
+              ),
+            LOGIN_TIMEOUT_MS
+          );
+        }),
+      ]);
+      /** Evita carrera: navigate(/account) antes de que exista user en contexto → redirect a /login. */
+      flushSync(() => {
+        persistUser(response.user);
+      });
     } finally {
+      credentialAuthInProgressRef.current = false;
       setLoading(false);
     }
   };
 
   const register = async (name: string, email: string, password: string) => {
+    credentialAuthInProgressRef.current = true;
     setLoading(true);
+    const REGISTER_TIMEOUT_MS = 25_000;
     try {
-      const response = await api.customerRegister({ name, email, password });
-      persistUser(response.user);
+      const response = await Promise.race([
+        tradexpar.customerRegister({ name, email, password }),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "El registro tardó demasiado. Revisá tu conexión o intentá de nuevo."
+                )
+              ),
+            REGISTER_TIMEOUT_MS
+          );
+        }),
+      ]);
+      flushSync(() => {
+        persistUser(response.user);
+      });
     } finally {
+      credentialAuthInProgressRef.current = false;
       setLoading(false);
     }
   };
 
-  const logout = () => persistUser(null);
+  const logout = async () => {
+    logoutInProgressRef.current = true;
+    clearOAuthReturnPending();
+    setDataClientAccessToken(null);
+    flushSync(() => {
+      persistUser(null);
+    });
+    /** No await: signOut() puede tardar (revocación en servidor); la UI ya quedó limpia. */
+    void runAuthExclusive(() => getSupabaseAuth().auth.signOut({ scope: "local" })).finally(() => {
+      logoutInProgressRef.current = false;
+    });
+  };
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading]
+    () => ({ user, loading, initializing, login, register, logout }),
+    [user, loading, initializing]
   );
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>;

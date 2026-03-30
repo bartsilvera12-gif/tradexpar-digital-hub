@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Package, ShoppingCart, Users, Settings, LogOut, ChevronLeft, ChevronRight,
+  LayoutDashboard, Package, ShoppingCart, Users, LogOut, ChevronLeft, ChevronRight, UserPlus,
 } from "lucide-react";
 import { useState } from "react";
 import logoIcon from "@/assets/logo-icon.png";
@@ -10,7 +10,7 @@ const navItems = [
   { to: "/admin/products", label: "Productos", icon: Package },
   { to: "/admin/orders", label: "Pedidos", icon: ShoppingCart },
   { to: "/admin/users", label: "Usuarios", icon: Users },
-  { to: "/admin/settings", label: "Configuración", icon: Settings },
+  { to: "/admin/affiliates", label: "Afiliados", icon: UserPlus },
 ];
 
 export function AdminSidebar() {

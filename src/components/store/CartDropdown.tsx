@@ -2,8 +2,8 @@ import { useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Trash2, Minus, Plus } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { motion } from "framer-motion";
-import { getEffectivePrice } from "@/lib/productHelpers";
 
 interface CartDropdownProps {
   open: boolean;
@@ -11,7 +11,9 @@ interface CartDropdownProps {
 }
 
 export function CartDropdown({ open, onClose }: CartDropdownProps) {
-  const { items, removeItem, updateQuantity, totalPrice, totalItems } = useCart();
+  const { items, removeItem, updateQuantity, totalItems } = useCart();
+  const { lineUnitPrice, cartTotal } = useAffiliateBuyerDiscount();
+  const totalPrice = cartTotal(items);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function CartDropdown({ open, onClose }: CartDropdownProps) {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{item.product.name}</p>
               <p className="text-xs text-muted-foreground">
-                ₲{getEffectivePrice(item.product).toLocaleString("es-PY")} x {item.quantity}
+                ₲{lineUnitPrice(item.product).toLocaleString("es-PY")} x {item.quantity}
               </p>
               {/* Quantity controls */}
               <div className="flex items-center gap-1 mt-1">

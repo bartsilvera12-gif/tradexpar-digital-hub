@@ -2,11 +2,12 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
 import { useCart } from "@/contexts/CartContext";
 import { Loader, ErrorState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { toastCartAdded } from "@/lib/cartToast";
+import { useAffiliateBuyerDiscount, useTrackAffiliateBuyerProduct } from "@/contexts/AffiliateBuyerDiscountContext";
 import {
   getDiscountPercentage,
   getEffectivePrice,
@@ -23,6 +24,8 @@ function getProductImages(product: Product): string[] {
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
+  useTrackAffiliateBuyerProduct(id);
+  const aff = useAffiliateBuyerDiscount();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +45,7 @@ export default function ProductDetailPage() {
   const fetchProduct = () => {
     setLoading(true);
     setError(null);
-    api.getProducts()
+    tradexpar.getProducts()
       .then((data) => {
         const found = data.find((p) => String(p.id) === id);
         if (found) setProduct(found);
@@ -75,6 +78,8 @@ export default function ProductDetailPage() {
   const maxQty = product.stock > 0 ? product.stock : 1;
   const discountPct = getDiscountPercentage(product);
   const effectivePrice = getEffectivePrice(product);
+  const affiliateBuyerPct = aff.buyerPercentForProduct(product.id);
+  const displayUnitPrice = aff.lineUnitPrice(product);
 
   return (
     <div className="container mx-auto px-4 py-10">
@@ -212,7 +217,13 @@ export default function ProductDetailPage() {
                 <p className="text-sm text-destructive font-semibold">-{discountPct}%</p>
               </>
             )}
-            <p className="text-4xl font-bold text-foreground">₲{effectivePrice.toLocaleString("es-PY")}</p>
+            {affiliateBuyerPct > 0 && displayUnitPrice < effectivePrice && (
+              <p className="text-sm text-muted-foreground line-through">₲{effectivePrice.toLocaleString("es-PY")}</p>
+            )}
+            {affiliateBuyerPct > 0 && (
+              <p className="text-sm text-primary font-semibold mb-1">-{Math.round(affiliateBuyerPct)}% con enlace de afiliado</p>
+            )}
+            <p className="text-4xl font-bold text-foreground">₲{displayUnitPrice.toLocaleString("es-PY")}</p>
           </div>
 
           <div className="flex items-center gap-3 md:gap-4">

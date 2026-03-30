@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/store/ProductCard";
-import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
 import type { Product } from "@/types";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
@@ -14,7 +14,7 @@ export default function WishlistPage() {
   const fetchProducts = () => {
     setLoading(true);
     setError(null);
-    api.getProducts()
+    tradexpar.getProducts()
       .then(setProducts)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));

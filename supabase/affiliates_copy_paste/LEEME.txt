@@ -1,0 +1,7 @@
+Afiliados FASE 1 — SQL para Supabase (schema tradexpar)
+
+1. En Supabase: Settings → API → exponer el schema "tradexpar" en Data API.
+2. Ejecutá los archivos en ORDEN: 00, 01, 02 … 09 (cada uno = un "array").
+3. Antes, si no lo tenés: ejecutá supabase/tradexpar_migrations.sql (schema base + pgcrypto + tablas mínimas).
+
+El archivo completo sigue en: supabase/tradexpar_affiliates_phase1.sql (mismo contenido, todo junto).

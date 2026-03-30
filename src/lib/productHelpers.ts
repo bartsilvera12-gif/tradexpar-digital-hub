@@ -41,6 +41,18 @@ export function getEffectivePrice(product: Product): number {
   return Math.max(0, Math.round(nextPrice));
 }
 
+/**
+ * Precio unitario con descuento al comprador por afiliado (% sobre el precio efectivo del catálogo),
+ * alineado a cómo se calcula el subtotal en `order_items` al pagar con ref.
+ */
+export function getStoreLineUnitPrice(product: Product, affiliateBuyerDiscountPercent: number): number {
+  if (!product || typeof product !== "object") return 0;
+  const base = getEffectivePrice(product);
+  const pct = Math.max(0, Math.min(100, Number(affiliateBuyerDiscountPercent) || 0));
+  if (pct <= 0) return base;
+  return Math.max(0, Math.round(base * (1 - pct / 100)));
+}
+
 export function getDiscountPercentage(product: Product): number {
   const basePrice = Number(product.price) || 0;
   if (basePrice <= 0 || !isDiscountWindowActive(product)) return 0;

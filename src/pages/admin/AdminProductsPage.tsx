@@ -1,10 +1,60 @@
 import { useEffect, useState } from "react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
-import { api } from "@/services/api";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ADMIN_CARD,
+  ADMIN_FORM_CONTROL,
+  ADMIN_FORM_FIELD,
+  ADMIN_FORM_HIGHLIGHT,
+  ADMIN_FORM_LABEL,
+  ADMIN_FORM_MODAL,
+  ADMIN_FORM_TEXTAREA,
+  ADMIN_TABLE,
+  ADMIN_TABLE_SCROLL,
+  ADMIN_TBODY,
+  ADMIN_TD,
+  ADMIN_TH,
+  ADMIN_THEAD_ROW,
+  ADMIN_TR,
+} from "@/lib/adminModuleLayout";
+import { formatGuaraniesInteger, parseGuaraniesInput } from "@/lib/paraguayNumberFormat";
+import { tradexpar } from "@/services/tradexpar";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { getDiscountPercentage, getEffectivePrice, getStockLabel } from "@/lib/productHelpers";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+function parsePercentDiscount(raw: string): number {
+  const t = raw.replace(",", ".").replace(/[^\d.]/g, "");
+  if (t === "" || t === ".") return 0;
+  const n = parseFloat(t);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(100, Math.max(0, n));
+}
+
+function formatOptionalStockInt(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return "";
+  return formatGuaraniesInteger(Number(n));
+}
+
+function parseOptionalStockInt(raw: string): number | null {
+  const digits = raw.replace(/\D/g, "");
+  if (digits === "") return null;
+  const n = parseInt(digits, 10);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(Math.max(0, n), 999_999_999);
+}
 
 const emptyForm: Partial<Product> = {
   name: "",
@@ -12,14 +62,23 @@ const emptyForm: Partial<Product> = {
   category: "",
   description: "",
   image: "",
+  images: [""],
   price: 0,
   stock: 0,
+  stock_min: null,
+  stock_max: null,
   product_source_type: "tradexpar",
   discount_type: null,
   discount_value: 0,
   discount_starts_at: "",
   discount_ends_at: "",
 };
+
+function imageUrlsForForm(p: Partial<Product>): string[] {
+  if (p.images && p.images.length > 0) return [...p.images];
+  if (p.image?.trim()) return [p.image.trim()];
+  return [""];
+}
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -33,7 +92,8 @@ export default function AdminProductsPage() {
   const fetchProducts = () => {
     setLoading(true);
     setError(null);
-    api.getProducts()
+    tradexpar
+      .getProducts()
       .then(setProducts)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -53,6 +113,7 @@ export default function AdminProductsPage() {
     setEditingId(product.id);
     setForm({
       ...product,
+      images: imageUrlsForForm(product),
       discount_starts_at: product.discount_starts_at || "",
       discount_ends_at: product.discount_ends_at || "",
       discount_value: product.discount_value || 0,
@@ -63,15 +124,30 @@ export default function AdminProductsPage() {
 
   const handleSave = async () => {
     try {
+      const smin = form.stock_min ?? null;
+      const smax = form.stock_max ?? null;
+      if (smin != null && smax != null && smax < smin) {
+        toast({
+          variant: "destructive",
+          title: "Revisá los stocks",
+          description: "El stock máximo no puede ser menor que el stock mínimo.",
+        });
+        return;
+      }
+      const urls = (form.images ?? []).map((s) => String(s).trim()).filter(Boolean);
       const payload = {
         ...form,
+        image: urls[0] ?? "",
+        images: urls,
         discount_value: Math.max(0, Number(form.discount_value || 0)),
+        stock_min: smin,
+        stock_max: smax,
       };
       if (editingId) {
-        await api.adminUpdateProduct(editingId, payload);
+        await tradexpar.adminUpdateProduct(editingId, payload);
         toast({ title: "Producto actualizado" });
       } else {
-        await api.adminCreateProduct(payload);
+        await tradexpar.adminCreateProduct(payload);
         toast({ title: "Producto creado" });
       }
       setOpenForm(false);
@@ -83,7 +159,7 @@ export default function AdminProductsPage() {
 
   const handleDelete = async (productId: string) => {
     try {
-      await api.adminDeleteProduct(productId);
+      await tradexpar.adminDeleteProduct(productId);
       toast({ title: "Producto eliminado" });
       fetchProducts();
     } catch (err: any) {
@@ -92,24 +168,31 @@ export default function AdminProductsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Productos</h1>
-          <p className="text-sm text-muted-foreground">Gestión del catálogo — datos reales desde API</p>
+    <AdminPageShell title="Productos">
+      <div className="space-y-3 w-full">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2.5 w-full">
+          Buscar en catálogo
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+          <div className="relative flex-1 min-w-0 w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Nombre o SKU…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={cn(ADMIN_FORM_CONTROL, "pl-10 w-full")}
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={startCreate}
+            className="gap-2 gradient-celeste text-primary-foreground shadow-sm shrink-0 w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo producto
+          </Button>
         </div>
-        <button onClick={startCreate} className="flex items-center gap-2 px-5 py-2.5 gradient-celeste text-white font-semibold rounded-xl text-sm hover:opacity-90 transition-opacity">
-          <Plus className="h-4 w-4" /> Nuevo producto
-        </button>
-      </div>
-
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text" placeholder="Buscar producto..." value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
       </div>
 
       {loading && <Loader text="Cargando productos..." />}
@@ -118,27 +201,31 @@ export default function AdminProductsPage() {
         <EmptyState title="Sin productos" description="No se encontraron productos en el catálogo." />
       )}
       {!loading && !error && filtered.length > 0 && (
-        <div className="bg-card rounded-2xl border shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className={ADMIN_CARD}>
+          <div className={ADMIN_TABLE_SCROLL}>
+            <table className={ADMIN_TABLE}>
               <thead>
-                <tr className="bg-muted/30">
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">Producto</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">SKU</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">Categoría</th>
-                  <th className="text-right py-3 px-4 text-muted-foreground font-medium">Precio</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">Tipo</th>
-                  <th className="text-right py-3 px-4 text-muted-foreground font-medium">Stock</th>
-                  <th className="text-right py-3 px-4 text-muted-foreground font-medium">Acciones</th>
+                <tr className={ADMIN_THEAD_ROW}>
+                  <th className={ADMIN_TH}>Producto</th>
+                  <th className={ADMIN_TH}>SKU</th>
+                  <th className={ADMIN_TH}>Categoría</th>
+                  <th className={`${ADMIN_TH} text-right`}>Precio</th>
+                  <th className={ADMIN_TH}>Tipo</th>
+                  <th className={`${ADMIN_TH} text-right`}>Stock</th>
+                  <th className={`${ADMIN_TH} text-right`}>Acciones</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={ADMIN_TBODY}>
                 {filtered.map((p) => (
-                  <tr key={p.id} className="border-t hover:bg-muted/20 transition-colors">
-                    <td className="py-3 px-4">
+                  <tr key={p.id} className={ADMIN_TR}>
+                    <td className={ADMIN_TD}>
                       <div className="flex items-center gap-3">
-                        {p.image ? (
-                          <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />
+                        {p.images?.[0] || p.image ? (
+                          <img
+                            src={p.images?.[0] || p.image}
+                            alt={p.name}
+                            className="w-10 h-10 rounded-lg object-cover"
+                          />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-muted/30 flex items-center justify-center shrink-0">
                             <span className="text-[8px] text-muted-foreground">[img]</span>
@@ -147,13 +234,13 @@ export default function AdminProductsPage() {
                         <span className="font-medium text-foreground">{p.name}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-mono text-muted-foreground">{p.sku || "—"}</td>
-                    <td className="py-3 px-4">
+                    <td className={`${ADMIN_TD} font-mono text-muted-foreground`}>{p.sku || "—"}</td>
+                    <td className={ADMIN_TD}>
                       <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
                         {p.category || "—"}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right text-foreground">
+                    <td className={`${ADMIN_TD} text-right text-foreground`}>
                       <div>
                         {getDiscountPercentage(p) > 0 && (
                           <p className="text-xs text-muted-foreground line-through">₲{(Number(p.price) || 0).toLocaleString("es-PY")}</p>
@@ -161,17 +248,17 @@ export default function AdminProductsPage() {
                         <p>₲{getEffectivePrice(p).toLocaleString("es-PY")}</p>
                       </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className={ADMIN_TD}>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${p.product_source_type === "dropi" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
                         {p.product_source_type === "dropi" ? "Dropi" : "Tradexpar"}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className={`${ADMIN_TD} text-right`}>
                       <span className={`font-medium ${(p.stock ?? 0) > 0 ? "text-green-600" : "text-destructive"}`}>
                         {getStockLabel(p)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className={`${ADMIN_TD} text-right`}>
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => startEdit(p)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted/50 text-muted-foreground" title="Editar">
                           <Edit className="h-4 w-4" />
@@ -191,43 +278,337 @@ export default function AdminProductsPage() {
 
       {openForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4">
+          <div className={cn(ADMIN_FORM_MODAL, "max-w-2xl")}>
             <h2 className="text-xl font-semibold text-foreground">{editingId ? "Editar producto" : "Nuevo producto"}</h2>
             <div className="grid md:grid-cols-2 gap-3">
-              <input className="px-3 py-2 border rounded-lg bg-background text-sm" placeholder="Nombre" value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input className="px-3 py-2 border rounded-lg bg-background text-sm" placeholder="SKU" value={form.sku || ""} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-              <input className="px-3 py-2 border rounded-lg bg-background text-sm" placeholder="Categoría" value={form.category || ""} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-              <input className="px-3 py-2 border rounded-lg bg-background text-sm" type="number" placeholder="Precio" value={form.price ?? 0} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
-              <input className="px-3 py-2 border rounded-lg bg-background text-sm" type="number" placeholder="Stock" value={form.stock ?? 0} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
-              <select className="px-3 py-2 border rounded-lg bg-background text-sm" value={form.product_source_type || "tradexpar"} onChange={(e) => setForm({ ...form, product_source_type: e.target.value as "tradexpar" | "dropi" })}>
-                <option value="tradexpar">tradexpar</option>
-                <option value="dropi">dropi</option>
-              </select>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-name" className={ADMIN_FORM_LABEL}>
+                  Nombre
+                </Label>
+                <Input
+                  id="prod-name"
+                  className={ADMIN_FORM_CONTROL}
+                  placeholder="Nombre del producto"
+                  value={form.name || ""}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-sku" className={ADMIN_FORM_LABEL}>
+                  SKU
+                </Label>
+                <Input
+                  id="prod-sku"
+                  className={ADMIN_FORM_CONTROL}
+                  placeholder="Código SKU"
+                  value={form.sku || ""}
+                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-cat" className={ADMIN_FORM_LABEL}>
+                  Categoría
+                </Label>
+                <Input
+                  id="prod-cat"
+                  className={ADMIN_FORM_CONTROL}
+                  placeholder="Categoría"
+                  value={form.category || ""}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-price" className={ADMIN_FORM_LABEL}>
+                  Precio (₲)
+                </Label>
+                <Input
+                  id="prod-price"
+                  className={cn(ADMIN_FORM_CONTROL, "tabular-nums")}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="0"
+                  value={formatGuaraniesInteger(form.price ?? 0)}
+                  onChange={(e) => setForm({ ...form, price: parseGuaraniesInput(e.target.value) })}
+                />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-stock" className={ADMIN_FORM_LABEL}>
+                  Stock
+                </Label>
+                <Input
+                  id="prod-stock"
+                  className={cn(ADMIN_FORM_CONTROL, "tabular-nums")}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="0"
+                  value={formatGuaraniesInteger(form.stock ?? 0)}
+                  onChange={(e) => setForm({ ...form, stock: parseGuaraniesInput(e.target.value) })}
+                />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label className={ADMIN_FORM_LABEL}>Origen del catálogo</Label>
+                <Select
+                  value={form.product_source_type || "tradexpar"}
+                  onValueChange={(v) => setForm({ ...form, product_source_type: v as "tradexpar" | "dropi" })}
+                >
+                  <SelectTrigger className={ADMIN_FORM_CONTROL}>
+                    <SelectValue placeholder="Elegí origen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tradexpar">Tradexpar</SelectItem>
+                    <SelectItem value="dropi">Dropi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-stock-min" className={ADMIN_FORM_LABEL}>
+                  Stock mínimo
+                </Label>
+                <Input
+                  id="prod-stock-min"
+                  className={cn(ADMIN_FORM_CONTROL, "tabular-nums")}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Opcional"
+                  value={formatOptionalStockInt(form.stock_min)}
+                  onChange={(e) => setForm({ ...form, stock_min: parseOptionalStockInt(e.target.value) })}
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">Vacío = sin umbral definido.</p>
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="prod-stock-max" className={ADMIN_FORM_LABEL}>
+                  Stock máximo
+                </Label>
+                <Input
+                  id="prod-stock-max"
+                  className={cn(ADMIN_FORM_CONTROL, "tabular-nums")}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Opcional"
+                  value={formatOptionalStockInt(form.stock_max)}
+                  onChange={(e) => setForm({ ...form, stock_max: parseOptionalStockInt(e.target.value) })}
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">Vacío = sin tope definido.</p>
+              </div>
             </div>
-            <textarea className="w-full px-3 py-2 border rounded-lg bg-background text-sm" placeholder="Descripción" rows={3} value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            <input className="w-full px-3 py-2 border rounded-lg bg-background text-sm" placeholder="URL imagen" value={form.image || ""} onChange={(e) => setForm({ ...form, image: e.target.value })} />
-
-            <div className="border rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-foreground">Descuento</p>
-              <div className="grid md:grid-cols-2 gap-3">
-                <select className="px-3 py-2 border rounded-lg bg-background text-sm" value={form.discount_type || ""} onChange={(e) => setForm({ ...form, discount_type: (e.target.value || null) as "percentage" | "fixed" | null })}>
-                  <option value="">Sin descuento</option>
-                  <option value="percentage">percentage</option>
-                  <option value="fixed">fixed</option>
-                </select>
-                <input className="px-3 py-2 border rounded-lg bg-background text-sm" type="number" min={0} placeholder="Valor" value={form.discount_value ?? 0} onChange={(e) => setForm({ ...form, discount_value: Number(e.target.value) })} />
-                <input className="px-3 py-2 border rounded-lg bg-background text-sm" type="datetime-local" value={String(form.discount_starts_at || "")} onChange={(e) => setForm({ ...form, discount_starts_at: e.target.value })} />
-                <input className="px-3 py-2 border rounded-lg bg-background text-sm" type="datetime-local" value={String(form.discount_ends_at || "")} onChange={(e) => setForm({ ...form, discount_ends_at: e.target.value })} />
+            <div className={ADMIN_FORM_FIELD}>
+              <Label htmlFor="prod-desc" className={ADMIN_FORM_LABEL}>
+                Descripción
+              </Label>
+              <textarea
+                id="prod-desc"
+                className={ADMIN_FORM_TEXTAREA}
+                placeholder="Descripción"
+                rows={3}
+                value={form.description || ""}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+            </div>
+            <div className={ADMIN_FORM_FIELD}>
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                <Label className={ADMIN_FORM_LABEL}>Imágenes (URLs)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 text-xs w-fit"
+                  onClick={() => {
+                    const cur = form.images?.length ? [...form.images] : imageUrlsForForm(form);
+                    setForm({ ...form, images: [...cur, ""] });
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Añadir URL
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                La primera URL es la imagen principal en listados; las demás forman la galería en la ficha del producto.
+              </p>
+              <div className="space-y-2">
+                {(form.images?.length ? form.images : imageUrlsForForm(form)).map((url, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <Input
+                        id={idx === 0 ? "prod-img-0" : undefined}
+                        className={ADMIN_FORM_CONTROL}
+                        placeholder="https://…"
+                        value={url}
+                        onChange={(e) => {
+                          const rows = [...(form.images?.length ? form.images : imageUrlsForForm(form))];
+                          rows[idx] = e.target.value;
+                          const trimmed = rows.map((s) => s.trim()).filter(Boolean);
+                          setForm({
+                            ...form,
+                            images: rows,
+                            image: trimmed[0] ?? "",
+                          });
+                        }}
+                      />
+                      {url.trim() ? (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={url.trim()}
+                            alt=""
+                            className="h-12 w-12 rounded-md object-cover border border-border/60 bg-muted/20"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.visibility = "hidden";
+                            }}
+                          />
+                          <span className="text-[10px] text-muted-foreground">
+                            {idx === 0 ? "Principal" : `Galería ${idx + 1}`}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                      title={form.images && form.images.length <= 1 ? "Debe quedar al menos un campo" : "Quitar URL"}
+                      disabled={!(form.images && form.images.length > 1)}
+                      onClick={() => {
+                        const rows = [...(form.images ?? imageUrlsForForm(form))];
+                        if (rows.length <= 1) {
+                          setForm({ ...form, images: [""], image: "" });
+                          return;
+                        }
+                        rows.splice(idx, 1);
+                        const trimmed = rows.map((s) => s.trim()).filter(Boolean);
+                        setForm({ ...form, images: rows, image: trimmed[0] ?? "" });
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setOpenForm(false)} className="px-4 py-2 rounded-lg border text-sm">Cancelar</button>
-              <button onClick={() => void handleSave()} className="px-4 py-2 rounded-lg gradient-celeste text-white text-sm font-semibold">Guardar</button>
+            <div className={ADMIN_FORM_HIGHLIGHT}>
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_100%_0%,hsl(195_89%_47%_/_0.08),transparent_60%)]"
+                aria-hidden
+              />
+              <div className="relative">
+                <p className="text-sm font-semibold text-foreground">Descuento promocional</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Por porcentaje sobre el precio, o monto fijo en guaraníes. Las fechas delimitan cuándo aplica.
+                </p>
+              </div>
+              <div className="relative grid md:grid-cols-2 gap-3">
+                <div className={ADMIN_FORM_FIELD}>
+                  <Label className={ADMIN_FORM_LABEL}>Tipo de descuento</Label>
+                  <Select
+                    value={form.discount_type ?? "__none"}
+                    onValueChange={(v) =>
+                      setForm({
+                        ...form,
+                        discount_type: v === "__none" ? null : (v as "percentage" | "fixed"),
+                        discount_value: v === "__none" ? 0 : form.discount_value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className={ADMIN_FORM_CONTROL}>
+                      <SelectValue placeholder="Sin descuento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Sin descuento</SelectItem>
+                      <SelectItem value="percentage">Por porcentaje</SelectItem>
+                      <SelectItem value="fixed">Monto fijo (₲)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className={ADMIN_FORM_FIELD}>
+                  <Label htmlFor="prod-disc-val" className={ADMIN_FORM_LABEL}>
+                    {form.discount_type === "percentage"
+                      ? "Porcentaje de descuento"
+                      : form.discount_type === "fixed"
+                        ? "Monto a descontar (₲)"
+                        : "Valor"}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="prod-disc-val"
+                      className={cn(
+                        ADMIN_FORM_CONTROL,
+                        "tabular-nums",
+                        form.discount_type === "percentage" ? "pr-9" : "",
+                        !form.discount_type ? "opacity-50 pointer-events-none" : ""
+                      )}
+                      disabled={!form.discount_type}
+                      inputMode={form.discount_type === "percentage" ? "decimal" : "numeric"}
+                      autoComplete="off"
+                      placeholder={
+                        form.discount_type === "percentage"
+                          ? "Ej. 15"
+                          : form.discount_type === "fixed"
+                            ? "0"
+                            : "—"
+                      }
+                      value={
+                        !form.discount_type
+                          ? ""
+                          : form.discount_type === "percentage"
+                            ? form.discount_value === 0
+                              ? ""
+                              : String(form.discount_value).replace(/\./g, ",")
+                            : formatGuaraniesInteger(form.discount_value ?? 0)
+                      }
+                      onChange={(e) => {
+                        if (!form.discount_type) return;
+                        if (form.discount_type === "percentage") {
+                          setForm({ ...form, discount_value: parsePercentDiscount(e.target.value) });
+                        } else {
+                          setForm({ ...form, discount_value: parseGuaraniesInput(e.target.value) });
+                        }
+                      }}
+                    />
+                    {form.discount_type === "percentage" ? (
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        %
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className={ADMIN_FORM_FIELD}>
+                  <Label htmlFor="prod-disc-start" className={ADMIN_FORM_LABEL}>
+                    Inicio del descuento
+                  </Label>
+                  <Input
+                    id="prod-disc-start"
+                    type="datetime-local"
+                    className={ADMIN_FORM_CONTROL}
+                    value={String(form.discount_starts_at || "")}
+                    onChange={(e) => setForm({ ...form, discount_starts_at: e.target.value })}
+                  />
+                </div>
+                <div className={ADMIN_FORM_FIELD}>
+                  <Label htmlFor="prod-disc-end" className={ADMIN_FORM_LABEL}>
+                    Fin del descuento
+                  </Label>
+                  <Input
+                    id="prod-disc-end"
+                    type="datetime-local"
+                    className={ADMIN_FORM_CONTROL}
+                    value={String(form.discount_ends_at || "")}
+                    onChange={(e) => setForm({ ...form, discount_ends_at: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setOpenForm(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" className="gradient-celeste text-primary-foreground shadow-sm" onClick={() => void handleSave()}>
+                Guardar
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </AdminPageShell>
   );
 }

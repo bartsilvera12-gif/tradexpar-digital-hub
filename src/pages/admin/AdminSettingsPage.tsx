@@ -1,60 +1,71 @@
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  ADMIN_FORM_CONTROL,
+  ADMIN_FORM_CONTROL_READONLY,
+  ADMIN_FORM_FIELD,
+  ADMIN_FORM_LABEL,
+  ADMIN_PANEL,
+} from "@/lib/adminModuleLayout";
+
 export default function AdminSettingsPage() {
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configuración</h1>
-        <p className="text-sm text-muted-foreground">Ajustes generales del sistema</p>
-      </div>
-
-      <div className="bg-card rounded-2xl border shadow-card p-6 space-y-6">
-        <div>
-          <h2 className="font-semibold text-foreground mb-4">API</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Base URL</label>
-              <input
-                type="text" readOnly value="https://tan-trout-550053.hostingersite.com"
-                className="w-full px-4 py-2.5 rounded-xl border bg-muted/30 text-muted-foreground text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">API Key</label>
-              <input
-                type="password" readOnly value="••••••••••••••••"
-                className="w-full px-4 py-2.5 rounded-xl border bg-muted/30 text-muted-foreground text-sm"
-              />
+    <AdminPageShell title="Configuración" description="Ajustes generales del sistema.">
+      <div className="max-w-2xl w-full">
+        <div className={`${ADMIN_PANEL} space-y-8`}>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-4">API</h2>
+            <div className="space-y-4">
+              <div className={ADMIN_FORM_FIELD}>
+                <Label className={ADMIN_FORM_LABEL}>Base URL</Label>
+                <Input
+                  type="text"
+                  readOnly
+                  value="https://tan-trout-550053.hostingersite.com"
+                  className={ADMIN_FORM_CONTROL_READONLY}
+                />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label className={ADMIN_FORM_LABEL}>API Key</Label>
+                <Input type="password" readOnly value="••••••••••••••••" className={ADMIN_FORM_CONTROL_READONLY} />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="border-t pt-6">
-          <h2 className="font-semibold text-foreground mb-4">Tienda</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Nombre de la tienda</label>
-              <input
-                type="text" defaultValue="Tradexpar Store"
-                className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Email de contacto</label>
-              <input
-                type="email" defaultValue="info@tradexpar.com"
-                className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+          <div className="border-t border-border/60 pt-8">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Tienda</h2>
+            <div className="space-y-4">
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="store-name" className={ADMIN_FORM_LABEL}>
+                  Nombre de la tienda
+                </Label>
+                <Input id="store-name" type="text" defaultValue="Tradexpar Store" className={ADMIN_FORM_CONTROL} />
+              </div>
+              <div className={ADMIN_FORM_FIELD}>
+                <Label htmlFor="store-email" className={ADMIN_FORM_LABEL}>
+                  Email de contacto
+                </Label>
+                <Input
+                  id="store-email"
+                  type="email"
+                  defaultValue="info@tradexpar.com"
+                  className={ADMIN_FORM_CONTROL}
+                />
+              </div>
             </div>
           </div>
+
+          <Button type="button" className="gradient-celeste text-primary-foreground shadow-sm rounded-xl px-6">
+            Guardar cambios
+          </Button>
+
+          <p className="text-xs text-muted-foreground">
+            * Endpoint de configuración debe ser implementado en backend (PUT /api/admin/settings)
+          </p>
         </div>
-
-        <button className="px-6 py-2.5 gradient-celeste text-white font-semibold rounded-xl text-sm hover:opacity-90 transition-opacity">
-          Guardar cambios
-        </button>
-
-        <p className="text-xs text-muted-foreground">
-          * Endpoint de configuración debe ser implementado en backend (PUT /api/admin/settings)
-        </p>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

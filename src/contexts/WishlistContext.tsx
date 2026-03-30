@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 
 interface WishlistContextType {
@@ -30,7 +30,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setSyncing(true);
-    api.getWishlist(user.id)
+    tradexpar.getWishlist(user.id)
       .then((res) => {
         const dbIds = (res.items ?? []).map((i) => i.product_id);
         const local = localStorage.getItem(LOCAL_KEY);
@@ -43,7 +43,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         const merged = Array.from(new Set([...dbIds, ...localIds]));
         setProductIds(merged);
         return Promise.all(
-          localIds.filter((id) => !dbIds.includes(id)).map((id) => api.addWishlistItem(user.id, id))
+          localIds.filter((id) => !dbIds.includes(id)).map((id) => tradexpar.addWishlistItem(user.id, id))
         );
       })
       .catch(() => {
@@ -76,9 +76,9 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
     setProductIds(next);
     if (exists) {
-      await api.removeWishlistItem(user.id, productId);
+      await tradexpar.removeWishlistItem(user.id, productId);
     } else {
-      await api.addWishlistItem(user.id, productId);
+      await tradexpar.addWishlistItem(user.id, productId);
     }
   };
 

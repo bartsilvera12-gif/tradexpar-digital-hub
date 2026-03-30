@@ -3,6 +3,10 @@ export interface Product {
   name: string;
   price: number;
   stock: number;
+  /** Umbral mínimo de inventario (opcional). */
+  stock_min?: number | null;
+  /** Tope máximo de inventario (opcional). */
+  stock_max?: number | null;
   image: string;
   images?: string[];
   sku: string;
@@ -25,7 +29,26 @@ export interface OrderItem {
   product_id: string;
   quantity: number;
   price: number;
+  /** Opcional: se guarda en order_items (snapshot al checkout). */
+  product_name?: string;
 }
+
+/** Línea de pedido en admin (ítems + metadatos catálogo / Dropi). */
+export interface OrderLineItem extends OrderItem {
+  id?: string;
+  line_index?: number;
+  line_subtotal?: number;
+  line_status?: string;
+  sku?: string;
+  product_source_type?: "tradexpar" | "dropi";
+  external_provider?: string | null;
+  external_product_id?: string | null;
+  external_order_id?: string | null;
+  external_status?: string | null;
+  external_url?: string | null;
+}
+
+export type OrderKindComputed = "internal" | "dropi" | "mixed";
 
 export interface CreateOrderPayload {
   items: OrderItem[];
@@ -38,16 +61,22 @@ export interface CreateOrderPayload {
   location_url: string;
   customer_location_id?: string;
   affiliate_ref?: string;
+  /** IP del cliente si el ERP/front la envía (antifraude) */
+  checkout_client_ip?: string | null;
 }
 
 export interface Order {
   id: string;
-  items: OrderItem[];
+  items: OrderLineItem[];
   total: number;
   status: string;
   created_at: string;
   /** Pedidos nuevos: solo tradexpar | dropi; valores antiguos pueden incluir otros. */
   checkout_type?: string;
+  /** Derivado de product_source_type de las líneas (propio / Dropi / mixto). */
+  order_kind?: OrderKindComputed;
+  /** URL del pedido en proveedor externo (nivel pedido). */
+  external_order_url?: string | null;
   customer: {
     name: string;
     email?: string;
@@ -60,6 +89,10 @@ export interface CustomerUser {
   name: string;
   email: string;
   created_at?: string;
+  /** Origen del registro (manual, google, etc.) — útil en admin */
+  provider?: string;
+  /** Listado admin (RPC): tiene fila en affiliates ligada a este customer */
+  is_affiliate?: boolean;
 }
 
 export interface CustomerLocation {

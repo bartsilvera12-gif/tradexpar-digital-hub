@@ -7,7 +7,7 @@ import processStep2 from "@/assets/process-step2.jpg";
 import processStep3 from "@/assets/process-step3.jpg";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
-import { api } from "@/services/api";
+import { tradexpar } from "@/services/tradexpar";
 import type { Product } from "@/types";
 
 const benefits = [
@@ -25,7 +25,7 @@ export default function HomePage() {
   const fetchProducts = () => {
     setLoading(true);
     setError(null);
-    api.getProducts()
+    tradexpar.getProducts()
       .then((data) => setProducts(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -60,7 +60,7 @@ export default function HomePage() {
             className="max-w-xl"
           >
             <h1 className="text-3xl lg:text-5xl font-bold text-primary-foreground leading-tight mb-4">
-              Distribución digital<br />
+              Distribuidora digital<br />
               <span className="text-gradient">de alto rendimiento</span>
             </h1>
             <p className="text-base text-primary-foreground/70 mb-6 max-w-md">
@@ -94,15 +94,6 @@ export default function HomePage() {
           <EmptyState title="Sin productos aún" description="El catálogo se poblará cuando haya productos disponibles en la API." />
         )}
 
-        {/* Productos destacados */}
-        {!loading && !error && products.length > 0 && (
-          <ProductSection
-            title="Productos destacados"
-            linkTo="/products"
-            products={products.slice(0, 8)}
-          />
-        )}
-
         {/* Los más virales */}
         {!loading && !error && viralDropi.length > 0 && (
           <ProductSection
@@ -110,6 +101,15 @@ export default function HomePage() {
             subtitle="Tendencias del momento"
             linkTo="/products?source=dropi"
             products={viralDropi}
+          />
+        )}
+
+        {/* Productos destacados */}
+        {!loading && !error && products.length > 0 && (
+          <ProductSection
+            title="Productos destacados"
+            linkTo="/products"
+            products={products.slice(0, 8)}
           />
         )}
 

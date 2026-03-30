@@ -19,6 +19,9 @@ import CustomerLoginPage from "@/pages/store/CustomerLoginPage";
 import CustomerRegisterPage from "@/pages/store/CustomerRegisterPage";
 import CustomerAccountPage from "@/pages/store/CustomerAccountPage";
 import WishlistPage from "@/pages/store/WishlistPage";
+import AffiliateApplyPage from "@/pages/store/AffiliateApplyPage";
+import AffiliatePortalPage from "@/pages/store/AffiliatePortalPage";
+import AboutTradexparPage from "@/pages/store/AboutTradexparPage";
 
 import AdminLoginPage from "@/pages/admin/AdminLoginPage";
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
@@ -26,6 +29,7 @@ import AdminProductsPage from "@/pages/admin/AdminProductsPage";
 import AdminOrdersPage from "@/pages/admin/AdminOrdersPage";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
+import AdminAffiliatesPage from "@/pages/admin/AdminAffiliatesPage";
 
 import NotFound from "@/pages/NotFound";
 
@@ -45,6 +49,7 @@ const App = () => (
                 <Route element={<StoreLayout />}>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/products" element={<ProductsPage />} />
+                  <Route path="/sobre-tradexpar" element={<AboutTradexparPage />} />
                   <Route path="/products/:id" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
@@ -53,6 +58,8 @@ const App = () => (
                   <Route path="/login" element={<CustomerLoginPage />} />
                   <Route path="/register" element={<CustomerRegisterPage />} />
                   <Route path="/account" element={<CustomerAccountPage />} />
+                  <Route path="/afiliados" element={<AffiliateApplyPage />} />
+                  <Route path="/afiliados/panel" element={<AffiliatePortalPage />} />
                 </Route>
 
                 {/* Admin */}
@@ -64,6 +71,7 @@ const App = () => (
                   <Route path="orders" element={<AdminOrdersPage />} />
                   <Route path="users" element={<AdminUsersPage />} />
                   <Route path="settings" element={<AdminSettingsPage />} />
+                  <Route path="affiliates" element={<AdminAffiliatesPage />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

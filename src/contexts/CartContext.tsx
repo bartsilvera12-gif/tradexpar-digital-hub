@@ -16,12 +16,38 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const CART_LS_KEY = "tradexpar_cart";
+
+function cartStorageGet(): string | null {
+  try {
+    return localStorage.getItem(CART_LS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function cartStorageSet(raw: string): void {
+  try {
+    localStorage.setItem(CART_LS_KEY, raw);
+  } catch {
+    /* cuota llena o storage bloqueado */
+  }
+}
+
+function cartStorageRemove(): void {
+  try {
+    localStorage.removeItem(CART_LS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function parseStoredCart(raw: string | null): CartItem[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) {
-      localStorage.removeItem("tradexpar_cart");
+      cartStorageRemove();
       return [];
     }
     const valid = parsed.filter(
@@ -35,21 +61,21 @@ function parseStoredCart(raw: string | null): CartItem[] {
         typeof (entry as CartItem).product.id === "string"
     );
     if (valid.length !== parsed.length) {
-      localStorage.setItem("tradexpar_cart", JSON.stringify(valid));
+      cartStorageSet(JSON.stringify(valid));
     }
     return valid;
   } catch {
-    localStorage.removeItem("tradexpar_cart");
+    cartStorageRemove();
     return [];
   }
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => parseStoredCart(localStorage.getItem("tradexpar_cart")));
+  const [items, setItems] = useState<CartItem[]>(() => parseStoredCart(cartStorageGet()));
 
   const persist = (next: CartItem[]) => {
     setItems(next);
-    localStorage.setItem("tradexpar_cart", JSON.stringify(next));
+    cartStorageSet(JSON.stringify(next));
   };
 
   const addItem = useCallback((product: Product, quantity = 1): boolean => {
@@ -60,7 +86,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const next = prev.map((i) =>
           i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i
         );
-        localStorage.setItem("tradexpar_cart", JSON.stringify(next));
+        cartStorageSet(JSON.stringify(next));
         return next;
       }
       if (prev.length > 0) {
@@ -72,7 +98,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       }
       const next = [...prev, { product, quantity }];
-      localStorage.setItem("tradexpar_cart", JSON.stringify(next));
+      cartStorageSet(JSON.stringify(next));
       return next;
     });
     if (rejected) {
@@ -85,7 +111,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const removeItem = useCallback((productId: string) => {
     setItems((prev) => {
       const next = prev.filter((i) => i.product.id !== productId);
-      localStorage.setItem("tradexpar_cart", JSON.stringify(next));
+      cartStorageSet(JSON.stringify(next));
       return next;
     });
   }, []);
@@ -94,7 +120,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (quantity <= 0) {
       setItems((prev) => {
         const next = prev.filter((i) => i.product.id !== productId);
-        localStorage.setItem("tradexpar_cart", JSON.stringify(next));
+        cartStorageSet(JSON.stringify(next));
         return next;
       });
       return;
@@ -102,7 +128,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) =>
       {
         const next = prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i));
-        localStorage.setItem("tradexpar_cart", JSON.stringify(next));
+        cartStorageSet(JSON.stringify(next));
         return next;
       }
     );
@@ -110,8 +136,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = useCallback(() => persist([]), []);
 
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
-  const totalPrice = items.reduce((sum, i) => sum + getEffectivePrice(i.product) * i.quantity, 0);
+  const totalItems = items.reduce((sum, i) => sum + (i?.product && i.quantity > 0 ? i.quantity : 0), 0);
+  const totalPrice = items.reduce(
+    (sum, i) => sum + (i?.product ? getEffectivePrice(i.product) * i.quantity : 0),
+    0
+  );
 
   return (
     <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, clearCart, totalItems, totalPrice }}>
