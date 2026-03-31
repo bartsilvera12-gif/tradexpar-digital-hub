@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import logoIcon from "@/assets/logo-x-flat.png";
 import {
   ADMIN_FORM_CONTROL,
   ADMIN_FORM_FIELD,
@@ -43,9 +44,13 @@ export default function AdminLoginPage() {
     <div className="min-h-screen gradient-hero flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl gradient-celeste mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-white">TRADEXPAR</h1>
-          <p className="text-white/60 text-sm mt-1">Panel de Administración</p>
+          <div className="inline-flex items-center gap-3 mb-3 px-3 py-2 rounded-xl bg-white/5 ring-1 ring-white/10">
+            <img src={logoIcon} alt="Tradexpar" className="w-8 h-8 shrink-0" width={32} height={32} />
+            <h1 className="text-[30px] leading-none font-extrabold tracking-tight text-white">
+              TRADE<span className="text-cyan-400">XPAR</span>
+            </h1>
+          </div>
+          <p className="text-white/65 text-sm">Panel de Administración</p>
         </div>
 
         <form onSubmit={handleSubmit} className={cn(ADMIN_PANEL, "p-8 space-y-5")}>

@@ -4,7 +4,7 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { tradexpar } from "@/services/tradexpar";
-import { normalizeProductSource } from "@/lib/productHelpers";
+import { getDiscountPercentage, normalizeProductSource } from "@/lib/productHelpers";
 import type { Product } from "@/types";
 
 export default function ProductsPage() {
@@ -16,6 +16,7 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const category = searchParams.get("category") || "all";
   const source = searchParams.get("source") || "all";
+  const offersOnly = searchParams.get("offers") === "1";
 
   const fetchProducts = () => {
     setLoading(true);
@@ -34,7 +35,8 @@ export default function ProductsPage() {
     const matchCat = category === "all" || p.category === category;
     const sourceKnown = source === "tradexpar" || source === "dropi";
     const matchSource = source === "all" || !sourceKnown || normalizeProductSource(p) === source;
-    return matchSearch && matchCat && matchSource;
+    const matchOffers = !offersOnly || getDiscountPercentage(p) > 0;
+    return matchSearch && matchCat && matchSource && matchOffers;
   });
 
   const setCategory = (cat: string) => {
@@ -43,7 +45,13 @@ export default function ProductsPage() {
     setSearchParams(searchParams);
   };
 
-  const hasActiveFilters = category !== "all" || source !== "all";
+  const setOffersFilter = (on: boolean) => {
+    if (on) searchParams.set("offers", "1");
+    else searchParams.delete("offers");
+    setSearchParams(searchParams);
+  };
+
+  const hasActiveFilters = category !== "all" || source !== "all" || offersOnly;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -88,7 +96,7 @@ export default function ProductsPage() {
         <div className="mb-6 p-4 bg-card rounded-xl border space-y-4">
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Categoría</p>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {categories.map((c) => (
                 <button
                   key={c}
@@ -102,6 +110,20 @@ export default function ProductsPage() {
                   {c === "all" ? "Todos" : c}
                 </button>
               ))}
+              <span className="hidden sm:inline text-muted-foreground/40 px-1" aria-hidden>
+                |
+              </span>
+              <button
+                type="button"
+                onClick={() => setOffersFilter(!offersOnly)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  offersOnly
+                    ? "bg-destructive text-destructive-foreground"
+                    : "border text-muted-foreground hover:border-destructive/40"
+                }`}
+              >
+                Ofertas
+              </button>
             </div>
           </div>
           {hasActiveFilters && (
@@ -109,6 +131,7 @@ export default function ProductsPage() {
               onClick={() => {
                 searchParams.delete("category");
                 searchParams.delete("source");
+                searchParams.delete("offers");
                 setSearchParams(searchParams);
               }}
               className="text-sm text-primary hover:underline flex items-center gap-1"
