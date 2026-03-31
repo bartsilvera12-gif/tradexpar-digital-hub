@@ -6,6 +6,8 @@ import {
   getSupabaseAuth,
   getSupabaseData,
   isSupabaseConfigured,
+  resolveSupabaseAnonKey,
+  resolveSupabaseUrl,
   runAuthExclusive,
   setDataClientAccessToken,
   syncDataClientTokenFromAuthSession,
@@ -440,17 +442,8 @@ function throwSetPasswordRpcReason(o: Record<string, unknown>): never {
 
 /** Respaldo: Edge Function (útil en Supabase Cloud con función desplegada). */
 async function adminSetCustomerPasswordViaEdge(customerId: string, newPassword: string): Promise<void> {
-  const base =
-    typeof import.meta.env.VITE_SUPABASE_URL === "string"
-      ? import.meta.env.VITE_SUPABASE_URL.replace(/\/$/, "")
-      : "";
-  const anon =
-    typeof import.meta.env.VITE_SUPABASE_ANON_KEY === "string"
-      ? import.meta.env.VITE_SUPABASE_ANON_KEY.trim()
-      : "";
-  if (!base || !anon) {
-    throw new Error("Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY.");
-  }
+  const base = resolveSupabaseUrl().replace(/\/$/, "");
+  const anon = resolveSupabaseAnonKey().trim();
   const token =
     typeof sessionStorage !== "undefined" ? sessionStorage.getItem("tradexpar_admin_token") : null;
   if (!token?.trim()) {

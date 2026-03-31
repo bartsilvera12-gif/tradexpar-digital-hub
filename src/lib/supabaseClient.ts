@@ -58,8 +58,21 @@ function strEnv(v: unknown): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
+/** Neura (self-hosted). `VITE_*` en `.env` o en el build las pisan. */
+const DEFAULT_SUPABASE_URL = "https://api.neura.com.py";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0MTAxNDYxLCJleHAiOjE5MzE3ODE0NjF9.7_wAph8IolPMXtgfpezSwS5XR62IdD__qhqCywLDp3Q";
+
+export function resolveSupabaseUrl(): string {
+  return strEnv(import.meta.env.VITE_SUPABASE_URL) ?? DEFAULT_SUPABASE_URL;
+}
+
+export function resolveSupabaseAnonKey(): string {
+  return strEnv(import.meta.env.VITE_SUPABASE_ANON_KEY) ?? DEFAULT_SUPABASE_ANON_KEY;
+}
+
 export function isSupabaseConfigured(): boolean {
-  return Boolean(strEnv(import.meta.env.VITE_SUPABASE_URL) && strEnv(import.meta.env.VITE_SUPABASE_ANON_KEY));
+  return Boolean(resolveSupabaseUrl() && resolveSupabaseAnonKey());
 }
 
 /**
@@ -89,9 +102,8 @@ export function getSupabaseAuth(): SupabaseClient {
   }
 
   if (!authClient) {
-    const url = strEnv(import.meta.env.VITE_SUPABASE_URL);
-    const key = strEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
-    if (!url || !key) throw new Error("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY");
+    const url = resolveSupabaseUrl();
+    const key = resolveSupabaseAnonKey();
 
     authClient = createClient(url, key, {
 
@@ -177,9 +189,8 @@ export function getSupabaseData(): SupabaseClient {
   }
 
   if (!dataClient) {
-    const url = strEnv(import.meta.env.VITE_SUPABASE_URL);
-    const key = strEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
-    if (!url || !key) throw new Error("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY");
+    const url = resolveSupabaseUrl();
+    const key = resolveSupabaseAnonKey();
 
     dataClient = createClient(url, key, {
       auth: {
