@@ -61,6 +61,11 @@ const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
   "https://www.pagopar.com/static/img/logo.png";
+/** PagoPar exige las claves `vendedor_*` en cada ítem (pueden ir vacías). */
+const PAGOPAR_VENDEDOR_TELEFONO = String(process.env.PAGOPAR_VENDEDOR_TELEFONO || "").slice(0, 40);
+const PAGOPAR_VENDEDOR_DIRECCION = String(process.env.PAGOPAR_VENDEDOR_DIRECCION || "").slice(0, 300);
+const PAGOPAR_VENDEDOR_DIR_REF = String(process.env.PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA || "").slice(0, 200);
+const PAGOPAR_VENDEDOR_COORDENADAS = String(process.env.PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS || "").slice(0, 80);
 const PAGOPAR_RETURN_URL =
   process.env.PAGOPAR_RETURN_URL ||
   "https://greenyellow-goat-534491.hostingersite.com/success?hash=($hash)";
@@ -251,10 +256,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
 
     const comprador = normalizeBuyerFromOrder(order, PAGOPAR_COMPRADOR_CIUDAD_ID);
 
-    /**
-     * `compras_items[]`: la API valida un jsonb con exactamente 9 claves por ítem.
-     * Los cuatro `vendedor_*` extra rompían el esquema ("cantidad no es 9").
-     */
+    /** Cada ítem debe incluir `vendedor_*` (la API rechaza si faltan, p. ej. vendedor_direccion). */
     const compras_items = [
       {
         ciudad: PAGOPAR_ITEM_CIUDAD,
@@ -266,6 +268,10 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
         descripcion: `Pago pedido ${orderId}`,
         id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
         precio_total: montoTotal,
+        vendedor_telefono: PAGOPAR_VENDEDOR_TELEFONO,
+        vendedor_direccion: PAGOPAR_VENDEDOR_DIRECCION,
+        vendedor_direccion_referencia: PAGOPAR_VENDEDOR_DIR_REF,
+        vendedor_direccion_coordenadas: PAGOPAR_VENDEDOR_COORDENADAS,
       },
     ];
 
