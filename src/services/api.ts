@@ -1,6 +1,6 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://greenyellow-goat-534491.hostingersite.com";
-const API_KEY = import.meta.env.VITE_API_KEY || "neura_mdUMuZ51HJq77ROG2WpWo1qhcdkDkcMi";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+/** Debe coincidir con API_PUBLIC_KEY del server de pagos (definir en .env como VITE_API_KEY). */
+const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
 
 const headers: HeadersInit = {
   "x-api-key": API_KEY,

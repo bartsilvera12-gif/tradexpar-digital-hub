@@ -23,7 +23,9 @@ export default function AdminSettingsPage() {
                 <Input
                   type="text"
                   readOnly
-                  value="https://tan-trout-550053.hostingersite.com"
+                  value={
+                    import.meta.env.VITE_API_BASE_URL || "—"
+                  }
                   className={ADMIN_FORM_CONTROL_READONLY}
                 />
               </div>

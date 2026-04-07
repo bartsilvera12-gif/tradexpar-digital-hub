@@ -20,7 +20,26 @@ function normalizeSupabaseUrl(raw) {
 const PORT = Number(process.env.PORT || 8787);
 const SUPABASE_URL = normalizeSupabaseUrl(process.env.SUPABASE_URL);
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const SUPABASE_SCHEMA = (process.env.SUPABASE_SCHEMA || "tradexpar").trim();
+
+/**
+ * Schema PostgREST donde vive `orders` (tabla de la tienda). No debe ser `public` en este proyecto.
+ * Preferí `SUPABASE_ORDERS_SCHEMA` en el server de pagos para no mezclar con otros usos de `SUPABASE_SCHEMA`.
+ */
+function resolveOrdersSchema() {
+  const raw = String(
+    process.env.SUPABASE_ORDERS_SCHEMA || process.env.SUPABASE_SCHEMA || "tradexpar"
+  ).trim();
+  const s = raw || "tradexpar";
+  if (s === "public") {
+    console.warn(
+      "[payments-api] SUPABASE_SCHEMA/SUPABASE_ORDERS_SCHEMA es `public`; los pedidos están en `tradexpar.orders`. Usando `tradexpar` para esta API."
+    );
+    return "tradexpar";
+  }
+  return s.toLowerCase();
+}
+
+const ORDERS_SCHEMA = resolveOrdersSchema();
 const API_KEY = process.env.API_PUBLIC_KEY || process.env.API_KEY || "";
 
 const PAGOPAR_PUBLIC_KEY =
@@ -58,13 +77,13 @@ function requireEnv() {
 function supabaseAdmin() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
-    db: { schema: SUPABASE_SCHEMA },
+    /** Sin `db.schema` global: todas las lecturas/escrituras de pedidos pasan por `orders()` → `.schema(ORDERS_SCHEMA)` para fijar `Accept-Profile` y evitar caer en `public`. */
   });
 }
 
-/** `tradexpar.orders` explícito (Accept-Profile). Evita caer en `public` si el SDK ignora `db.schema`. */
+/** Siempre `ORDERS_SCHEMA` + `orders` → PostgREST `Accept-Profile` / ruta correcta (p. ej. tradexpar.orders). */
 function orders(sb) {
-  return sb.schema(SUPABASE_SCHEMA).from("orders");
+  return sb.schema(ORDERS_SCHEMA).from("orders");
 }
 
 function randomRef() {
@@ -134,7 +153,18 @@ app.use("/api/pagopar/webhook", express.urlencoded({ extended: true, limit: "1mb
 app.use(express.json({ limit: "512kb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "tradexpar-payments-api", supabase_schema: SUPABASE_SCHEMA });
+  let supabaseHost = "";
+  try {
+    supabaseHost = SUPABASE_URL ? new URL(SUPABASE_URL).host : "";
+  } catch {
+    supabaseHost = "";
+  }
+  res.json({
+    ok: true,
+    service: "tradexpar-payments-api",
+    orders_schema: ORDERS_SCHEMA,
+    supabase_host: supabaseHost,
+  });
 });
 
 /**
@@ -144,6 +174,18 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
   try {
     requireEnv();
     const orderId = req.params.orderId;
+    let supabaseHost = "";
+    try {
+      supabaseHost = SUPABASE_URL ? new URL(SUPABASE_URL).host : "";
+    } catch {
+      supabaseHost = "";
+    }
+    console.info("[create-payment][debug] orderId recibido=", orderId, {
+      orders_schema_efectivo: ORDERS_SCHEMA,
+      supabase_host: supabaseHost,
+      query: `${ORDERS_SCHEMA}.orders`,
+      filtro: `id eq ${orderId}`,
+    });
     const sb = supabaseAdmin();
 
     const { data: order, error: fetchErr } = await orders(sb)
@@ -151,11 +193,20 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       .eq("id", orderId)
       .maybeSingle();
 
-    if (fetchErr) throw fetchErr;
+    if (fetchErr) {
+      console.error("[create-payment][debug] error Supabase al leer pedido:", fetchErr);
+      throw fetchErr;
+    }
     if (!order) {
-      console.warn("[create-payment] Sin fila en", SUPABASE_SCHEMA + ".orders", "id=", orderId);
+      console.warn("[create-payment][debug] sin fila", {
+        orders_schema: ORDERS_SCHEMA,
+        tabla: "orders",
+        orderId,
+        supabase_host: supabaseHost,
+      });
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
+    console.info("[create-payment][debug] pedido encontrado id=", order.id, "status=", order.status);
 
     const ref = randomRef();
     const montoTotal = Math.max(0, Math.round(Number(order.total) || 0));
@@ -411,5 +462,5 @@ app.post("/api/pagopar/webhook", async (req, res) => {
 
 requireEnv();
 app.listen(PORT, () => {
-  console.log(`[payments-api] listening on :${PORT}`);
+  console.log(`[payments-api] listening on :${PORT} (orders → PostgREST schema "${ORDERS_SCHEMA}")`);
 });
