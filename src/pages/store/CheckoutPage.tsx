@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { api } from "@/services/api";
 import { tradexpar } from "@/services/tradexpar";
-import { Loader2 } from "lucide-react";
+import { Loader2, User } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -17,6 +17,30 @@ import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountCont
 import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
 import type { CustomerLocation } from "@/types";
+import { PAGOPAR_CIUDADES_PY, pagoparCiudadLabel } from "@/config/pagoparCiudadesPy";
+
+const fieldCls =
+  "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+type CheckoutForm = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  document: string;
+  phone: string;
+  address: string;
+  cityCode: string;
+  locationUrl: string;
+  locationLabel: string;
+};
+
+function splitDisplayName(full: string): { first: string; last: string } {
+  const t = full.trim();
+  if (!t) return { first: "", last: "" };
+  const i = t.indexOf(" ");
+  if (i === -1) return { first: t, last: "" };
+  return { first: t.slice(0, i), last: t.slice(i + 1).trim() };
+}
 
 export default function CheckoutPage() {
   const { items, clearCart } = useCart();
@@ -24,7 +48,17 @@ export default function CheckoutPage() {
   const totalPrice = cartTotal(items);
   const { user } = useCustomerAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", locationUrl: "", locationLabel: "" });
+  const [form, setForm] = useState<CheckoutForm>({
+    firstName: "",
+    lastName: "",
+    email: "",
+    document: "",
+    phone: "",
+    address: "",
+    cityCode: "",
+    locationUrl: "",
+    locationLabel: "",
+  });
   const [locations, setLocations] = useState<CustomerLocation[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -32,28 +66,30 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!user) return;
-    setForm((prev) => ({ ...prev, email: user.email, name: user.name }));
+    const { first, last } = splitDisplayName(user.name || "");
+    setForm((prev) => ({
+      ...prev,
+      email: user.email,
+      firstName: first || prev.firstName,
+      lastName: last || prev.lastName,
+    }));
     const LOC_MS = 14_000;
     let cancelled = false;
     void Promise.race([
       tradexpar.getCustomerLocations(user.id),
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error("locations_timeout")), LOC_MS)
-      ),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("locations_timeout")), LOC_MS)),
     ])
       .then((res) => {
         if (cancelled) return;
-        const locations = (res as { locations: CustomerLocation[] }).locations;
-        setLocations(locations);
-        const defaultLoc = locations.find((l) => l.is_default) || locations[0];
+        const locs = (res as { locations: CustomerLocation[] }).locations;
+        setLocations(locs);
+        const defaultLoc = locs.find((l) => l.is_default) || locs[0];
         if (defaultLoc) {
           setSelectedLocationId(defaultLoc.id);
           setForm((prev) => ({ ...prev, locationUrl: defaultLoc.location_url }));
         }
       })
-      .catch(() => {
-        /* timeout o red: el usuario puede pegar la URL a mano */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -73,21 +109,40 @@ export default function CheckoutPage() {
           "No puedes combinar productos Tradexpar y Dropi en el mismo pedido. Quita ítems de un origen o vacía el carrito."
         );
       }
-      if (!form.locationUrl.trim()) {
-        throw new Error("La ubicación URL es obligatoria.");
+      if (!form.email.trim()) {
+        throw new Error("El email es obligatorio.");
+      }
+      if (!form.firstName.trim() || !form.lastName.trim()) {
+        throw new Error("Nombre y apellido son obligatorios.");
+      }
+      if (!form.document.trim()) {
+        throw new Error("El número de CI / RUC es obligatorio.");
       }
       if (!form.phone.trim()) {
         throw new Error("El teléfono es obligatorio.");
       }
+      if (!form.address.trim()) {
+        throw new Error("La dirección es obligatoria.");
+      }
+      if (!form.cityCode) {
+        throw new Error("Seleccioná una ciudad.");
+      }
+
+      const cityLabel = pagoparCiudadLabel(form.cityCode);
+      const location_url =
+        form.locationUrl.trim() ||
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address.trim()}, ${cityLabel}, Paraguay`)}`;
 
       let customerLocationId = selectedLocationId || undefined;
       if (user && !customerLocationId && form.locationLabel.trim()) {
         const created = await tradexpar.createCustomerLocation(user.id, {
           label: form.locationLabel.trim(),
-          location_url: form.locationUrl.trim(),
+          location_url: location_url.trim(),
         });
         customerLocationId = created.id;
       }
+
+      const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
 
       const order = await tradexpar.createOrder({
         items: items.map((i) => ({
@@ -96,8 +151,15 @@ export default function CheckoutPage() {
           price: lineUnitPrice(i.product),
           product_name: i.product.name,
         })),
-        customer: { name: form.name, email: form.email || undefined, phone: form.phone.trim() },
-        location_url: form.locationUrl.trim(),
+        customer: {
+          name: fullName,
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          document: form.document.trim(),
+          address: form.address.trim(),
+          city_code: form.cityCode,
+        },
+        location_url,
         customer_location_id: customerLocationId,
         checkout_type: checkoutType,
         affiliate_ref: getActiveAffiliateRef() || undefined,
@@ -112,15 +174,14 @@ export default function CheckoutPage() {
       clearCart();
 
       if (payment.paymentLink) {
-        // Store orderId and ref for success page
         sessionStorage.setItem("tradexpar_order_id", order.id);
         sessionStorage.setItem("tradexpar_payment_ref", payment.ref);
         window.location.href = payment.paymentLink;
       } else {
         navigate(`/success?order_id=${order.id}&ref=${payment.ref}`);
       }
-    } catch (err: any) {
-      setError(err.message || "Error al procesar el pedido");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al procesar el pedido");
     } finally {
       setLoading(false);
     }
@@ -135,135 +196,256 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 sm:py-10 max-w-2xl min-w-0">
+    <div className="container mx-auto px-4 py-8 sm:py-10 max-w-6xl min-w-0">
       <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-6 sm:mb-8">Checkout</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-4">
-          <h2 className="font-semibold text-foreground">Datos del cliente</h2>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Nombre *</label>
-            <input
-              type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              autoComplete="name"
-              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Email {user ? "*" : "(opcional)"}</label>
-            <input
-              type="email" required={Boolean(user)} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-              autoComplete="email"
-              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Teléfono *</label>
-            <input
-              type="tel"
-              required
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              placeholder="Ej. 0981 123456"
-              autoComplete="tel"
-              inputMode="tel"
-              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          {user && locations.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Ubicaciones guardadas</label>
-              <Select
-                value={selectedLocationId || "__none"}
-                onValueChange={(v) => {
-                  if (v === "__none") {
-                    setSelectedLocationId("");
-                    return;
-                  }
-                  const selected = locations.find((l) => l.id === v);
-                  setSelectedLocationId(v);
-                  if (selected) setForm((prev) => ({ ...prev, locationUrl: selected.location_url }));
-                }}
-              >
-                <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-10 text-foreground text-sm">
-                  <SelectValue placeholder="Seleccionar…" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Seleccionar…</SelectItem>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">URL de ubicación *</label>
-            <input
-              type="url"
-              required
-              value={form.locationUrl}
-              onChange={(e) => setForm({ ...form, locationUrl: e.target.value })}
-              placeholder="https://maps.google.com/..."
-              autoComplete="url"
-              inputMode="url"
-              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-          {user && (
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Guardar ubicación como (opcional)</label>
-              <input
-                type="text"
-                value={form.locationLabel}
-                onChange={(e) => setForm({ ...form, locationLabel: e.target.value })}
-                placeholder="Casa, Oficina, Depósito..."
-                className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-          )}
-        </div>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="grid lg:grid-cols-3 gap-8 items-start">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-5">
+              <h2 className="text-lg font-semibold text-foreground">Dirección de envío</h2>
 
-        {/* Order summary */}
-        <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6">
-          <h2 className="font-semibold text-foreground mb-2">Resumen del pedido</h2>
-          {checkoutType === null ? (
-            <p className="text-sm text-destructive mb-4">
-              Este carrito mezcla productos Tradexpar y Dropi. Deja solo un tipo de origen para continuar (ajusta cantidades o vacía el carrito).
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground mb-4">
-              {checkoutType === "dropi"
-                ? "Pedido Dropi (todos los ítems son de catálogo Dropi)."
-                : "Pedido Tradexpar (todos los ítems son propios)."}
-            </p>
-          )}
-          <div className="space-y-3">
-            {items.map((item) => (
-              <div key={item.product.id} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{item.product.name} × {item.quantity}</span>
-                <span className="text-foreground">₲{lineSubtotal(item.product, item.quantity).toLocaleString("es-PY")}</span>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Email <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  autoComplete="email"
+                  className={fieldCls}
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">Podés crear una cuenta después de comprar.</p>
               </div>
-            ))}
-            <div className="border-t pt-3 flex justify-between font-semibold text-lg">
-              <span>Total</span>
-              <span>₲{totalPrice.toLocaleString("es-PY")}</span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Nombre <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.firstName}
+                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    autoComplete="given-name"
+                    className={fieldCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Apellido <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.lastName}
+                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    autoComplete="family-name"
+                    className={fieldCls}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Número CI / RUC <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.document}
+                    onChange={(e) => setForm({ ...form, document: e.target.value })}
+                    autoComplete="off"
+                    className={fieldCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Teléfono <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="09xx 123456"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    className={fieldCls}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Dirección <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  autoComplete="street-address"
+                  className={fieldCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Ciudad <span className="text-destructive">*</span>
+                </label>
+                <Select
+                  value={form.cityCode || "__none"}
+                  onValueChange={(v) => setForm({ ...form, cityCode: v === "__none" ? "" : v })}
+                >
+                  <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
+                    <SelectValue placeholder="Seleccionar ciudad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Seleccionar ciudad</SelectItem>
+                    {PAGOPAR_CIUDADES_PY.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {user && locations.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Ubicaciones guardadas</label>
+                  <Select
+                    value={selectedLocationId || "__none"}
+                    onValueChange={(v) => {
+                      if (v === "__none") {
+                        setSelectedLocationId("");
+                        return;
+                      }
+                      const selected = locations.find((l) => l.id === v);
+                      setSelectedLocationId(v);
+                      if (selected) setForm((prev) => ({ ...prev, locationUrl: selected.location_url }));
+                    }}
+                  >
+                    <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-10 text-foreground text-sm">
+                      <SelectValue placeholder="Seleccionar…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Seleccionar…</SelectItem>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Enlace a Google Maps <span className="text-muted-foreground font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={form.locationUrl}
+                  onChange={(e) => setForm({ ...form, locationUrl: e.target.value })}
+                  placeholder="https://maps.google.com/..."
+                  autoComplete="url"
+                  className={fieldCls}
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Si no pegás un enlace, usamos tu dirección y ciudad para generar uno en el pedido.
+                </p>
+              </div>
+
+              {user && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Guardar ubicación como <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.locationLabel}
+                    onChange={(e) => setForm({ ...form, locationLabel: e.target.value })}
+                    placeholder="Casa, Oficina…"
+                    className={fieldCls}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-1">
+            <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 lg:sticky lg:top-24 space-y-4">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="font-semibold text-foreground">Resumen del pedido</h2>
+                {!user && (
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline shrink-0"
+                  >
+                    <User className="h-4 w-4" aria-hidden />
+                    Iniciá sesión
+                  </Link>
+                )}
+              </div>
+
+              {checkoutType === null ? (
+                <p className="text-sm text-destructive">
+                  Este carrito mezcla productos Tradexpar y Dropi. Deja solo un tipo de origen para continuar.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {checkoutType === "dropi"
+                    ? "Pedido Dropi (todos los ítems son de catálogo Dropi)."
+                    : "Pedido Tradexpar (todos los ítems son propios)."}
+                </p>
+              )}
+
+              <p className="text-sm text-muted-foreground">
+                {items.reduce((n, i) => n + i.quantity, 0)} producto
+                {items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"} en el carrito
+              </p>
+
+              <div className="space-y-3">
+                {items.map((item) => (
+                  <div key={item.product.id} className="flex justify-between gap-3 text-sm">
+                    <span className="text-muted-foreground min-w-0">
+                      {item.product.name} × {item.quantity}
+                    </span>
+                    <span className="text-foreground shrink-0">
+                      ₲{lineSubtotal(item.product, item.quantity).toLocaleString("es-PY")}
+                    </span>
+                  </div>
+                ))}
+                <div className="border-t pt-3 flex justify-between font-semibold text-lg">
+                  <span>Total</span>
+                  <span>₲{totalPrice.toLocaleString("es-PY")}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {error && (
-          <div className="p-4 rounded-xl bg-destructive/10 text-destructive text-sm">{error}</div>
-        )}
+        {error && <div className="p-4 rounded-xl bg-destructive/10 text-destructive text-sm">{error}</div>}
 
         <button
           type="submit"
           disabled={loading || checkoutType === null}
-          className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
+          className="w-full max-w-xl lg:max-w-none min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
         >
-          {loading ? <><Loader2 className="h-5 w-5 animate-spin" /> Procesando...</> : "Confirmar y pagar"}
+          {loading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
+            </>
+          ) : (
+            "Confirmar y pagar"
+          )}
         </button>
       </form>
     </div>

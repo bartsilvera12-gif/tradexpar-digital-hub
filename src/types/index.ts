@@ -56,6 +56,12 @@ export interface CreateOrderPayload {
     name: string;
     email?: string;
     phone?: string;
+    /** CI / RUC u otro documento (PagoPar / facturación). */
+    document?: string;
+    /** Dirección de envío o facturación. */
+    address?: string;
+    /** Código de ciudad PagoPar (string, p. ej. "1"). */
+    city_code?: string;
   };
   checkout_type?: "tradexpar" | "dropi";
   location_url: string;
@@ -81,6 +87,9 @@ export interface Order {
     name: string;
     email?: string;
     phone?: string;
+    document?: string;
+    address?: string;
+    city_code?: string;
   };
 }
 

@@ -155,15 +155,18 @@ function buildPagoparCompradorFromOrder(order) {
   const nombre = (order.customer_name || "Cliente").toString().slice(0, 200);
   const email = (order.customer_email || "sin-email@tradexpar.local").toString().slice(0, 200);
   const telefono = (order.customer_phone || "000000").toString().replace(/\D/g, "").slice(0, 20) || "000000";
-  const documento = telefono.slice(-7) || "0000000";
+  const rawDoc = (order.customer_document || "").toString().replace(/\s/g, "");
+  const documento = rawDoc.slice(0, 20) || telefono.slice(-7) || "0000000";
+  const ciudad = String(order.customer_city_code || PAGOPAR_COMPRADOR_CIUDAD).trim() || "1";
+  const direccion = (order.customer_address || "").toString().slice(0, 200);
   return {
     nombre,
     email,
-    ciudad: PAGOPAR_COMPRADOR_CIUDAD,
+    ciudad,
     telefono,
     tipo_documento: "CI",
     documento,
-    direccion: "",
+    direccion,
     direccion_referencia: "",
     coordenadas: "",
   };
@@ -314,7 +317,9 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const sb = supabaseAdmin();
 
     const { data: order, error: fetchErr } = await orders(sb)
-      .select("id, total, customer_name, customer_email, customer_phone, status")
+      .select(
+        "id, total, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, status"
+      )
       .eq("id", orderId)
       .maybeSingle();
 
