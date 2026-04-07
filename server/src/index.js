@@ -319,7 +319,20 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     });
   } catch (e) {
     console.error("[create-payment]", e);
-    return res.status(500).json(serializeCaughtError(e));
+    const body = serializeCaughtError(e);
+    const low = String(body.error || "").toLowerCase();
+    const looksLikeSupabaseAuth =
+      low.includes("unauthorized") ||
+      low.includes("invalid api key") ||
+      low.includes("jwt") ||
+      body.code === "PGRST301" ||
+      body.code === "42501";
+    if (looksLikeSupabaseAuth) {
+      body.hint =
+        "El proceso Node no pudo autenticarse con Supabase: revisá SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en el .env del server de pagos (debe ser la service_role del mismo proyecto que la tienda, no la anon).";
+      return res.status(503).json(body);
+    }
+    return res.status(500).json(body);
   }
 });
 
