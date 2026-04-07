@@ -251,7 +251,11 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
 
     const comprador = normalizeBuyerFromOrder(order);
 
-    /** Cada ítem debe incluir `vendedor_*` (la API rechaza si faltan, p. ej. vendedor_direccion). */
+    /**
+     * PagoPar persiste cada línea como jsonb con exactamente 9 claves de primer nivel.
+     * Antes había 13 (producto + vendedor_* planos) → "cantidad no es 9".
+     * Los datos del vendedor van anidados en `vendedor` (sigue existiendo dirección para validaciones internas).
+     */
     const compras_items = [
       {
         ciudad: PAGOPAR_ITEM_CIUDAD,
@@ -260,17 +264,18 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
         categoria: PAGOPAR_ITEM_CATEGORIA,
         public_key: PAGOPAR_PUBLIC_KEY,
         url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
-        descripcion: `Pago pedido ${orderId}`,
         id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
         precio_total: montoTotal,
-        vendedor_telefono: PAGOPAR_VENDEDOR_TELEFONO,
-        vendedor_direccion: PAGOPAR_VENDEDOR_DIRECCION,
-        vendedor_direccion_referencia: PAGOPAR_VENDEDOR_DIR_REF,
-        vendedor_direccion_coordenadas: PAGOPAR_VENDEDOR_COORDENADAS,
+        vendedor: {
+          telefono: PAGOPAR_VENDEDOR_TELEFONO,
+          direccion: PAGOPAR_VENDEDOR_DIRECCION,
+          direccion_referencia: PAGOPAR_VENDEDOR_DIR_REF,
+          direccion_coordenadas: PAGOPAR_VENDEDOR_COORDENADAS,
+        },
       },
     ];
 
-    const payload = {
+    const orderPagopar = {
       token,
       comprador,
       public_key: PAGOPAR_PUBLIC_KEY,
@@ -282,13 +287,26 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       descripcion_resumen: `Tradexpar #${orderId.slice(0, 8)}`,
       forma_pago: PAGOPAR_FORMA_PAGO,
     };
-
     if (PAGOPAR_RETURN_URL) {
-      payload.url_respuesta = PAGOPAR_RETURN_URL;
+      orderPagopar.url_respuesta = PAGOPAR_RETURN_URL;
     }
     if (PAGOPAR_WEBHOOK_URL) {
-      payload.url_notificacion = PAGOPAR_WEBHOOK_URL;
+      orderPagopar.url_notificacion = PAGOPAR_WEBHOOK_URL;
     }
+
+    /**
+     * Algunas integraciones PHP envuelven el pedido en `orderPagopar`. Por defecto se manda plano (como antes);
+     * si seguís viendo errores de estructura, probá `PAGOPAR_ORDER_WRAPPER=1` en el .env del server.
+     */
+    const useOrderWrapper = String(process.env.PAGOPAR_ORDER_WRAPPER || "").trim() === "1";
+    const payload = useOrderWrapper ? { orderPagopar } : orderPagopar;
+
+    console.info("[create-payment][pagopar shape]", {
+      bodyWrapper: useOrderWrapper ? "orderPagopar" : "flat",
+      compradorKeyCount: Object.keys(comprador).length,
+      itemTopLevelKeyCount: Object.keys(compras_items[0]).length,
+      itemKeys: Object.keys(compras_items[0]),
+    });
 
     const { error: upErr } = await orders(sb)
       .update({

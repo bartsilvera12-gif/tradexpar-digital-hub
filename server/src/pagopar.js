@@ -48,15 +48,18 @@ export function isPagoparRespuestaOk(respuesta) {
 
 export async function iniciarTransaccion(payload) {
   const url = `${PAGOPAR_API}/api/comercios/2.0/iniciar-transaccion`;
+  const headers = { Accept: "application/json", "Content-Type": "application/json" };
+  const bodyStr = JSON.stringify(payload);
   console.info("[pagopar][debug] POST", url);
-  console.info("[pagopar][debug] payload", JSON.stringify(payload));
+  console.info("[pagopar][debug] headers", JSON.stringify(headers));
+  console.info("[pagopar][debug] body (string length)", bodyStr.length, bodyStr.slice(0, 8000));
   const res = await fetch(url, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    headers,
+    body: bodyStr,
   });
   const text = await res.text();
-  console.info("[pagopar][debug] status", res.status, "body", text.slice(0, 4000));
+  console.info("[pagopar][debug] http status", res.status, "response", text.slice(0, 8000));
   let data;
   try {
     data = JSON.parse(text);
