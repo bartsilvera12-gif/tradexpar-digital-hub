@@ -1,0 +1,11 @@
+# SPA (React Router): /products, /admin, etc. deben servir index.html
+# Apache + mod_rewrite (Hostinger). Copiado a dist/ desde public/ al hacer build.
+RewriteEngine On
+RewriteBase /
+
+RewriteRule ^index\.html$ - [L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+RewriteRule . /index.html [L]
