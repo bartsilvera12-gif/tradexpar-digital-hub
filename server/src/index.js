@@ -90,6 +90,23 @@ function randomRef() {
   return crypto.randomBytes(16).toString("hex");
 }
 
+/** PostgREST / Supabase devuelve a veces objetos sin `instanceof Error`; el catch los convertía en "Error interno". */
+function serializeCaughtError(e) {
+  if (e instanceof Error) return { error: e.message };
+  if (e && typeof e === "object") {
+    const msg = e.message || e.error_description || e.details;
+    if (msg) {
+      return {
+        error: String(msg),
+        ...(e.code != null && { code: e.code }),
+        ...(e.details != null && String(e.details) !== String(msg) && { details: e.details }),
+        ...(e.hint != null && { hint: e.hint }),
+      };
+    }
+  }
+  return { error: e != null ? String(e) : "Error interno" };
+}
+
 function apiKeyMiddleware(req, res, next) {
   const key = req.headers["x-api-key"];
   if (!API_KEY || key !== API_KEY) {
@@ -302,7 +319,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     });
   } catch (e) {
     console.error("[create-payment]", e);
-    return res.status(500).json({ error: e instanceof Error ? e.message : "Error interno" });
+    return res.status(500).json(serializeCaughtError(e));
   }
 });
 
