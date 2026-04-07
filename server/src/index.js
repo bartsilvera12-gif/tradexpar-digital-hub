@@ -53,6 +53,10 @@ const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
 const PAGOPAR_COMPRADOR_CIUDAD_ID = Number(
   process.env.PAGOPAR_COMPRADOR_CIUDAD_ID || process.env.PAGOPAR_ITEM_CIUDAD || 1
 );
+/** PagoPar exige también la clave string `comprador.ciudad` (mismo código que en ítems, p. ej. "1" Asunción). */
+const PAGOPAR_COMPRADOR_CIUDAD = String(
+  process.env.PAGOPAR_COMPRADOR_CIUDAD || process.env.PAGOPAR_ITEM_CIUDAD || "1"
+).trim() || "1";
 const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 895);
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
@@ -151,6 +155,7 @@ function normalizeBuyerFromOrder(order, ciudadId) {
   return {
     nombre,
     email,
+    ciudad: PAGOPAR_COMPRADOR_CIUDAD,
     ciudad_id: Number.isFinite(ciudadId) && ciudadId > 0 ? ciudadId : 1,
     telefono,
     tipo_documento: "CI",
