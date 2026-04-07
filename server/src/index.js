@@ -60,7 +60,7 @@ const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
   "https://www.pagopar.com/static/img/logo.png";
-/** PagoPar exige las claves `vendedor_*` en cada ítem (pueden ir vacías). */
+/** Valores del objeto anidado `compras_items[].vendedor` (no usar claves planas `vendedor_*`). */
 const PAGOPAR_VENDEDOR_TELEFONO = String(process.env.PAGOPAR_VENDEDOR_TELEFONO || "").slice(0, 40);
 const PAGOPAR_VENDEDOR_DIRECCION = String(process.env.PAGOPAR_VENDEDOR_DIRECCION || "").slice(0, 300);
 const PAGOPAR_VENDEDOR_DIR_REF = String(process.env.PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA || "").slice(0, 200);
@@ -150,7 +150,8 @@ function extractPagoparHashFromIniciarResult(body) {
   return null;
 }
 
-function normalizeBuyerFromOrder(order) {
+/** Solo `ciudad` string (p. ej. "1"). Nunca `ciudad_id` ni `ruc` / `razon_social` en este jsonb. */
+function buildPagoparCompradorFromOrder(order) {
   const nombre = (order.customer_name || "Cliente").toString().slice(0, 200);
   const email = (order.customer_email || "sin-email@tradexpar.local").toString().slice(0, 200);
   const telefono = (order.customer_phone || "000000").toString().replace(/\D/g, "").slice(0, 20) || "000000";
@@ -165,6 +166,102 @@ function normalizeBuyerFromOrder(order) {
     direccion: "",
     direccion_referencia: "",
     coordenadas: "",
+  };
+}
+
+const PAGOPAR_COMPRADOR_KEYS = [
+  "nombre",
+  "email",
+  "ciudad",
+  "telefono",
+  "tipo_documento",
+  "documento",
+  "direccion",
+  "direccion_referencia",
+  "coordenadas",
+];
+
+const PAGOPAR_ITEM_TOP_KEYS = [
+  "ciudad",
+  "nombre",
+  "cantidad",
+  "categoria",
+  "public_key",
+  "url_imagen",
+  "id_producto",
+  "precio_total",
+  "vendedor",
+];
+
+function assertPagoparCompradorShape(comprador) {
+  const keys = new Set(Object.keys(comprador));
+  if (keys.has("ciudad_id")) {
+    throw new Error("[pagopar] comprador: no enviar ciudad_id; solo ciudad (string).");
+  }
+  if (keys.size !== PAGOPAR_COMPRADOR_KEYS.length) {
+    throw new Error(`[pagopar] comprador: se esperaban ${PAGOPAR_COMPRADOR_KEYS.length} claves, hay ${keys.size}.`);
+  }
+  for (const k of PAGOPAR_COMPRADOR_KEYS) {
+    if (!keys.has(k)) {
+      throw new Error(`[pagopar] comprador: falta la clave obligatoria "${k}".`);
+    }
+  }
+  for (const k of keys) {
+    if (!PAGOPAR_COMPRADOR_KEYS.includes(k)) {
+      throw new Error(`[pagopar] comprador: clave no permitida "${k}".`);
+    }
+  }
+}
+
+function assertPagoparCompraItemShape(item) {
+  const keys = new Set(Object.keys(item));
+  if ([...keys].some((k) => k.startsWith("vendedor_"))) {
+    throw new Error("[pagopar] compras_items: no usar vendedor_* planos; usá el objeto vendedor anidado.");
+  }
+  if (keys.has("descripcion")) {
+    throw new Error("[pagopar] compras_items: no enviar descripcion en el ítem.");
+  }
+  if (keys.size !== PAGOPAR_ITEM_TOP_KEYS.length) {
+    throw new Error(`[pagopar] compras_items: se esperaban ${PAGOPAR_ITEM_TOP_KEYS.length} claves de primer nivel, hay ${keys.size}.`);
+  }
+  for (const k of PAGOPAR_ITEM_TOP_KEYS) {
+    if (!keys.has(k)) {
+      throw new Error(`[pagopar] compras_items: falta la clave obligatoria "${k}".`);
+    }
+  }
+  for (const k of keys) {
+    if (!PAGOPAR_ITEM_TOP_KEYS.includes(k)) {
+      throw new Error(`[pagopar] compras_items: clave no permitida "${k}".`);
+    }
+  }
+  const v = item.vendedor;
+  if (!v || typeof v !== "object") {
+    throw new Error("[pagopar] compras_items: vendedor debe ser un objeto.");
+  }
+  for (const vk of ["telefono", "direccion", "direccion_referencia", "direccion_coordenadas"]) {
+    if (!Object.prototype.hasOwnProperty.call(v, vk)) {
+      throw new Error(`[pagopar] compras_items.vendedor: falta "${vk}".`);
+    }
+  }
+}
+
+/** Exactamente 9 claves de primer nivel; sin `descripcion`; `vendedor` anidado. */
+function buildPagoparCompraItem(orderId, montoTotal) {
+  return {
+    ciudad: PAGOPAR_ITEM_CIUDAD,
+    nombre: `Pedido Tradexpar ${orderId.slice(0, 8)}`,
+    cantidad: 1,
+    categoria: PAGOPAR_ITEM_CATEGORIA,
+    public_key: PAGOPAR_PUBLIC_KEY,
+    url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
+    id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
+    precio_total: montoTotal,
+    vendedor: {
+      telefono: PAGOPAR_VENDEDOR_TELEFONO,
+      direccion: PAGOPAR_VENDEDOR_DIRECCION,
+      direccion_referencia: PAGOPAR_VENDEDOR_DIR_REF,
+      direccion_coordenadas: PAGOPAR_VENDEDOR_COORDENADAS,
+    },
   };
 }
 
@@ -249,31 +346,10 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     fechaMax.setDate(fechaMax.getDate() + 3);
     const fecha_maxima_pago = fechaMax.toISOString().slice(0, 19).replace("T", " ");
 
-    const comprador = normalizeBuyerFromOrder(order);
-
-    /**
-     * PagoPar persiste cada línea como jsonb con exactamente 9 claves de primer nivel.
-     * Antes había 13 (producto + vendedor_* planos) → "cantidad no es 9".
-     * Los datos del vendedor van anidados en `vendedor` (sigue existiendo dirección para validaciones internas).
-     */
-    const compras_items = [
-      {
-        ciudad: PAGOPAR_ITEM_CIUDAD,
-        nombre: `Pedido Tradexpar ${orderId.slice(0, 8)}`,
-        cantidad: 1,
-        categoria: PAGOPAR_ITEM_CATEGORIA,
-        public_key: PAGOPAR_PUBLIC_KEY,
-        url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
-        id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
-        precio_total: montoTotal,
-        vendedor: {
-          telefono: PAGOPAR_VENDEDOR_TELEFONO,
-          direccion: PAGOPAR_VENDEDOR_DIRECCION,
-          direccion_referencia: PAGOPAR_VENDEDOR_DIR_REF,
-          direccion_coordenadas: PAGOPAR_VENDEDOR_COORDENADAS,
-        },
-      },
-    ];
+    const comprador = buildPagoparCompradorFromOrder(order);
+    const compras_items = [buildPagoparCompraItem(orderId, montoTotal)];
+    assertPagoparCompradorShape(comprador);
+    assertPagoparCompraItemShape(compras_items[0]);
 
     const orderPagopar = {
       token,
