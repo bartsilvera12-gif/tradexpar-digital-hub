@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 import { useAffiliatePortalLinkVisible } from "@/hooks/useAffiliatePortalLinkVisible";
+import { DDI } from "@/lib/ddiLabels";
 import { affiliatesAvailable, submitAffiliateRequest } from "@/services/affiliateTradexparService";
 
 export default function AffiliateApplyPage() {
@@ -25,7 +26,7 @@ export default function AffiliateApplyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!affiliatesAvailable()) {
-      toast.error("El programa de afiliados no está configurado (Supabase).");
+      toast.error(`El ${DDI.programa} no está configurado (Supabase).`);
       return;
     }
     if (!form.full_name.trim() || !form.email.trim()) {
@@ -54,7 +55,7 @@ export default function AffiliateApplyPage() {
 
   return (
     <div className="container mx-auto px-4 py-16 max-w-lg">
-      <h1 className="text-3xl font-bold text-foreground mb-2">Ser afiliado</h1>
+      <h1 className="text-3xl font-bold text-foreground mb-2">Ser {DDI.singular}</h1>
       <p className="text-muted-foreground text-sm mb-4">
         Completá el formulario. Revisamos cada solicitud y, si es aprobada, recibís un código único para compartir
         enlaces con <code className="text-xs bg-muted px-1 rounded">?ref=tu_codigo</code>.
@@ -62,7 +63,7 @@ export default function AffiliateApplyPage() {
       <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground mb-6 space-y-2">
         <p>
           Este formulario <strong className="text-foreground font-medium">no crea una cuenta ni contraseña</strong> en la
-          tienda. Para entrar al panel de afiliado después, necesitás{" "}
+          tienda. Para entrar al panel del {DDI.singularLower} después, necesitás{" "}
           <Link to="/register" className="text-primary font-medium underline-offset-4 hover:underline">
             registrarte
           </Link>{" "}
@@ -76,7 +77,7 @@ export default function AffiliateApplyPage() {
       </div>
       {showAffiliatePanel ? (
         <p className="text-sm text-muted-foreground mb-8">
-          ¿Tenés solicitud pendiente o ya sos afiliado?{" "}
+          {`¿Tenés solicitud pendiente o ya sos ${DDI.singularLower}? `}
           <Link to="/afiliados/panel" className="text-primary font-medium underline-offset-4 hover:underline">
             Ir al panel
           </Link>

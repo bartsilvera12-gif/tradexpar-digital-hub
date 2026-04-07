@@ -6,19 +6,36 @@ import { api } from "@/services/api";
 export default function SuccessPage() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<string>("pending");
+  const [displayOrderId, setDisplayOrderId] = useState("");
 
   const orderId = searchParams.get("order_id") || sessionStorage.getItem("tradexpar_order_id") || "";
   const ref = searchParams.get("ref") || sessionStorage.getItem("tradexpar_payment_ref") || "";
+  const hashFromReturn = searchParams.get("hash") || "";
 
   useEffect(() => {
-    if (!orderId || !ref) return;
+    const hash = hashFromReturn;
+    if (!orderId && !hash) return;
+    if (orderId && !ref && !hash) return;
     let active = true;
 
     const poll = async () => {
       for (let i = 0; i < 30; i++) {
         if (!active) return;
         try {
-          const data = await api.getPaymentStatus(orderId, ref);
+          const data = orderId
+            ? await api.getPaymentStatus(orderId, ref, hash || undefined)
+            : await api.getPaymentStatusByHash(hash, ref || undefined);
+
+          if (data.order_id) {
+            if (!sessionStorage.getItem("tradexpar_order_id")) {
+              sessionStorage.setItem("tradexpar_order_id", data.order_id);
+            }
+            setDisplayOrderId(data.order_id);
+          }
+          if (data.ref && !sessionStorage.getItem("tradexpar_payment_ref")) {
+            sessionStorage.setItem("tradexpar_payment_ref", data.ref);
+          }
+
           if (data.status === "approved" || data.status === "completed" || data.status === "paid") {
             setStatus("approved");
             return;
@@ -33,9 +50,12 @@ export default function SuccessPage() {
       setStatus("timeout");
     };
 
-    poll();
-    return () => { active = false; };
-  }, [orderId, ref]);
+    if (orderId) setDisplayOrderId(orderId);
+    void poll();
+    return () => {
+      active = false;
+    };
+  }, [orderId, ref, hashFromReturn]);
 
   const config: Record<string, { icon: React.ReactNode; title: string; desc: string }> = {
     pending: {
@@ -67,7 +87,11 @@ export default function SuccessPage() {
       <div className="mb-6">{c.icon}</div>
       <h1 className="text-3xl font-bold text-foreground mb-4">{c.title}</h1>
       <p className="text-muted-foreground max-w-md mb-8">{c.desc}</p>
-      {orderId && <p className="text-sm text-muted-foreground mb-8">Pedido: <span className="font-mono text-foreground">{orderId}</span></p>}
+      {displayOrderId && (
+        <p className="text-sm text-muted-foreground mb-8">
+          Pedido: <span className="font-mono text-foreground">{displayOrderId}</span>
+        </p>
+      )}
       <Link to="/" className="inline-flex px-6 py-3 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity">
         Volver al inicio
       </Link>

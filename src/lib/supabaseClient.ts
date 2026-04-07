@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isInvalidRefreshTokenError, isTransientAuthSdkError, sleep } from "@/lib/networkResilience";
 
 
 
@@ -26,7 +27,7 @@ let dataAccessToken: string | null = null;
 
 /**
  * Storage aislado para el cliente PostgREST: si usa el mismo localStorage que el cliente Auth,
- * GoTrue crea dos instancias que compiten por el mismo lock → getSession() puede colgar y el panel afiliado hace timeout.
+ * GoTrue crea dos instancias que compiten por el mismo lock → getSession() puede colgar y el panel del distribuidor hace timeout.
  */
 function createMemoryStorage(): Storage {
   const map = new Map<string, string>();
@@ -247,6 +248,17 @@ function tryApplyCachedAdminJwt(): boolean {
 
 }
 
+/** Limpia flags de panel + JWT en memoria (refresh inválido o sesión revocada). */
+function clearAdminPanelSession(): void {
+  try {
+    sessionStorage.removeItem("tradexpar_admin_token");
+    sessionStorage.removeItem("tradexpar_admin");
+  } catch {
+    /* ignore */
+  }
+  setDataClientAccessToken(null);
+}
+
 
 
 /**
@@ -268,7 +280,11 @@ export async function syncDataClientTokenFromAuthSession(): Promise<void> {
 
     const { data: { session }, error } = await auth.auth.getSession();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      const m = error.message ?? "";
+      if (isInvalidRefreshTokenError(m)) clearAdminPanelSession();
+      throw new Error(m || "No se pudo leer la sesión.");
+    }
 
     let token = session?.access_token ?? null;
 
@@ -287,11 +303,30 @@ export async function syncDataClientTokenFromAuthSession(): Promise<void> {
     const stale = !token || (expMs > 0 && expMs < Date.now() + 60_000);
 
     if (stale) {
-      const { data, error: rErr } = await auth.auth.refreshSession();
-      if (rErr || !data.session?.access_token) {
+      let refreshed: string | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, error: rErr } = await auth.auth.refreshSession();
+        if (!rErr && data.session?.access_token) {
+          refreshed = data.session.access_token;
+          break;
+        }
+        const rMsg = rErr?.message ?? "";
+        if (isInvalidRefreshTokenError(rMsg)) {
+          clearAdminPanelSession();
+          throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
+        }
+        if (attempt === 0 && isTransientAuthSdkError(rMsg)) {
+          await sleep(450);
+          continue;
+        }
+        throw new Error(
+          rMsg || "Sesión expirada. Volvé a iniciar sesión en el panel."
+        );
+      }
+      if (!refreshed) {
         throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
       }
-      token = data.session.access_token;
+      token = refreshed;
     }
 
     if (!token) throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");

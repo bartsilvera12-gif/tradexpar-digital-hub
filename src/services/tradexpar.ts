@@ -26,6 +26,11 @@ import type {
   CustomerLocation,
 } from "@/types";
 import { deriveOrderKind } from "@/lib/adminOrdersUtils";
+import {
+  formatSupabaseErrorForUser,
+  isTransientNetworkOrServerError,
+  sleep,
+} from "@/lib/networkResilience";
 
 function oauthProviderFromUser(user: User): "google" | "facebook" | null {
   for (const id of user.identities ?? []) {
@@ -88,6 +93,20 @@ function tx() {
   return getSupabaseData();
 }
 
+const STORE_JWT_SYNC_MS = 12_000;
+
+function requestAbortSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(ms);
+  }
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
+const STORE_CATALOG_TIMEOUT_MS = 32_000;
+const STORE_CATALOG_RETRIES = 2;
+
 /** Asegura que las RPC de tienda vean el mismo JWT que la sesión de Auth (evita auth.uid() null en PostgREST). */
 async function syncStoreJwtToDataClient(): Promise<void> {
   const fast = tryReadAuthAccessTokenFromStorage();
@@ -95,11 +114,45 @@ async function syncStoreJwtToDataClient(): Promise<void> {
     setDataClientAccessToken(fast);
     return;
   }
-  await runAuthExclusive(async () => {
-    const { data: { session }, error } = await getSupabaseAuth().auth.getSession();
-    if (error) throw new Error(error.message);
-    if (session?.access_token) setDataClientAccessToken(session.access_token);
-  });
+  try {
+    await Promise.race([
+      runAuthExclusive(async () => {
+        const { data: { session }, error } = await getSupabaseAuth().auth.getSession();
+        if (error) throw new Error(formatSupabaseErrorForUser(error.message));
+        if (session?.access_token) setDataClientAccessToken(session.access_token);
+      }),
+      new Promise<never>((_, rej) =>
+        setTimeout(
+          () => rej(new Error("__STORE_JWT_SYNC_TIMEOUT__")),
+          STORE_JWT_SYNC_MS
+        )
+      ),
+    ]);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === "__STORE_JWT_SYNC_TIMEOUT__") {
+      const again = tryReadAuthAccessTokenFromStorage();
+      if (again) {
+        setDataClientAccessToken(again);
+        return;
+      }
+      throw new Error(
+        "No se pudo sincronizar la sesión a tiempo. Cerrá otras pestañas de este sitio o volvé a iniciar sesión."
+      );
+    }
+    throw e instanceof Error ? e : new Error(msg);
+  }
+}
+
+async function fetchProductsOnce(): Promise<Product[]> {
+  const signal = requestAbortSignal(STORE_CATALOG_TIMEOUT_MS);
+  const { data, error } = await tx()
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .abortSignal(signal);
+  if (error) throw new Error(formatSupabaseErrorForUser(error.message));
+  return (data ?? []).map((r) => mapProduct(r as Record<string, unknown>));
 }
 
 const ADMIN_AUTH_SYNC_MS = 6000;
@@ -344,7 +397,7 @@ function rowToCustomerUser(row: Record<string, unknown>): CustomerUser {
 
 /**
  * Marca `is_affiliate` si hay fila en `affiliates` por `customer_id` o por **mismo email**
- * (muchos afiliados aún no tienen `customer_id` vinculado al crear la cuenta en la tienda).
+ * (muchos distribuidores digitales independientes aún no tienen `customer_id` vinculado al crear la cuenta en la tienda).
  */
 async function mergeCustomerAffiliateFlags(
   sb: Awaited<ReturnType<typeof txAdmin>>,
@@ -526,9 +579,20 @@ async function adminSetCustomerPasswordViaEdge(customerId: string, newPassword: 
 
 export const tradexpar = {
   getProducts: async (): Promise<Product[]> => {
-    const { data, error } = await tx().from("products").select("*").order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((r) => mapProduct(r as Record<string, unknown>));
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= STORE_CATALOG_RETRIES; attempt++) {
+      try {
+        return await fetchProductsOnce();
+      } catch (e) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
+        if (attempt < STORE_CATALOG_RETRIES && isTransientNetworkOrServerError(lastErr.message)) {
+          await sleep(400 * (attempt + 1));
+          continue;
+        }
+        throw lastErr;
+      }
+    }
+    throw lastErr ?? new Error("No se pudo cargar el catálogo.");
   },
 
   /** Pedido + líneas en una transacción (RPC `tradexpar.create_checkout_order` en SQL). */
@@ -799,8 +863,9 @@ export const tradexpar = {
       .from("customer_locations")
       .select("*")
       .eq("customer_id", customerId)
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+      .order("created_at", { ascending: false })
+      .abortSignal(requestAbortSignal(15_000));
+    if (error) throw new Error(formatSupabaseErrorForUser(error.message));
     return { locations: (data ?? []) as CustomerLocation[] };
   },
 

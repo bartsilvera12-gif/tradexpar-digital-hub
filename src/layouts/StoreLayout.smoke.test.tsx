@@ -5,22 +5,25 @@ import { CartProvider } from "@/contexts/CartContext";
 import { CustomerAuthProvider } from "@/contexts/CustomerAuthContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import { StoreLayout } from "@/layouts/StoreLayout";
+import { StoreTestQueryProvider } from "@/test/StoreTestProviders";
 
 describe("StoreLayout", () => {
-  it("monta navbar, outlet y proveedor de descuentos afiliados sin error", async () => {
+  it("monta navbar, outlet y proveedor de descuentos por distribuidor sin error", async () => {
     render(
       <MemoryRouter initialEntries={["/?ref=SMOKE"]}>
-        <CustomerAuthProvider>
-          <WishlistProvider>
-            <CartProvider>
-              <Routes>
-                <Route element={<StoreLayout />}>
-                  <Route path="/" element={<div data-testid="outlet-ok">OK</div>} />
-                </Route>
-              </Routes>
-            </CartProvider>
-          </WishlistProvider>
-        </CustomerAuthProvider>
+        <StoreTestQueryProvider>
+          <CustomerAuthProvider>
+            <WishlistProvider>
+              <CartProvider>
+                <Routes>
+                  <Route element={<StoreLayout />}>
+                    <Route path="/" element={<div data-testid="outlet-ok">OK</div>} />
+                  </Route>
+                </Routes>
+              </CartProvider>
+            </WishlistProvider>
+          </CustomerAuthProvider>
+        </StoreTestQueryProvider>
       </MemoryRouter>
     );
 

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Product } from "@/types";
-import { ShoppingCart, Plus, Minus, Heart, MessageCircle } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Heart } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { useCart } from "@/contexts/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -17,6 +18,7 @@ import {
   getStockLabel,
   buildWhatsAppProductLink,
 } from "@/lib/productHelpers";
+import { ProductPromoBadge } from "@/components/store/ProductPromoBadge";
 
 interface ProductCardProps {
   product: Product;
@@ -56,19 +58,13 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       <Link to={`/products/${product.id}`} className="block relative">
         <div className="aspect-square bg-muted/20 flex items-center justify-center p-5 relative overflow-hidden">
           {/* Badges */}
-          <div className="absolute top-2.5 left-0 z-10 flex flex-col gap-1.5">
-            {discountPct > 0 && (
-              <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-destructive text-destructive-foreground font-bold">
-                -{discountPct}%
-              </span>
-            )}
+          <div className="absolute top-2.5 left-0 z-10 flex flex-col gap-2">
+            {discountPct > 0 && <ProductPromoBadge variant="sale" percent={discountPct} shape="ribbon" />}
             {affiliateBuyerPct > 0 && (
-              <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-primary/90 text-primary-foreground font-bold">
-                -{Math.round(affiliateBuyerPct)}% ref
-              </span>
+              <ProductPromoBadge variant="referral" percent={affiliateBuyerPct} shape="ribbon" />
             )}
             {isNewProduct(product) && (
-              <span className="px-2.5 py-0.5 text-[11px] rounded-r-md bg-primary text-primary-foreground font-bold uppercase">
+              <span className="inline-flex items-center pl-3 pr-3.5 py-1.5 sm:py-2 rounded-l-none rounded-r-2xl border border-primary/25 bg-gradient-to-br from-primary/20 via-primary/12 to-transparent text-primary text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] shadow-sm backdrop-blur-[2px]">
                 Nuevo
               </span>
             )}
@@ -81,7 +77,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               e.stopPropagation();
               void toggle(product.id);
             }}
-            className={`absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+            className={`absolute top-2.5 right-2.5 z-10 min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 rounded-full flex items-center justify-center transition-all touch-manipulation ${
               has(product.id)
                 ? "bg-primary/10 text-primary"
                 : "bg-card/80 backdrop-blur text-muted-foreground opacity-0 group-hover:opacity-100"
@@ -97,6 +93,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               alt={product.name}
               className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
+              decoding="async"
             />
           ) : (
             <div className="text-sm text-muted-foreground font-medium text-center">Sin imagen</div>
@@ -145,15 +142,15 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               href={buildWhatsAppProductLink(product)}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-8 h-8 rounded-full border text-muted-foreground flex items-center justify-center hover:text-primary hover:border-primary/30 transition-colors"
+              className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 rounded-full border border-border text-[#25D366] flex items-center justify-center hover:text-[#128C7E] hover:border-[#25D366]/45 transition-colors touch-manipulation"
               aria-label="Consultar por WhatsApp"
             >
-              <MessageCircle className="h-3.5 w-3.5" />
+              <WhatsAppIcon className="h-3.5 w-3.5" />
             </a>
             <button
               onClick={() => setShowQty(!showQty)}
               disabled={soldOut}
-              className="w-8 h-8 rounded-full gradient-celeste text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed shadow-brand"
+              className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 rounded-full gradient-celeste text-primary-foreground flex items-center justify-center hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed shadow-brand touch-manipulation"
             >
               <ShoppingCart className="h-3.5 w-3.5" />
             </button>

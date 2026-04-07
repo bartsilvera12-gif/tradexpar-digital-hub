@@ -35,6 +35,7 @@ import {
   ADMIN_THEAD_ROW,
   ADMIN_TR,
 } from "@/lib/adminModuleLayout";
+import { DDI } from "@/lib/ddiLabels";
 import { cn } from "@/lib/utils";
 import { tradexpar } from "@/services/tradexpar";
 import type { CustomerUser } from "@/types";
@@ -168,13 +169,13 @@ export default function AdminUsersPage() {
       if (affiliate === "deleted") {
         toast({
           title: "Cliente eliminado",
-          description: "También se eliminó el perfil de afiliado vinculado (sin ventas atribuidas).",
+          description: `También se eliminó el perfil de ${DDI.singularLower} vinculado (sin ventas atribuidas).`,
         });
       } else if (affiliate === "unlinked_suspended") {
         toast({
           title: "Cliente eliminado",
           description:
-            "El afiliado tenía ventas registradas: se desvinculó del cliente, quedó suspendido y sus links se desactivaron.",
+            `El ${DDI.singularLower} tenía ventas registradas: se desvinculó del cliente, quedó suspendido y sus links se desactivaron.`,
         });
       } else {
         toast({ title: "Cliente eliminado" });
@@ -239,7 +240,7 @@ export default function AdminUsersPage() {
                   <th className={ADMIN_TH}>Nombre</th>
                   <th className={ADMIN_TH}>Email</th>
                   <th className={ADMIN_TH}>Origen</th>
-                  <th className={ADMIN_TH}>Afiliado</th>
+                  <th className={ADMIN_TH}>{DDI.columnHeader}</th>
                   <th className={ADMIN_TH}>Creado</th>
                   <th className={`${ADMIN_TH} text-right`}>Acciones</th>
                 </tr>
@@ -420,8 +421,9 @@ export default function AdminUsersPage() {
               </span>
               {deleteTarget?.is_affiliate ? (
                 <span className="block text-sm">
-                  Es <strong className="text-foreground">afiliado</strong>: si no tiene ventas atribuidas, se borra
-                  también el perfil de afiliado. Si ya tiene ventas, el afiliado quedará suspendido y desvinculado.
+                  Es <strong className="text-foreground">{DDI.singularLower}</strong>: si no tiene ventas atribuidas, se
+                  borra también el perfil de {DDI.singularLower}. Si ya tiene ventas, el {DDI.singularLower} quedará
+                  suspendido y desvinculado.
                 </span>
               ) : null}
               <span className="block text-xs text-muted-foreground">

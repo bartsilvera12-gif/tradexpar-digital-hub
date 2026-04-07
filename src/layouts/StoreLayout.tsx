@@ -35,7 +35,7 @@ export function StoreLayout() {
     <AffiliateBuyerDiscountProvider>
       <div className="min-h-screen flex flex-col">
         <StoreNavbar />
-        <main className="flex-1">
+        <main className="flex-1 min-w-0 pb-[env(safe-area-inset-bottom)]">
           <Outlet />
         </main>
         <StoreFooter />

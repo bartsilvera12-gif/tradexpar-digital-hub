@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "sobre:split-collage": "python scripts/split-sobre-collage.py",
     "test": "vitest run",
     "test:watch": "vitest",
     "supabase:config-push": "supabase config push",

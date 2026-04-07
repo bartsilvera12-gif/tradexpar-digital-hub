@@ -42,7 +42,7 @@ export function getEffectivePrice(product: Product): number {
 }
 
 /**
- * Precio unitario con descuento al comprador por afiliado (% sobre el precio efectivo del catálogo),
+ * Precio unitario con descuento al comprador por distribuidor digital independiente (% sobre el precio efectivo del catálogo),
  * alineado a cómo se calcula el subtotal en `order_items` al pagar con ref.
  */
 export function getStoreLineUnitPrice(product: Product, affiliateBuyerDiscountPercent: number): number {

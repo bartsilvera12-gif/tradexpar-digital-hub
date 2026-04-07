@@ -7,7 +7,7 @@ import {
 } from "@/lib/supabaseClient";
 import { affiliatesAvailable, fetchAffiliatePortalLinkVisible } from "@/services/affiliateTradexparService";
 
-/** True cuando hay sesión Supabase y el backend permite ver el panel (afiliado o solicitud pendiente). */
+/** True cuando hay sesión Supabase y el backend permite ver el panel (distribuidor o solicitud pendiente). */
 export function useAffiliatePortalLinkVisible(userId: string | undefined): boolean {
   const [visible, setVisible] = useState(false);
 

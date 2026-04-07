@@ -16,6 +16,17 @@ function getCookie(name: string): string | null {
   return raw ? decodeURIComponent(raw) : null;
 }
 
+/** Quita ref guardado (cookie + localStorage). Usalo si el comprador no quiere atribución ni descuento por referido. */
+export function clearAffiliateRef() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(AFFILIATE_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+  document.cookie = `${AFFILIATE_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+}
+
 /** Persiste ref en cookie y localStorage (30 días). Last-click: cada ?ref= válido sobrescribe. */
 export function persistAffiliateRef(ref: string) {
   if (!ref || typeof window === "undefined") return;

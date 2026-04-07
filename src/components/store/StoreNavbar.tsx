@@ -1,15 +1,23 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ShoppingCart, Menu, X, Search, ChevronDown, Heart, User, Briefcase } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { tradexpar } from "@/services/tradexpar";
 import type { Product } from "@/types";
+import { useStoreCatalog } from "@/hooks/useStoreCatalog";
+import { useIsMdUp } from "@/hooks/use-mobile";
 import logoIcon from "@/assets/logo-icon.png";
 import { CartDropdown } from "@/components/store/CartDropdown";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 import { affiliatesAvailable } from "@/services/affiliateTradexparService";
+import { DDI } from "@/lib/ddiLabels";
+import { cn } from "@/lib/utils";
+
+const VIRAL_DROPI_LABEL = "Los más virales";
+/** Naranja fuego: solo texto, sin fondo */
+const viralItemText = "font-semibold text-[#FF4D00] hover:text-[#E65100]";
+const viralItemActive = "text-[#D84315]";
 
 export function StoreNavbar() {
   const { totalItems } = useCart();
@@ -18,23 +26,28 @@ export function StoreNavbar() {
   const showAffiliateNav = Boolean(user) && affiliatesAvailable();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Product[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const { data: allProducts = [] } = useStoreCatalog();
   const [showResults, setShowResults] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const searchRefDesktop = useRef<HTMLDivElement>(null);
   const searchRefMobile = useRef<HTMLDivElement>(null);
   const catRef = useRef<HTMLDivElement>(null);
+  const cartAnchorDesktopRef = useRef<HTMLButtonElement>(null);
+  const cartAnchorMobileRef = useRef<HTMLButtonElement>(null);
   const closeCart = useCallback(() => setCartOpen(false), []);
+  const mdUp = useIsMdUp();
+  const cartAnchorRef = mdUp ? cartAnchorDesktopRef : cartAnchorMobileRef;
 
   const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))];
-
-  useEffect(() => {
-    tradexpar.getProducts().then(setAllProducts).catch(() => {});
-  }, []);
+  const viralNavActive =
+    location.pathname.startsWith("/products") &&
+    searchParams.get("source") === "dropi" &&
+    !searchParams.get("category");
 
   useEffect(() => {
     if (query.trim().length === 0) { setResults([]); return; }
@@ -82,9 +95,15 @@ export function StoreNavbar() {
     navigate(`/products?category=${encodeURIComponent(cat)}`);
   };
 
+  const handleViralDropiSelect = () => {
+    setCatOpen(false);
+    setMobileOpen(false);
+    navigate("/products?source=dropi");
+  };
+
   return (
-    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-xl border-b shadow-sm pt-[env(safe-area-inset-top)]">
-      <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 md:gap-0 md:flex-row md:items-center md:h-16 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-2.5 md:py-0 md:gap-6 lg:gap-8 xl:gap-10">
+    <header className="sticky top-0 z-50 bg-background border-b border-border/50 pt-[env(safe-area-inset-top)]">
+      <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 md:gap-0 md:flex-row md:items-center md:h-16 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-2.5 md:py-0 md:gap-4 lg:gap-5 xl:gap-6">
         <div className="flex w-full min-h-11 items-center justify-between gap-3 shrink-0 md:contents md:min-h-0">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 touch-manipulation">
@@ -100,7 +119,7 @@ export function StoreNavbar() {
           className="hidden md:flex flex-1 min-w-0 justify-center px-2 lg:px-4 xl:px-6"
         >
           <div className="w-full max-w-md lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
-            <div className="flex w-full border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-ring transition-shadow">
+            <div className="flex w-full border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow">
               <input
                 type="search"
                 inputMode="search"
@@ -110,7 +129,7 @@ export function StoreNavbar() {
                 onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
                 onFocus={() => query.trim() && setShowResults(true)}
                 placeholder="Estoy buscando..."
-                className="flex-1 px-4 py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none"
+                className="flex-1 px-4 py-2 text-sm bg-card text-foreground placeholder:text-muted-foreground outline-none"
               />
               <button className="px-4 bg-primary text-primary-foreground flex items-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors">
                 <Search className="h-4 w-4" />
@@ -149,12 +168,12 @@ export function StoreNavbar() {
           </div>
         </div>
 
-        {/* Enlaces de escritorio (los iconos van aparte para que sigan visibles en móvil) */}
-        <div className="hidden md:flex items-center shrink-0 gap-6 lg:gap-8 xl:gap-10">
-          <nav className="flex items-center gap-5 lg:gap-7 xl:gap-8">
+        {/* Escritorio: enlaces + separador + iconos pegados (sin hueco intermedio) */}
+        <div className="hidden md:flex shrink-0 items-center gap-2 lg:gap-3 min-w-0">
+          <nav className="flex items-center gap-4 lg:gap-5 xl:gap-6 min-w-0">
             <Link
               to="/"
-              className={`text-sm font-medium transition-colors hover:text-primary ${
+              className={`shrink-0 text-sm font-medium transition-colors hover:text-primary ${
                 location.pathname === "/" ? "text-primary" : "text-muted-foreground"
               }`}
             >
@@ -162,7 +181,7 @@ export function StoreNavbar() {
             </Link>
             <Link
               to="/products"
-              className={`text-sm font-medium transition-colors hover:text-primary ${
+              className={`shrink-0 text-sm font-medium transition-colors hover:text-primary ${
                 location.pathname.startsWith("/products") ? "text-primary" : "text-muted-foreground"
               }`}
             >
@@ -170,7 +189,7 @@ export function StoreNavbar() {
             </Link>
             <Link
               to="/sobre-tradexpar"
-              className={`text-sm font-medium transition-colors hover:text-primary whitespace-nowrap ${
+              className={`shrink-0 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap ${
                 location.pathname === "/sobre-tradexpar" ? "text-primary" : "text-muted-foreground"
               }`}
             >
@@ -178,16 +197,16 @@ export function StoreNavbar() {
             </Link>
             <Link
               to="/afiliados"
-              className={`text-sm font-medium transition-colors hover:text-primary whitespace-nowrap ${
+              className={`shrink-0 max-w-[11rem] lg:max-w-[13rem] xl:max-w-none text-sm font-medium transition-colors hover:text-primary text-left leading-snug xl:whitespace-nowrap ${
                 location.pathname === "/afiliados" ? "text-primary" : "text-muted-foreground"
               }`}
             >
               ¿Quieres trabajar con nosotros?
             </Link>
 
-            {/* Categorías dropdown */}
-            <div ref={catRef} className="relative">
+            <div ref={catRef} className="relative shrink-0">
               <button
+                type="button"
                 onClick={() => setCatOpen(!catOpen)}
                 className={`text-sm font-medium transition-colors hover:text-primary flex items-center gap-1 ${
                   catOpen ? "text-primary" : "text-muted-foreground"
@@ -197,17 +216,30 @@ export function StoreNavbar() {
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform ${catOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
-                {catOpen && categories.length > 0 && (
+                {catOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-full right-0 mt-2 w-48 bg-card border rounded-xl shadow-lg overflow-hidden z-50"
+                    className="absolute top-full right-0 mt-2 min-w-[13rem] w-max max-w-[min(18rem,calc(100vw-2rem))] bg-card border rounded-xl shadow-lg overflow-hidden z-50"
                   >
+                    <button
+                      type="button"
+                      onClick={() => handleViralDropiSelect()}
+                      className={cn(
+                        "w-full text-left px-4 py-2.5 text-sm transition-colors",
+                        viralItemText,
+                        categories.length > 0 && "border-b border-border/60",
+                        viralNavActive && viralItemActive
+                      )}
+                    >
+                      {VIRAL_DROPI_LABEL}
+                    </button>
                     {categories.map((c) => (
                       <button
                         key={c}
+                        type="button"
                         onClick={() => handleCategorySelect(c)}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
                       >
@@ -221,58 +253,113 @@ export function StoreNavbar() {
           </nav>
 
           <div className="h-8 w-px bg-border/70 shrink-0 hidden lg:block" aria-hidden />
+
+          <div className="flex items-center gap-3 lg:gap-4 shrink-0 touch-manipulation">
+            {showAffiliateNav && (
+              <Link
+                to="/afiliados/panel"
+                className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-primary/10 active:bg-primary/15 transition-colors text-primary"
+                title={DDI.panelTitle}
+              >
+                <Briefcase className="h-5 w-5" strokeWidth={2} />
+              </Link>
+            )}
+            <Link
+              to={user ? "/account" : "/login"}
+              className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
+              title={user ? "Mi cuenta" : "Ingresar"}
+            >
+              <User className="h-5 w-5 text-foreground" />
+            </Link>
+            <Link
+              to="/wishlist"
+              className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
+              title="Favoritos"
+            >
+              <Heart
+                className={`h-5 w-5 ${location.pathname === "/wishlist" ? "text-primary" : "text-foreground"}`}
+              />
+              <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                {wishlistCount}
+              </span>
+            </Link>
+            <div className="relative">
+              <button
+                ref={cartAnchorDesktopRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCartOpen((v) => !v);
+                }}
+                className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
+                aria-expanded={cartOpen}
+              >
+                <ShoppingCart className="h-5 w-5 text-foreground" />
+                <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {totalItems}
+                </span>
+              </button>
+              {mdUp ? (
+                <CartDropdown open={cartOpen} onClose={closeCart} anchorRef={cartAnchorRef} />
+              ) : null}
+            </div>
+          </div>
         </div>
 
-        {/* Iconos y menú móvil */}
-        <div className="flex items-center gap-0.5 sm:gap-2 md:gap-3 lg:gap-4 shrink-0 ml-auto md:ml-0 touch-manipulation">
+        {/* Móvil: iconos + menú (misma fila que el logo) */}
+        <div className="flex md:hidden items-center gap-0.5 sm:gap-2 shrink-0 ml-auto touch-manipulation">
           {showAffiliateNav && (
             <Link
               to="/afiliados/panel"
-              className="hidden sm:flex relative items-center justify-center min-h-11 min-w-11 md:min-h-10 md:min-w-10 rounded-full hover:bg-primary/10 active:bg-primary/15 transition-colors text-primary"
-              title="Panel de afiliado"
+              className="hidden sm:flex relative items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-primary/10 active:bg-primary/15 transition-colors text-primary"
+              title={DDI.panelTitle}
             >
               <Briefcase className="h-5 w-5" strokeWidth={2} />
             </Link>
           )}
           <Link
             to={user ? "/account" : "/login"}
-            className="relative flex items-center justify-center min-h-11 min-w-11 md:min-h-10 md:min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
+            className="relative flex items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
             title={user ? "Mi cuenta" : "Ingresar"}
           >
             <User className="h-5 w-5 text-foreground" />
           </Link>
           <Link
             to="/wishlist"
-            className="relative flex items-center justify-center min-h-11 min-w-11 md:min-h-10 md:min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
+            className="relative flex items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
             title="Favoritos"
           >
             <Heart
               className={`h-5 w-5 ${location.pathname === "/wishlist" ? "text-primary" : "text-foreground"}`}
             />
-            <span className="absolute top-0.5 right-0.5 md:-top-1 md:-right-1 min-w-[1.125rem] h-[1.125rem] md:w-5 md:h-5 px-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute top-0.5 right-0.5 min-w-[1.125rem] h-[1.125rem] px-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
               {wishlistCount}
             </span>
           </Link>
           <div className="relative">
             <button
+              ref={cartAnchorMobileRef}
               type="button"
-              onClick={() => setCartOpen(!cartOpen)}
-              className="relative flex items-center justify-center min-h-11 min-w-11 md:min-h-10 md:min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCartOpen((v) => !v);
+              }}
+              className="relative flex items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
               aria-expanded={cartOpen}
             >
               <ShoppingCart className="h-5 w-5 text-foreground" />
-              <span className="absolute top-0.5 right-0.5 md:-top-1 md:-right-1 min-w-[1.125rem] h-[1.125rem] md:w-5 md:h-5 px-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute top-0.5 right-0.5 min-w-[1.125rem] h-[1.125rem] px-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
                 {totalItems}
               </span>
             </button>
-            <AnimatePresence>
-              <CartDropdown open={cartOpen} onClose={closeCart} />
-            </AnimatePresence>
+            {!mdUp ? (
+              <CartDropdown open={cartOpen} onClose={closeCart} anchorRef={cartAnchorRef} />
+            ) : null}
           </div>
 
           <button
             type="button"
-            className="md:hidden flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-muted/60 active:bg-muted/80 -mr-1"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-muted/60 active:bg-muted/80 -mr-1"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
@@ -369,7 +456,7 @@ export function StoreNavbar() {
                 <Link
                   to="/afiliados"
                   onClick={() => setMobileOpen(false)}
-                  className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${
+                  className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation leading-snug ${
                     location.pathname === "/afiliados" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
                   }`}
                 >
@@ -391,7 +478,7 @@ export function StoreNavbar() {
                         className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-primary hover:bg-primary/10 active:bg-primary/15 gap-2 touch-manipulation"
                       >
                         <Briefcase className="h-4 w-4 shrink-0" strokeWidth={2} />
-                        Panel de afiliado
+                        {DDI.panelShort}
                       </Link>
                     ) : null}
                     <Link to="/account" onClick={() => setMobileOpen(false)} className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50 active:bg-muted/60 touch-manipulation">
@@ -402,21 +489,30 @@ export function StoreNavbar() {
                     </button>
                   </>
                 )}
-                {categories.length > 0 && (
-                  <div className="pt-2 space-y-1 border-t border-border/60 mt-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">Categorías</p>
-                    {categories.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => handleCategorySelect(c)}
-                        className="w-full text-left text-sm font-medium min-h-11 flex items-center px-3 rounded-lg text-muted-foreground hover:bg-muted/50 active:bg-muted/60 transition-colors touch-manipulation"
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="pt-2 space-y-1 border-t border-border/60 mt-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">Categorías</p>
+                  <button
+                    type="button"
+                    onClick={() => handleViralDropiSelect()}
+                    className={cn(
+                      "w-full text-left text-sm min-h-11 flex items-center px-3 rounded-lg transition-colors touch-manipulation",
+                      viralItemText,
+                      viralNavActive && viralItemActive
+                    )}
+                  >
+                    {VIRAL_DROPI_LABEL}
+                  </button>
+                  {categories.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => handleCategorySelect(c)}
+                      className="w-full text-left text-sm font-medium min-h-11 flex items-center px-3 rounded-lg text-muted-foreground hover:bg-muted/50 active:bg-muted/60 transition-colors touch-manipulation"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </nav>
             </div>
           </motion.div>

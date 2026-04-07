@@ -45,6 +45,7 @@ import {
 } from "@/lib/adminModuleLayout";
 import { cn } from "@/lib/utils";
 import { Loader } from "@/components/shared/Loader";
+import { DDI } from "@/lib/ddiLabels";
 
 export function FraudTab() {
   const [flags, setFlags] = useState<AffiliateFraudFlagRow[]>([]);
@@ -106,7 +107,7 @@ export function FraudTab() {
                 <th className={ADMIN_TH}>Tipo</th>
                 <th className={ADMIN_TH}>Severidad</th>
                 <th className={ADMIN_TH}>Estado</th>
-                <th className={ADMIN_TH}>Afiliado</th>
+                <th className={ADMIN_TH}>{DDI.columnHeader}</th>
                 <th className={ADMIN_TH}>Pedido</th>
                 <th className={ADMIN_TH}>Notas</th>
                 <th className={ADMIN_TH}>Fecha</th>
@@ -155,7 +156,7 @@ export function FraudTab() {
             <table className={ADMIN_TABLE}>
               <thead>
                 <tr className={ADMIN_THEAD_ROW}>
-                  <th className={ADMIN_TH}>Afiliado</th>
+                  <th className={ADMIN_TH}>{DDI.columnHeader}</th>
                   <th className={ADMIN_TH}>Tipo</th>
                   <th className={ADMIN_TH}>Monto</th>
                   <th className={ADMIN_TH}>Motivo</th>
@@ -413,7 +414,7 @@ export function AnalyticsTab() {
       </div>
 
       <div>
-        <h3 className="font-semibold text-foreground mb-2">Top afiliados</h3>
+        <h3 className="font-semibold text-foreground mb-2">{`Top ${DDI.pluralLower}`}</h3>
         <div className={ADMIN_CARD}>
           <div className={ADMIN_TABLE_SCROLL}>
             <table className={ADMIN_TABLE}>
@@ -441,7 +442,7 @@ export function AnalyticsTab() {
       </div>
 
       <div>
-        <h3 className="font-semibold text-foreground mb-2">Productos más vendidos vía afiliados</h3>
+        <h3 className="font-semibold text-foreground mb-2">{`Productos más vendidos vía ${DDI.pluralLower}`}</h3>
         <div className={ADMIN_CARD}>
           <div className={ADMIN_TABLE_SCROLL}>
             <table className={ADMIN_TABLE}>
@@ -467,13 +468,13 @@ export function AnalyticsTab() {
       </div>
 
       <div>
-        <h3 className="font-semibold text-foreground mb-2">Devoluciones por afiliado</h3>
+        <h3 className="font-semibold text-foreground mb-2">{`Devoluciones por ${DDI.singularLower}`}</h3>
         <div className={ADMIN_CARD}>
           <div className={ADMIN_TABLE_SCROLL}>
             <table className={ADMIN_TABLE}>
               <thead>
                 <tr className={ADMIN_THEAD_ROW}>
-                  <th className={ADMIN_TH}>Afiliado</th>
+                  <th className={ADMIN_TH}>{DDI.columnHeader}</th>
                   <th className={ADMIN_TH}>Pedidos atrib.</th>
                   <th className={ADMIN_TH}>Reembolsos</th>
                 </tr>

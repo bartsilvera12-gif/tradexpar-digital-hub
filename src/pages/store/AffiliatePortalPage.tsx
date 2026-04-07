@@ -20,6 +20,7 @@ import {
   fetchPublicAffiliateAssets,
 } from "@/services/affiliateTradexparService";
 import { commissionStatusLabelEs } from "@/lib/affiliateCommissionLabels";
+import { DDI } from "@/lib/ddiLabels";
 import type { AffiliatePortalSaleRow, AffiliatePortalSnapshot, CommissionStatus } from "@/types/affiliates";
 import type { AffiliateAssetRow } from "@/types/affiliatesPro";
 
@@ -115,7 +116,7 @@ export default function AffiliatePortalPage() {
           setSnapshot(snap);
         })(),
         AFFILIATE_RPC_MS,
-        "El servidor tardó demasiado en responder el panel de afiliados. Revisá tu conexión o intentá de nuevo."
+        `El servidor tardó demasiado en responder el panel de ${DDI.pluralLower}. Revisá tu conexión o intentá de nuevo.`
       );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Error al cargar el panel";
@@ -157,7 +158,7 @@ export default function AffiliatePortalPage() {
   if (!affiliatesAvailable()) {
     return (
       <div className="container mx-auto px-4 py-16 max-w-lg">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Panel de afiliado</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-2">{DDI.panelTitle}</h1>
         <p className="text-sm text-muted-foreground">Supabase no está configurado.</p>
       </div>
     );
@@ -177,14 +178,14 @@ export default function AffiliatePortalPage() {
       <div className="container mx-auto px-4 py-10 max-w-2xl space-y-6">
         <div className="flex items-center gap-2 text-foreground">
           <img src={logoIcon} alt="Tradexpar" className="h-8 w-8 shrink-0" width={32} height={32} />
-          <h1 className="text-2xl font-bold">Panel de afiliado</h1>
+          <h1 className="text-2xl font-bold">{DDI.panelTitle}</h1>
         </div>
         <Card>
           <CardHeader>
             <CardTitle>Solicitud en revisión</CardTitle>
             <CardDescription>
               Ya enviaste tu postulación y está pendiente de aprobación. Cuando el equipo la apruebe, vas a ver acá tu
-              código de referido, comisiones y enlaces.
+              código de enlace (?ref), comisiones y enlaces.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -205,7 +206,7 @@ export default function AffiliatePortalPage() {
       <div className="container mx-auto px-4 py-16 max-w-lg space-y-4">
         <div className="flex items-center gap-2 text-foreground">
           <img src={logoIcon} alt="Tradexpar" className="h-7 w-7 shrink-0" width={28} height={28} />
-          <h1 className="text-2xl font-bold">Panel de afiliado</h1>
+          <h1 className="text-2xl font-bold">{DDI.panelTitle}</h1>
         </div>
         {needLogin ? (
           <>
@@ -219,12 +220,14 @@ export default function AffiliatePortalPage() {
         ) : reason === "no_affiliate" ? (
           <>
             <p className="text-sm text-muted-foreground">
-              No encontramos un afiliado <strong className="text-foreground font-medium">activo</strong> asociado a tu
-              sesión. Suele pasar por una de estas causas:
+              {`No encontramos un ${DDI.singularLower} `}
+              <strong className="text-foreground font-medium">activo</strong> asociado a tu sesión. Suele pasar por una
+              de estas causas:
             </p>
             <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1.5">
               <li>
-                Iniciaste sesión con un email distinto al que usaste en la solicitud de afiliado (tiene que ser el mismo,
+                Iniciaste sesión con un email distinto al que usaste en la solicitud de {DDI.singularLower} (tiene que
+                ser el mismo,
                 sin importar mayúsculas).
               </li>
               <li>
@@ -232,15 +235,17 @@ export default function AffiliatePortalPage() {
                 admin).
               </li>
               <li>
-                En Supabase, el afiliado tiene un <code className="text-xs bg-muted px-1 rounded">customer_id</code>{" "}
+                En Supabase, el {DDI.singularLower} tiene un{" "}
+                <code className="text-xs bg-muted px-1 rounded">customer_id</code>{" "}
                 que apunta a otro cliente: entonces hace falta corregir el vínculo o usar el usuario correcto.
               </li>
             </ul>
             <p className="text-xs text-muted-foreground">
-              Si ya fuiste aprobado, probá cerrar sesión y volver a entrar con el mismo email del alta de afiliado.
+              Si ya fuiste aprobado, probá cerrar sesión y volver a entrar con el mismo email del alta de{" "}
+              {DDI.singularLower}.
             </p>
             <Button variant="outline" asChild>
-              <Link to="/afiliados">Postularme como afiliado</Link>
+              <Link to="/afiliados">Postularme como {DDI.singularLower}</Link>
             </Button>
           </>
         ) : (
@@ -276,7 +281,7 @@ export default function AffiliatePortalPage() {
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
             <img src={logoIcon} alt="Tradexpar" className="h-8 w-8 shrink-0" width={32} height={32} />
-            Panel de afiliado
+            {DDI.panelTitle}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             Hola, {affiliate.name}. Código: <span className="font-mono text-foreground">{affiliate.code}</span>

@@ -1,16 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
-import { tradexpar } from "@/services/tradexpar";
 import { getDiscountPercentage, normalizeProductSource } from "@/lib/productHelpers";
-import type { Product } from "@/types";
-
+import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: products = [], isPending: loading, error: queryError, refetch } = useStoreCatalog();
+  const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
   const [search, setSearch] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
@@ -19,15 +16,8 @@ export default function ProductsPage() {
   const offersOnly = searchParams.get("offers") === "1";
 
   const fetchProducts = () => {
-    setLoading(true);
-    setError(null);
-    tradexpar.getProducts()
-      .then((data) => setProducts(data))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    void refetch();
   };
-
-  useEffect(() => { fetchProducts(); }, []);
 
   const categories = ["all", ...new Set(products.map((p) => p.category).filter(Boolean))];
   const filtered = products.filter((p) => {

@@ -1,26 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ProductCard } from "@/components/store/ProductCard";
-import { tradexpar } from "@/services/tradexpar";
-import type { Product } from "@/types";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
+import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 
 export default function WishlistPage() {
   const { productIds } = useWishlist();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: products = [], isPending: loading, error: queryError, refetch } = useStoreCatalog();
+  const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
 
   const fetchProducts = () => {
-    setLoading(true);
-    setError(null);
-    tradexpar.getProducts()
-      .then(setProducts)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    void refetch();
   };
-
-  useEffect(() => { fetchProducts(); }, []);
 
   const favoriteProducts = useMemo(
     () => products.filter((p) => productIds.includes(p.id)),

@@ -1,3 +1,4 @@
+import { DDI } from "@/lib/ddiLabels";
 import { getSupabaseData, isSupabaseConfigured } from "@/lib/supabaseClient";
 import type {
   AffiliateRequestRow,
@@ -252,7 +253,7 @@ export async function setAffiliateStatus(affiliateId: string, status: "active" |
     const parts = [error.message, error.hint, error.details].filter(
       (x): x is string => typeof x === "string" && x.trim().length > 0
     );
-    throw new Error(parts.join(" — ") || error.code || "Error al actualizar el afiliado");
+    throw new Error(parts.join(" — ") || error.code || `Error al actualizar el ${DDI.singularLower}`);
   }
 }
 
@@ -265,7 +266,7 @@ export async function setAttributionCommissionStatus(attributionId: string, stat
   if (error) throw error;
 }
 
-/** True si el usuario puede ver el enlace al panel (afiliado activo o solicitud pendiente con su email). */
+/** True si el usuario puede ver el enlace al panel (distribuidor activo o solicitud pendiente con su email). */
 export async function fetchAffiliatePortalLinkVisible(): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   const sb = getSupabaseData();
@@ -281,7 +282,7 @@ export async function fetchAffiliatePortalLinkVisible(): Promise<boolean> {
   return Boolean(data);
 }
 
-/** Panel afiliado: requiere sesión Supabase (cliente autenticado con JWT). */
+/** Panel del distribuidor digital independiente: requiere sesión Supabase (cliente autenticado con JWT). */
 export async function fetchAffiliatePortalSnapshot(): Promise<AffiliatePortalSnapshot> {
   const sb = getSupabaseData();
   const { data, error } = await sb.rpc("affiliate_portal_snapshot");

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { DDI } from "@/lib/ddiLabels";
 import logoIcon from "@/assets/logo-x-flat.png";
 import paymentMethods from "@/assets/payment-methods.png";
 import { Mail, Phone, MapPin, Truck, ShieldCheck, Headphones, CheckCircle } from "lucide-react";
@@ -48,7 +49,9 @@ export function StoreFooter() {
             <div className="flex flex-col gap-2.5">
               <Link to="/" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Inicio</Link>
               <Link to="/products" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Catálogo</Link>
-              <Link to="/afiliados" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Ser afiliado</Link>
+              <Link to="/afiliados" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors leading-snug">
+                Ser {DDI.singular}
+              </Link>
               <Link to="/cart" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Carrito</Link>
               <Link to="/wishlist" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Favoritos</Link>
             </div>

@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Zap, Shield, Globe, TrendingUp, ChevronRight, ShoppingCart, Warehouse, Truck } from "lucide-react";
 import processStep1 from "@/assets/process-step1.jpg";
@@ -7,8 +6,8 @@ import processStep2 from "@/assets/process-step2.jpg";
 import processStep3 from "@/assets/process-step3.jpg";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
-import { tradexpar } from "@/services/tradexpar";
 import type { Product } from "@/types";
+import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
@@ -18,20 +17,11 @@ const benefits = [
 ];
 
 export default function HomePage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const { data: products = [], isPending: loading, error: queryError, refetch } = useStoreCatalog();
+  const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
   const fetchProducts = () => {
-    setLoading(true);
-    setError(null);
-    tradexpar.getProducts()
-      .then((data) => setProducts(data))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    void refetch();
   };
-
-  useEffect(() => { fetchProducts(); }, []);
 
   const categoryMap = new Map<string, Product[]>();
   products.forEach((p) => {
@@ -50,6 +40,8 @@ export default function HomePage() {
           src="https://res.cloudinary.com/drupicep5/image/upload/v1774384987/6b7b8009-8b0c-4d66-8b6e-7c4393582258.png"
           alt="Tradexpar Hero"
           className="w-full h-auto block"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 z-10 container mx-auto px-4 pb-10 lg:pb-16">
@@ -68,7 +60,7 @@ export default function HomePage() {
             </p>
             <Link
               to="/products"
-              className="inline-flex items-center gap-2 px-7 py-3 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 transition-opacity shadow-brand"
+              className="inline-flex items-center justify-center gap-2 min-h-12 px-7 py-3 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 active:opacity-95 transition-opacity shadow-brand touch-manipulation"
             >
               Explorar catálogo
               <ArrowRight className="h-5 w-5" />

@@ -68,6 +68,7 @@ import {
 } from "@/lib/adminModuleLayout";
 import { affiliateSaleCommissionSelectOptions, commissionStatusLabelEs } from "@/lib/affiliateCommissionLabels";
 import { cn } from "@/lib/utils";
+import { DDI } from "@/lib/ddiLabels";
 import { Loader } from "@/components/shared/Loader";
 import { AnalyticsTab, AssetsTab } from "@/pages/admin/affiliates/AdminAffiliatesProTabs";
 
@@ -76,7 +77,7 @@ export default function AdminAffiliatesPage() {
 
   if (!affiliatesAvailable()) {
     return (
-      <AdminPageShell title="Afiliados">
+      <AdminPageShell title={DDI.plural}>
         <p className="text-sm text-muted-foreground max-w-2xl">
           Configurá <code className="text-xs bg-muted px-1 rounded">VITE_SUPABASE_URL</code> y{" "}
           <code className="text-xs bg-muted px-1 rounded">VITE_SUPABASE_ANON_KEY</code> y ejecutá el SQL de{" "}
@@ -88,8 +89,8 @@ export default function AdminAffiliatesPage() {
 
   return (
     <AdminPageShell
-      title="Afiliados"
-      description="Solicitudes, afiliados activos, ventas atribuidas, reglas de comisión y materiales."
+      title={DDI.plural}
+      description={`Solicitudes, ${DDI.pluralLower} activos, ventas atribuidas, reglas de comisión y materiales.`}
     >
       <Tabs value={tab} onValueChange={setTab} className="w-full min-w-0">
         <div className="w-full min-w-0 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:overflow-visible">
@@ -98,7 +99,7 @@ export default function AdminAffiliatesPage() {
               Solicitudes
             </TabsTrigger>
             <TabsTrigger value="affiliates" className="shrink-0 text-xs sm:text-sm">
-              Afiliados
+              Distribuidores
             </TabsTrigger>
             <TabsTrigger value="sales" className="shrink-0 text-xs sm:text-sm">
               Ventas
@@ -160,7 +161,7 @@ function RequestsTab() {
         toast.error(res?.reason || "No se pudo aprobar");
         return;
       }
-      toast.success(`Afiliado creado. Código: ${res.code}`);
+      toast.success(`${DDI.singular} creado. Código: ${res.code}`);
       load();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Error");
@@ -300,13 +301,15 @@ function AffiliatesTab() {
 
   const onToggleActive = async (a: AffiliateSummaryRow, nextActive: boolean) => {
     if (a.status === "pending") {
-      toast.message("Este afiliado sigue en estado pendiente; activalo desde solicitudes si aplica.");
+      toast.message(
+        `Este ${DDI.singularLower} sigue en estado pendiente; activalo desde solicitudes si aplica.`
+      );
       return;
     }
     setStatusBusyId(a.affiliate_id);
     try {
       await setAffiliateStatus(a.affiliate_id, nextActive ? "active" : "suspended");
-      toast.success(nextActive ? "Afiliado activado" : "Afiliado desactivado");
+      toast.success(nextActive ? `${DDI.singular} activado` : `${DDI.singular} desactivado`);
       await load();
     } catch (e: unknown) {
       const msg =
@@ -322,21 +325,21 @@ function AffiliatesTab() {
             "Ejecutá en el SQL Editor: supabase/tradexpar_admin_set_affiliate_status.sql y recargá el panel.",
         });
       } else {
-        toast.error("No se pudo cambiar el estado del afiliado", { description: text });
+        toast.error(`No se pudo cambiar el estado del ${DDI.singularLower}`, { description: text });
       }
     } finally {
       setStatusBusyId(null);
     }
   };
 
-  if (loading) return <Loader text="Cargando afiliados…" />;
+  if (loading) return <Loader text={`Cargando ${DDI.pluralLower}…`} />;
 
   return (
     <div className="space-y-4 w-full min-w-0">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-3 w-full max-w-xl">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2.5">
-            Buscar afiliados
+            {`Buscar ${DDI.pluralLower}`}
           </p>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -345,7 +348,7 @@ function AffiliatesTab() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Nombre, correo, código, ID o parte del enlace…"
               className={cn(ADMIN_FORM_CONTROL, "pl-10")}
-              aria-label="Buscar afiliados"
+              aria-label={`Buscar ${DDI.pluralLower}`}
             />
           </div>
         </div>
@@ -390,7 +393,7 @@ function AffiliatesTab() {
                 <th className={cn(ADMIN_TH, "text-center")}>Pedidos</th>
                 <th className={cn(ADMIN_TH, "text-center")}>Vendido</th>
                 <th className={cn(ADMIN_TH, "text-center")}>Comisión total</th>
-                <th className={cn(ADMIN_TH, "text-center min-w-[200px]")}>Enlace de referido</th>
+                <th className={cn(ADMIN_TH, "text-center min-w-[200px]")}>{DDI.linkColumnHeader}</th>
               </tr>
             </thead>
             <tbody className={ADMIN_TBODY}>
@@ -436,7 +439,11 @@ function AffiliatesTab() {
                               checked={a.status === "active"}
                               disabled={statusBusyId === a.affiliate_id}
                               onCheckedChange={(checked) => void onToggleActive(a, checked)}
-                              aria-label={a.status === "active" ? "Desactivar afiliado" : "Activar afiliado"}
+                              aria-label={
+                                a.status === "active"
+                                  ? `Desactivar ${DDI.singularLower}`
+                                  : `Activar ${DDI.singularLower}`
+                              }
                             />
                             <span className="text-[10px] text-muted-foreground hidden sm:inline">Activo</span>
                           </div>
@@ -479,9 +486,13 @@ function AffiliatesTab() {
               })}
             </tbody>
           </table>
-          {summary.length === 0 && <p className="p-6 text-center text-muted-foreground">No hay afiliados.</p>}
+          {summary.length === 0 && (
+            <p className="p-6 text-center text-muted-foreground">{`No hay ${DDI.pluralLower}.`}</p>
+          )}
           {summary.length > 0 && filtered.length === 0 && (
-            <p className="p-6 text-center text-muted-foreground">Ningún afiliado coincide con la búsqueda o el filtro.</p>
+            <p className="p-6 text-center text-muted-foreground">
+              {`Ningún ${DDI.singularLower} coincide con la búsqueda o el filtro.`}
+            </p>
           )}
         </div>
       </div>
@@ -641,7 +652,7 @@ function SalesTab() {
           <table className={ADMIN_TABLE}>
             <thead>
               <tr className={ADMIN_THEAD_ROW}>
-                <th className={ADMIN_TH}>Afiliado</th>
+                <th className={ADMIN_TH}>{DDI.columnHeader}</th>
                 <th className={ADMIN_TH}>Pedido</th>
                 <th className={ADMIN_TH}>Fecha</th>
                 <th className={ADMIN_TH}>Productos</th>
@@ -687,7 +698,7 @@ function SalesTab() {
   );
 }
 
-/** Selector de afiliado con el mismo aspecto que el Select admin + búsqueda (cmdk). */
+/** Selector de distribuidor con el mismo aspecto que el Select admin + búsqueda (cmdk). */
 function RulesAffiliateCombobox({
   affiliates,
   value,
@@ -768,7 +779,7 @@ function RulesTab() {
   const [affId, setAffId] = useState<string>("");
   const [globalComm, setGlobalComm] = useState("10");
   const [globalDisc, setGlobalDisc] = useState("0");
-  /** Porcentajes globales efectivos ya guardados (misma lógica que la tienda: regla global o columnas del afiliado). */
+  /** Porcentajes globales efectivos ya guardados (misma lógica que la tienda: regla global o columnas del distribuidor). */
   const [vigenteGlobal, setVigenteGlobal] = useState<{ comm: number; disc: number } | null>(null);
   const [prodId, setProdId] = useState<string>("");
   const [prodComm, setProdComm] = useState("5");
@@ -915,15 +926,17 @@ function RulesTab() {
   return (
     <div className="grid gap-8 w-full min-w-0 max-w-6xl">
       <div className={ADMIN_FORM_FIELD}>
-        <Label className={ADMIN_FORM_LABEL}>Afiliado</Label>
+        <Label className={ADMIN_FORM_LABEL}>{DDI.columnHeader}</Label>
         <RulesAffiliateCombobox affiliates={affiliates} value={affId} onChange={setAffId} />
       </div>
 
       <div className={`${ADMIN_FORM_SECTION} space-y-3`}>
-        <h3 className="font-semibold text-foreground">Comisión y descuento globales del afiliado</h3>
+        <h3 className="font-semibold text-foreground">
+          Comisión y descuento globales del {DDI.singularLower}
+        </h3>
         <p className="text-xs text-muted-foreground">
           Aplican a todos los productos salvo que definas una regla por producto. El descuento lo ve quien compra con el
-          enlace del afiliado; la comisión es lo que gana el afiliado por la venta.
+          enlace del {DDI.singularLower}; la comisión es lo que gana el {DDI.singularLower} por la venta.
         </p>
         {affId && vigenteGlobal != null && (
           <div className="rounded-xl border border-primary/20 bg-primary/[0.06] px-3 py-2.5 text-sm">
@@ -932,12 +945,12 @@ function RulesTab() {
               Descuento global al comprador:{" "}
               <strong className="tabular-nums">{vigenteGlobal.disc.toFixed(1)}%</strong>
               <span className="text-muted-foreground font-normal"> · </span>
-              Comisión global del afiliado:{" "}
+              {`Comisión global del ${DDI.singularLower}: `}
               <strong className="tabular-nums">{vigenteGlobal.comm.toFixed(1)}%</strong>
             </p>
             <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
               Mismo criterio que la tabla de abajo: lo que aplica cuando el producto no tiene regla propia (regla global en
-              BD o, si no hay fila, los valores del afiliado).
+              BD o, si no hay fila, los valores del {DDI.singularLower}).
             </p>
           </div>
         )}

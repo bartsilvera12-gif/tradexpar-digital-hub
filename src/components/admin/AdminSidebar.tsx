@@ -4,13 +4,14 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import logoIcon from "@/assets/logo-icon.png";
+import { DDI } from "@/lib/ddiLabels";
 
 const navItems = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/products", label: "Productos", icon: Package },
   { to: "/admin/orders", label: "Pedidos", icon: ShoppingCart },
   { to: "/admin/users", label: "Usuarios", icon: Users },
-  { to: "/admin/affiliates", label: "Afiliados", icon: UserPlus },
+  { to: "/admin/affiliates", label: DDI.plural, icon: UserPlus },
 ];
 
 export function AdminSidebar() {

@@ -114,6 +114,10 @@ export interface CustomerWishlistItem {
 export interface PaymentResponse {
   paymentLink: string;
   ref: string;
+  /** hash_pedido de PagoPar (mismo valor que `pagopar_hash` en la respuesta). */
+  hash?: string;
+  pagopar_hash?: string;
+  order_id?: string;
 }
 
 export interface PaymentStatus {

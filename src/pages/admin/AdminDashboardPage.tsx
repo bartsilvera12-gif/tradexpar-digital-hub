@@ -8,9 +8,8 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { tradexpar } from "@/services/tradexpar";
 import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,8 @@ import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { ADMIN_PANEL } from "@/lib/adminModuleLayout";
 import { cn } from "@/lib/utils";
 import type { CustomerUser, Order, Product } from "@/types";
+
+const AdminDashboardChartsLazy = lazy(() => import("./AdminDashboardChartsLazy"));
 
 const LOW_STOCK_MAX = 5;
 const STOCK_DISMISSED_KEY = "tradexpar_admin_stock_dismissed";
@@ -384,69 +385,54 @@ export default function AdminDashboardPage() {
             ))}
           </div>
 
-          {chartData.length > 0 && (
-            <div className={ADMIN_PANEL}>
-              <h3 className="font-semibold text-foreground mb-4">Productos por categoría</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(40 4% 86%)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(197 10% 52%)" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="hsl(197 10% 52%)" />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="hsl(195 89% 47%)" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className={ADMIN_PANEL}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground">Pedidos recientes</h3>
-                <Link to="/admin/orders" className="text-xs font-medium text-primary hover:underline">
-                  Ver todos
-                </Link>
+          <Suspense
+            fallback={
+              <div className="space-y-8" aria-busy="true" aria-label="Cargando gráficos">
+                <div className="h-[280px] rounded-2xl bg-muted/40 animate-pulse" />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="min-h-[12rem] rounded-2xl bg-muted/40 animate-pulse" />
+                  <div className="h-[280px] rounded-2xl bg-muted/40 animate-pulse" />
+                </div>
               </div>
-              {recentOrders.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">Aún no hay pedidos registrados.</p>
-              ) : (
-                <ul className="space-y-0 divide-y divide-border/70">
-                  {recentOrders.map((o) => (
-                    <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2 py-3 first:pt-0">
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate">{o.customer?.name || "Cliente"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(o.created_at).toLocaleString("es-PY", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
-                        </p>
-                      </div>
-                      <span className="text-sm font-semibold text-foreground">
-                        Gs. {(Number(o.total) || 0).toLocaleString("es-PY")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className={ADMIN_PANEL}>
-              <h3 className="font-semibold text-foreground mb-4">Facturación por mes (últimos 6)</h3>
-              {monthlySalesChart.every((x) => x.total === 0) ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Sin datos de ventas en ese período.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={monthlySalesChart}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(40 4% 86%)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(197 10% 52%)" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="hsl(197 10% 52%)" />
-                    <Tooltip formatter={(v: number) => [`Gs. ${v.toLocaleString("es-PY")}`, "Total"]} />
-                    <Bar dataKey="total" fill="hsl(142 76% 36%)" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
+            }
+          >
+            <AdminDashboardChartsLazy
+              chartData={chartData}
+              monthlySalesChart={monthlySalesChart}
+              ordersColumn={
+                <div className={ADMIN_PANEL}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-foreground">Pedidos recientes</h3>
+                    <Link to="/admin/orders" className="text-xs font-medium text-primary hover:underline">
+                      Ver todos
+                    </Link>
+                  </div>
+                  {recentOrders.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-6 text-center">Aún no hay pedidos registrados.</p>
+                  ) : (
+                    <ul className="space-y-0 divide-y divide-border/70">
+                      {recentOrders.map((o) => (
+                        <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2 py-3 first:pt-0">
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground truncate">{o.customer?.name || "Cliente"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(o.created_at).toLocaleString("es-PY", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </p>
+                          </div>
+                          <span className="text-sm font-semibold text-foreground">
+                            Gs. {(Number(o.total) || 0).toLocaleString("es-PY")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              }
+            />
+          </Suspense>
         </div>
       )}
     </AdminPageShell>

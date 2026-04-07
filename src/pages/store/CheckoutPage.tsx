@@ -31,17 +31,32 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      tradexpar.getCustomerLocations(user.id).then((res) => {
-        setLocations(res.locations);
-        const defaultLoc = res.locations.find((l) => l.is_default) || res.locations[0];
+    if (!user) return;
+    setForm((prev) => ({ ...prev, email: user.email, name: user.name }));
+    const LOC_MS = 14_000;
+    let cancelled = false;
+    void Promise.race([
+      tradexpar.getCustomerLocations(user.id),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("locations_timeout")), LOC_MS)
+      ),
+    ])
+      .then((res) => {
+        if (cancelled) return;
+        const locations = (res as { locations: CustomerLocation[] }).locations;
+        setLocations(locations);
+        const defaultLoc = locations.find((l) => l.is_default) || locations[0];
         if (defaultLoc) {
           setSelectedLocationId(defaultLoc.id);
           setForm((prev) => ({ ...prev, locationUrl: defaultLoc.location_url }));
         }
-      }).catch(() => {});
-      setForm((prev) => ({ ...prev, email: user.email, name: user.name }));
-    }
+      })
+      .catch(() => {
+        /* timeout o red: el usuario puede pegar la URL a mano */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
@@ -120,24 +135,26 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-10 max-w-2xl">
-      <h1 className="text-3xl font-bold text-foreground mb-8">Checkout</h1>
+    <div className="container mx-auto px-4 py-8 sm:py-10 max-w-2xl min-w-0">
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-6 sm:mb-8">Checkout</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-card rounded-2xl border shadow-card p-6 space-y-4">
+        <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-4">
           <h2 className="font-semibold text-foreground">Datos del cliente</h2>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Nombre *</label>
             <input
               type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              autoComplete="name"
+              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Email {user ? "*" : "(opcional)"}</label>
             <input
               type="email" required={Boolean(user)} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              autoComplete="email"
+              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <div>
@@ -148,7 +165,9 @@ export default function CheckoutPage() {
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="Ej. 0981 123456"
-              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              autoComplete="tel"
+              inputMode="tel"
+              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           {user && locations.length > 0 && (
@@ -188,7 +207,9 @@ export default function CheckoutPage() {
               value={form.locationUrl}
               onChange={(e) => setForm({ ...form, locationUrl: e.target.value })}
               placeholder="https://maps.google.com/..."
-              className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              autoComplete="url"
+              inputMode="url"
+              className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           {user && (
@@ -199,14 +220,14 @@ export default function CheckoutPage() {
                 value={form.locationLabel}
                 onChange={(e) => setForm({ ...form, locationLabel: e.target.value })}
                 placeholder="Casa, Oficina, Depósito..."
-                className="w-full px-4 py-2.5 rounded-xl border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
           )}
         </div>
 
         {/* Order summary */}
-        <div className="bg-card rounded-2xl border shadow-card p-6">
+        <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6">
           <h2 className="font-semibold text-foreground mb-2">Resumen del pedido</h2>
           {checkoutType === null ? (
             <p className="text-sm text-destructive mb-4">
@@ -240,7 +261,7 @@ export default function CheckoutPage() {
         <button
           type="submit"
           disabled={loading || checkoutType === null}
-          className="w-full flex items-center justify-center gap-2 px-6 py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-60"
+          className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
         >
           {loading ? <><Loader2 className="h-5 w-5 animate-spin" /> Procesando...</> : "Confirmar y pagar"}
         </button>

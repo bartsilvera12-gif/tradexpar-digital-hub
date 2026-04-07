@@ -1,9 +1,12 @@
-import { useEffect, useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { motion, AnimatePresence } from "framer-motion";
-import { tradexpar } from "@/services/tradexpar";
 import { useCart } from "@/contexts/CartContext";
+import { useStoreCatalog } from "@/hooks/useStoreCatalog";
+import { ProductPromoBadge } from "@/components/store/ProductPromoBadge";
+import { DDI } from "@/lib/ddiLabels";
 import { Loader, ErrorState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { toastCartAdded } from "@/lib/cartToast";
@@ -26,9 +29,19 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   useTrackAffiliateBuyerProduct(id);
   const aff = useAffiliateBuyerDiscount();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: catalog = [], isPending: loading, error: queryError, refetch, isFetched } = useStoreCatalog();
+  const product = useMemo(
+    () => catalog.find((p) => String(p.id) === id) ?? null,
+    [catalog, id]
+  );
+  const error =
+    queryError instanceof Error
+      ? queryError.message
+      : queryError
+        ? String(queryError)
+        : isFetched && !loading && id && !product
+          ? "Producto no encontrado"
+          : null;
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
   const { addItem } = useCart();
@@ -43,19 +56,8 @@ export default function ProductDetailPage() {
   const ZOOM_FACTOR = 2.5;
 
   const fetchProduct = () => {
-    setLoading(true);
-    setError(null);
-    tradexpar.getProducts()
-      .then((data) => {
-        const found = data.find((p) => String(p.id) === id);
-        if (found) setProduct(found);
-        else setError("Producto no encontrado");
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    void refetch();
   };
-
-  useEffect(() => { fetchProduct(); }, [id]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imgContainerRef.current) return;
@@ -72,7 +74,13 @@ export default function ProductDetailPage() {
   };
 
   if (loading) return <div className="container mx-auto px-4 py-10"><Loader /></div>;
-  if (error || !product) return <div className="container mx-auto px-4 py-10"><ErrorState message={error || "Producto no encontrado"} onRetry={fetchProduct} /></div>;
+  if (error || !product) {
+    return (
+      <div className="container mx-auto px-4 py-10">
+        <ErrorState message={error || "Producto no encontrado"} onRetry={fetchProduct} />
+      </div>
+    );
+  }
 
   const images = getProductImages(product);
   const maxQty = product.stock > 0 ? product.stock : 1;
@@ -101,7 +109,7 @@ export default function ProductDetailPage() {
               onMouseEnter={() => setZooming(true)}
               onMouseLeave={() => setZooming(false)}
               onMouseMove={handleMouseMove}
-              className="relative aspect-square rounded-3xl flex items-center justify-center border overflow-hidden cursor-crosshair flex-1"
+              className="relative aspect-square rounded-3xl flex items-center justify-center border overflow-hidden flex-1 max-lg:cursor-default lg:cursor-crosshair touch-pan-y"
               style={{
                 background: "linear-gradient(145deg, hsl(var(--muted) / 0.4), hsl(var(--muted) / 0.15))",
               }}
@@ -125,7 +133,7 @@ export default function ProductDetailPage() {
                   {/* Lens overlay */}
                   {zooming && (
                     <div
-                      className="absolute border-2 border-primary/40 bg-primary/5 pointer-events-none z-20 rounded-sm"
+                      className="hidden lg:block absolute border-2 border-primary/40 bg-primary/5 pointer-events-none z-20 rounded-sm"
                       style={{
                         width: LENS_SIZE,
                         height: LENS_SIZE,
@@ -138,14 +146,16 @@ export default function ProductDetailPage() {
                   {images.length > 1 && (
                     <>
                       <button
+                        type="button"
                         onClick={() => setActiveImg((prev) => (prev - 1 + images.length) % images.length)}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
+                        className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-10 sm:h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background active:bg-background transition-colors z-10 touch-manipulation"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => setActiveImg((prev) => (prev + 1) % images.length)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background transition-colors z-10"
+                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-10 sm:h-10 rounded-full bg-background/90 border shadow-md flex items-center justify-center hover:bg-background active:bg-background transition-colors z-10 touch-manipulation"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </button>
@@ -197,7 +207,7 @@ export default function ProductDetailPage() {
         <div className="flex flex-col justify-center">
           <p className="text-xs uppercase tracking-wider text-primary font-semibold mb-2">{product.category}</p>
           {isNewProduct(product) && (
-            <span className="inline-flex w-fit mb-2 px-2.5 py-1 text-xs rounded-full bg-primary text-primary-foreground font-semibold">
+            <span className="inline-flex w-fit mb-2 items-center rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/15 via-primary/10 to-transparent px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary shadow-sm backdrop-blur-sm">
               Nuevo
             </span>
           )}
@@ -214,49 +224,66 @@ export default function ProductDetailPage() {
             {discountPct > 0 && (
               <>
                 <p className="text-sm text-muted-foreground line-through">₲{(Number(product.price) || 0).toLocaleString("es-PY")}</p>
-                <p className="text-sm text-destructive font-semibold">-{discountPct}%</p>
+                <div className="mb-2">
+                  <ProductPromoBadge variant="sale" percent={discountPct} shape="pill" />
+                </div>
               </>
             )}
             {affiliateBuyerPct > 0 && displayUnitPrice < effectivePrice && (
               <p className="text-sm text-muted-foreground line-through">₲{effectivePrice.toLocaleString("es-PY")}</p>
             )}
             {affiliateBuyerPct > 0 && (
-              <p className="text-sm text-primary font-semibold mb-1">-{Math.round(affiliateBuyerPct)}% con enlace de afiliado</p>
+              <div className="mb-2 space-y-1.5">
+                <ProductPromoBadge variant="referral" percent={affiliateBuyerPct} shape="pill" />
+                <p className="text-xs text-muted-foreground">
+                  Precio final con beneficio por enlace de {DDI.singularLower}.
+                </p>
+              </div>
             )}
-            <p className="text-4xl font-bold text-foreground">₲{displayUnitPrice.toLocaleString("es-PY")}</p>
+            <p className="text-4xl font-bold text-foreground tabular-nums">₲{displayUnitPrice.toLocaleString("es-PY")}</p>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="flex items-center border rounded-xl overflow-hidden">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-10 h-10 flex items-center justify-center hover:bg-muted/50 transition-colors">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:gap-4">
+            <div className="flex items-center border rounded-xl overflow-hidden self-start">
+              <button
+                type="button"
+                onClick={() => setQty(Math.max(1, qty - 1))}
+                className="min-h-11 min-w-11 sm:min-h-10 sm:min-w-10 flex items-center justify-center hover:bg-muted/50 active:bg-muted/70 transition-colors touch-manipulation"
+              >
                 <Minus className="h-4 w-4" />
               </button>
-              <span className="w-12 text-center font-medium text-sm">{qty}</span>
-              <button onClick={() => setQty(Math.min(maxQty, qty + 1))} className="w-10 h-10 flex items-center justify-center hover:bg-muted/50 transition-colors disabled:opacity-40" disabled={qty >= maxQty}>
+              <span className="w-12 text-center font-medium text-sm tabular-nums">{qty}</span>
+              <button
+                type="button"
+                onClick={() => setQty(Math.min(maxQty, qty + 1))}
+                className="min-h-11 min-w-11 sm:min-h-10 sm:min-w-10 flex items-center justify-center hover:bg-muted/50 active:bg-muted/70 transition-colors disabled:opacity-40 touch-manipulation"
+                disabled={qty >= maxQty}
+              >
                 <Plus className="h-4 w-4" />
               </button>
             </div>
 
             <button
+              type="button"
               onClick={() => {
                 if (addItem(product, qty)) {
                   toastCartAdded(product.name, qty);
                 }
               }}
               disabled={product.stock <= 0}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full sm:flex-1 min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             >
-              <ShoppingCart className="h-5 w-5" />
+              <ShoppingCart className="h-5 w-5 shrink-0" />
               Agregar al carrito
             </button>
             <a
               href={buildWhatsAppProductLink(product)}
               target="_blank"
               rel="noopener noreferrer"
-              className="h-12 px-4 rounded-xl border flex items-center justify-center text-foreground hover:bg-muted/50 transition-colors"
+              className="min-h-12 min-w-12 sm:h-12 sm:px-4 rounded-xl border border-border flex items-center justify-center text-[#25D366] hover:bg-[#25D366]/10 hover:border-[#25D366]/35 active:bg-[#25D366]/15 transition-colors touch-manipulation self-center sm:self-auto"
               aria-label="Consultar este producto por WhatsApp"
             >
-              <MessageCircle className="h-5 w-5" />
+              <WhatsAppIcon className="h-5 w-5" />
             </a>
           </div>
         </div>

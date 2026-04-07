@@ -6,6 +6,7 @@ import { CustomerAuthProvider } from "@/contexts/CustomerAuthContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import { StoreLayout } from "@/layouts/StoreLayout";
 import { ProductCard } from "@/components/store/ProductCard";
+import { StoreTestQueryProvider } from "@/test/StoreTestProviders";
 import type { Product } from "@/types";
 
 const mockProduct: Product = {
@@ -24,24 +25,26 @@ describe("ProductCard en catálogo (StoreLayout + ref)", () => {
   it("renderiza sin ReferenceError ni crash del boundary", async () => {
     render(
       <MemoryRouter initialEntries={["/products?ref=E2ED891F"]}>
-        <CustomerAuthProvider>
-          <WishlistProvider>
-            <CartProvider>
-              <Routes>
-                <Route element={<StoreLayout />}>
-                  <Route
-                    path="/products"
-                    element={
-                      <div className="p-4">
-                        <ProductCard product={mockProduct} index={0} />
-                      </div>
-                    }
-                  />
-                </Route>
-              </Routes>
-            </CartProvider>
-          </WishlistProvider>
-        </CustomerAuthProvider>
+        <StoreTestQueryProvider>
+          <CustomerAuthProvider>
+            <WishlistProvider>
+              <CartProvider>
+                <Routes>
+                  <Route element={<StoreLayout />}>
+                    <Route
+                      path="/products"
+                      element={
+                        <div className="p-4">
+                          <ProductCard product={mockProduct} index={0} />
+                        </div>
+                      }
+                    />
+                  </Route>
+                </Routes>
+              </CartProvider>
+            </WishlistProvider>
+          </CustomerAuthProvider>
+        </StoreTestQueryProvider>
       </MemoryRouter>
     );
 
