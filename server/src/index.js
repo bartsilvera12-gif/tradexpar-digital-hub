@@ -184,6 +184,7 @@ const PAGOPAR_COMPRADOR_KEYS = [
   "coordenadas",
 ];
 
+/** PagoPar exige `vendedor_direccion` (y resto) como claves planas en el ítem; el objeto anidado `vendedor` no alcanza. */
 const PAGOPAR_ITEM_TOP_KEYS = [
   "ciudad",
   "nombre",
@@ -193,7 +194,10 @@ const PAGOPAR_ITEM_TOP_KEYS = [
   "url_imagen",
   "id_producto",
   "precio_total",
-  "vendedor",
+  "vendedor_telefono",
+  "vendedor_direccion",
+  "vendedor_direccion_referencia",
+  "vendedor_direccion_coordenadas",
 ];
 
 function assertPagoparCompradorShape(comprador) {
@@ -218,8 +222,8 @@ function assertPagoparCompradorShape(comprador) {
 
 function assertPagoparCompraItemShape(item) {
   const keys = new Set(Object.keys(item));
-  if ([...keys].some((k) => k.startsWith("vendedor_"))) {
-    throw new Error("[pagopar] compras_items: no usar vendedor_* planos; usá el objeto vendedor anidado.");
+  if (keys.has("vendedor")) {
+    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; usá vendedor_* planos.");
   }
   if (keys.has("descripcion")) {
     throw new Error("[pagopar] compras_items: no enviar descripcion en el ítem.");
@@ -237,19 +241,14 @@ function assertPagoparCompraItemShape(item) {
       throw new Error(`[pagopar] compras_items: clave no permitida "${k}".`);
     }
   }
-  const v = item.vendedor;
-  if (!v || typeof v !== "object") {
-    throw new Error("[pagopar] compras_items: vendedor debe ser un objeto.");
-  }
-  for (const vk of ["telefono", "direccion", "direccion_referencia", "direccion_coordenadas"]) {
-    if (!Object.prototype.hasOwnProperty.call(v, vk)) {
-      throw new Error(`[pagopar] compras_items.vendedor: falta "${vk}".`);
-    }
-  }
 }
 
-/** Exactamente 9 claves de primer nivel; sin `descripcion`; `vendedor` anidado. */
+/** Sin `descripcion`. `vendedor_*` planos (requisito real de la API; ver mensaje vendedor_direccion). */
 function buildPagoparCompraItem(orderId, montoTotal) {
+  const tel = String(PAGOPAR_VENDEDOR_TELEFONO || "").trim();
+  const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim();
+  const ref = String(PAGOPAR_VENDEDOR_DIR_REF || "").trim();
+  const coo = String(PAGOPAR_VENDEDOR_COORDENADAS || "").trim();
   return {
     ciudad: PAGOPAR_ITEM_CIUDAD,
     nombre: `Pedido Tradexpar ${orderId.slice(0, 8)}`,
@@ -259,12 +258,10 @@ function buildPagoparCompraItem(orderId, montoTotal) {
     url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
     id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
     precio_total: montoTotal,
-    vendedor: {
-      telefono: PAGOPAR_VENDEDOR_TELEFONO,
-      direccion: PAGOPAR_VENDEDOR_DIRECCION,
-      direccion_referencia: PAGOPAR_VENDEDOR_DIR_REF,
-      direccion_coordenadas: PAGOPAR_VENDEDOR_COORDENADAS,
-    },
+    vendedor_telefono: tel,
+    vendedor_direccion: dir || "Tradexpar",
+    vendedor_direccion_referencia: ref,
+    vendedor_direccion_coordenadas: coo,
   };
 }
 
