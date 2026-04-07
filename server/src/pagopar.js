@@ -39,13 +39,24 @@ export function verifyWebhookToken(privateKey, hashPedido, tokenRecibido) {
 
 const PAGOPAR_API = "https://api.pagopar.com";
 
+/** PagoPar a veces devuelve `respuesta` como string `"false"` / `"true"`. */
+export function isPagoparRespuestaOk(respuesta) {
+  if (respuesta === true) return true;
+  const s = String(respuesta ?? "").trim().toLowerCase();
+  return s === "true" || s === "t" || s === "1";
+}
+
 export async function iniciarTransaccion(payload) {
-  const res = await fetch(`${PAGOPAR_API}/api/comercios/2.0/iniciar-transaccion`, {
+  const url = `${PAGOPAR_API}/api/comercios/2.0/iniciar-transaccion`;
+  console.info("[pagopar][debug] POST", url);
+  console.info("[pagopar][debug] payload", JSON.stringify(payload));
+  const res = await fetch(url, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const text = await res.text();
+  console.info("[pagopar][debug] status", res.status, "body", text.slice(0, 4000));
   let data;
   try {
     data = JSON.parse(text);

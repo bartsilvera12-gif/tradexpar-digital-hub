@@ -1,5 +1,4 @@
 import "dotenv/config";
-import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
@@ -7,6 +6,7 @@ import {
   buildStartTransactionToken,
   checkoutUrlFromHash,
   iniciarTransaccion,
+  isPagoparRespuestaOk,
   verifyWebhookToken,
 } from "./pagopar.js";
 
@@ -49,6 +49,10 @@ const PAGOPAR_PRIVATE_KEY =
 const PAGOPAR_FORMA_PAGO = Number(process.env.PAGOPAR_FORMA_PAGO || 9);
 const PAGOPAR_ITEM_CATEGORIA = String(process.env.PAGOPAR_ITEM_CATEGORIA || "909");
 const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
+/** Entero obligatorio en `comprador.ciudad_id` (doc PagoPar; no usar `ciudad: null`). */
+const PAGOPAR_COMPRADOR_CIUDAD_ID = Number(
+  process.env.PAGOPAR_COMPRADOR_CIUDAD_ID || process.env.PAGOPAR_ITEM_CIUDAD || 1
+);
 const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 895);
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
@@ -86,8 +90,9 @@ function orders(sb) {
   return sb.schema(ORDERS_SCHEMA).from("orders");
 }
 
-function randomRef() {
-  return crypto.randomBytes(16).toString("hex");
+/** `id_pedido_comercio` debe ser entero en la API; el token SHA-1 usa el mismo valor. */
+function randomIdPedidoComercio() {
+  return Math.floor(100_000_000 + Math.random() * 900_000_000);
 }
 
 /** PostgREST / Supabase devuelve a veces objetos sin `instanceof Error`; el catch los convertía en "Error interno". */
@@ -137,23 +142,24 @@ function extractPagoparHashFromIniciarResult(body) {
   return null;
 }
 
-function normalizeBuyerFromOrder(order) {
+function normalizeBuyerFromOrder(order, ciudadId) {
   const nombre = (order.customer_name || "Cliente").toString().slice(0, 200);
   const email = (order.customer_email || "sin-email@tradexpar.local").toString().slice(0, 200);
   const telefono = (order.customer_phone || "000000").toString().replace(/\D/g, "").slice(0, 20) || "000000";
   const documento = telefono.slice(-7) || "0000000";
+  const ruc = `${documento}-0`;
   return {
-    ruc: `${documento}-0`,
-    email,
-    ciudad: null,
     nombre,
+    email,
+    ciudad_id: Number.isFinite(ciudadId) && ciudadId > 0 ? ciudadId : 1,
     telefono,
-    direccion: "",
-    documento,
-    coordenadas: "",
-    razon_social: nombre,
     tipo_documento: "CI",
-    direccion_referencia: null,
+    documento,
+    direccion: "",
+    direccion_referencia: "",
+    coordenadas: "",
+    ruc,
+    razon_social: nombre,
   };
 }
 
@@ -225,19 +231,38 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     }
     console.info("[create-payment][debug] pedido encontrado id=", order.id, "status=", order.status);
 
-    const ref = randomRef();
+    const idPedidoComercio = randomIdPedidoComercio();
+    const ref = String(idPedidoComercio);
     const montoTotal = Math.max(0, Math.round(Number(order.total) || 0));
     if (montoTotal <= 0) {
       return res.status(400).json({ error: "Total del pedido inválido" });
     }
 
-    const token = buildStartTransactionToken(PAGOPAR_PRIVATE_KEY, ref, montoTotal);
+    const token = buildStartTransactionToken(PAGOPAR_PRIVATE_KEY, idPedidoComercio, montoTotal);
 
     const fechaMax = new Date();
     fechaMax.setDate(fechaMax.getDate() + 3);
     const fecha_maxima_pago = fechaMax.toISOString().slice(0, 19).replace("T", " ");
 
-    const comprador = normalizeBuyerFromOrder(order);
+    const comprador = normalizeBuyerFromOrder(order, PAGOPAR_COMPRADOR_CIUDAD_ID);
+
+    /**
+     * `compras_items[]`: la API valida un jsonb con exactamente 9 claves por ítem.
+     * Los cuatro `vendedor_*` extra rompían el esquema ("cantidad no es 9").
+     */
+    const compras_items = [
+      {
+        ciudad: PAGOPAR_ITEM_CIUDAD,
+        nombre: `Pedido Tradexpar ${orderId.slice(0, 8)}`,
+        cantidad: 1,
+        categoria: PAGOPAR_ITEM_CATEGORIA,
+        public_key: PAGOPAR_PUBLIC_KEY,
+        url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
+        descripcion: `Pago pedido ${orderId}`,
+        id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
+        precio_total: montoTotal,
+      },
+    ];
 
     const payload = {
       token,
@@ -245,25 +270,9 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       public_key: PAGOPAR_PUBLIC_KEY,
       monto_total: montoTotal,
       tipo_pedido: "VENTA-COMERCIO",
-      compras_items: [
-        {
-          ciudad: PAGOPAR_ITEM_CIUDAD,
-          nombre: `Pedido Tradexpar ${orderId.slice(0, 8)}`,
-          cantidad: 1,
-          categoria: PAGOPAR_ITEM_CATEGORIA,
-          public_key: PAGOPAR_PUBLIC_KEY,
-          url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
-          descripcion: `Pago pedido ${orderId}`,
-          id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
-          precio_total: montoTotal,
-          vendedor_telefono: "",
-          vendedor_direccion: "",
-          vendedor_direccion_referencia: "",
-          vendedor_direccion_coordenadas: "",
-        },
-      ],
+      compras_items,
       fecha_maxima_pago,
-      id_pedido_comercio: ref,
+      id_pedido_comercio: idPedidoComercio,
       descripcion_resumen: `Tradexpar #${orderId.slice(0, 8)}`,
       forma_pago: PAGOPAR_FORMA_PAGO,
     };
@@ -287,7 +296,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
 
     const pp = await iniciarTransaccion(payload);
 
-    if (!pp.respuesta) {
+    if (!isPagoparRespuestaOk(pp.respuesta)) {
       const msg = pp.mensaje || pp.resultado || "PagoPar rechazó iniciar transacción";
       return res.status(502).json({ error: String(msg), pagopar: pp });
     }
