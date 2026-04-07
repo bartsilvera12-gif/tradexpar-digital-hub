@@ -62,6 +62,11 @@ function supabaseAdmin() {
   });
 }
 
+/** `tradexpar.orders` explícito (Accept-Profile). Evita caer en `public` si el SDK ignora `db.schema`. */
+function orders(sb) {
+  return sb.schema(SUPABASE_SCHEMA).from("orders");
+}
+
 function randomRef() {
   return crypto.randomBytes(16).toString("hex");
 }
@@ -129,7 +134,7 @@ app.use("/api/pagopar/webhook", express.urlencoded({ extended: true, limit: "1mb
 app.use(express.json({ limit: "512kb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "tradexpar-payments-api" });
+  res.json({ ok: true, service: "tradexpar-payments-api", supabase_schema: SUPABASE_SCHEMA });
 });
 
 /**
@@ -141,14 +146,14 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const orderId = req.params.orderId;
     const sb = supabaseAdmin();
 
-    const { data: order, error: fetchErr } = await sb
-      .from("orders")
+    const { data: order, error: fetchErr } = await orders(sb)
       .select("id, total, customer_name, customer_email, customer_phone, status")
       .eq("id", orderId)
       .maybeSingle();
 
     if (fetchErr) throw fetchErr;
     if (!order) {
+      console.warn("[create-payment] Sin fila en", SUPABASE_SCHEMA + ".orders", "id=", orderId);
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
@@ -202,8 +207,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       payload.url_notificacion = PAGOPAR_WEBHOOK_URL;
     }
 
-    const { error: upErr } = await sb
-      .from("orders")
+    const { error: upErr } = await orders(sb)
       .update({
         payment_reference: ref,
         payment_status: "pending",
@@ -228,8 +232,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       });
     }
 
-    const { error: hashErr } = await sb
-      .from("orders")
+    const { error: hashErr } = await orders(sb)
       .update({ pagopar_hash: hashPedido })
       .eq("id", orderId);
 
@@ -262,8 +265,7 @@ app.get("/api/public/orders/:orderId/payment-status", apiKeyMiddleware, async (r
     const hash = (req.query.hash || "").toString();
     const sb = supabaseAdmin();
 
-    const { data: row, error } = await sb
-      .from("orders")
+    const { data: row, error } = await orders(sb)
       .select("id, payment_reference, payment_status, pagopar_hash")
       .eq("id", orderId)
       .maybeSingle();
@@ -304,7 +306,7 @@ app.get("/api/public/payment-status", apiKeyMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Indicá hash o ref" });
     }
     const sb = supabaseAdmin();
-    let q = sb.from("orders").select("id, payment_reference, payment_status, pagopar_hash").limit(1);
+    let q = orders(sb).select("id, payment_reference, payment_status, pagopar_hash").limit(1);
     if (hash) {
       q = q.eq("pagopar_hash", hash);
     } else {
@@ -389,8 +391,7 @@ app.post("/api/pagopar/webhook", async (req, res) => {
     else if (cancelado) payment_status = "failed";
 
     const sb = supabaseAdmin();
-    const { data: updated, error } = await sb
-      .from("orders")
+    const { data: updated, error } = await orders(sb)
       .update({ payment_status })
       .eq("pagopar_hash", String(hashPedido))
       .select("id")
