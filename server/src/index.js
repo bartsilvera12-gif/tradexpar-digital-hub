@@ -49,11 +49,10 @@ const PAGOPAR_PRIVATE_KEY =
 const PAGOPAR_FORMA_PAGO = Number(process.env.PAGOPAR_FORMA_PAGO || 9);
 const PAGOPAR_ITEM_CATEGORIA = String(process.env.PAGOPAR_ITEM_CATEGORIA || "909");
 const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
-/** Entero obligatorio en `comprador.ciudad_id` (doc PagoPar; no usar `ciudad: null`). */
-const PAGOPAR_COMPRADOR_CIUDAD_ID = Number(
-  process.env.PAGOPAR_COMPRADOR_CIUDAD_ID || process.env.PAGOPAR_ITEM_CIUDAD || 1
-);
-/** PagoPar exige también la clave string `comprador.ciudad` (mismo código que en ítems, p. ej. "1" Asunción). */
+/**
+ * PagoPar valida `comprador` como jsonb con exactamente 9 claves (error "cantidad no es 9" si sobran).
+ * Incluye `ciudad` (string); no enviar `ciudad_id`, `ruc` ni `razon_social` en el mismo objeto.
+ */
 const PAGOPAR_COMPRADOR_CIUDAD = String(
   process.env.PAGOPAR_COMPRADOR_CIUDAD || process.env.PAGOPAR_ITEM_CIUDAD || "1"
 ).trim() || "1";
@@ -151,25 +150,21 @@ function extractPagoparHashFromIniciarResult(body) {
   return null;
 }
 
-function normalizeBuyerFromOrder(order, ciudadId) {
+function normalizeBuyerFromOrder(order) {
   const nombre = (order.customer_name || "Cliente").toString().slice(0, 200);
   const email = (order.customer_email || "sin-email@tradexpar.local").toString().slice(0, 200);
   const telefono = (order.customer_phone || "000000").toString().replace(/\D/g, "").slice(0, 20) || "000000";
   const documento = telefono.slice(-7) || "0000000";
-  const ruc = `${documento}-0`;
   return {
     nombre,
     email,
     ciudad: PAGOPAR_COMPRADOR_CIUDAD,
-    ciudad_id: Number.isFinite(ciudadId) && ciudadId > 0 ? ciudadId : 1,
     telefono,
     tipo_documento: "CI",
     documento,
     direccion: "",
     direccion_referencia: "",
     coordenadas: "",
-    ruc,
-    razon_social: nombre,
   };
 }
 
@@ -254,7 +249,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     fechaMax.setDate(fechaMax.getDate() + 3);
     const fecha_maxima_pago = fechaMax.toISOString().slice(0, 19).replace("T", " ");
 
-    const comprador = normalizeBuyerFromOrder(order, PAGOPAR_COMPRADOR_CIUDAD_ID);
+    const comprador = normalizeBuyerFromOrder(order);
 
     /** Cada ítem debe incluir `vendedor_*` (la API rechaza si faltan, p. ej. vendedor_direccion). */
     const compras_items = [
