@@ -25,8 +25,8 @@ const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 type CheckoutForm = {
-  /** Nombre y apellido en un solo campo (como en el diseño de checkout). */
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   document: string;
   phone: string;
@@ -54,7 +54,8 @@ export default function CheckoutPage() {
   const { user } = useCustomerAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState<CheckoutForm>({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     document: "",
     phone: "",
@@ -107,10 +108,15 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!user) return;
+    const raw = (user.name || "").trim();
+    const parts = raw ? raw.split(/\s+/) : [];
+    const fn = parts[0] ?? "";
+    const ln = parts.slice(1).join(" ");
     setForm((prev) => ({
       ...prev,
       email: user.email,
-      fullName: (user.name || "").trim() || prev.fullName,
+      firstName: fn || prev.firstName,
+      lastName: ln || prev.lastName,
     }));
     const LOC_MS = 14_000;
     let cancelled = false;
@@ -151,13 +157,15 @@ export default function CheckoutPage() {
       if (!form.email.trim()) {
         throw new Error("El email es obligatorio.");
       }
-      const fullName = form.fullName.trim();
-      if (fullName.length < 3) {
+      const firstName = form.firstName.trim();
+      const lastName = form.lastName.trim();
+      if (firstName.length < 2) {
         throw new Error("El nombre es obligatorio.");
       }
-      if (!/\s/.test(fullName)) {
-        throw new Error("Ingresá nombre y apellido (al menos dos palabras).");
+      if (lastName.length < 2) {
+        throw new Error("El apellido es obligatorio.");
       }
+      const fullName = `${firstName} ${lastName}`.trim();
       if (!form.document.trim()) {
         throw new Error("El número de CI / RUC es obligatorio.");
       }
@@ -263,21 +271,6 @@ export default function CheckoutPage() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Nombre <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.fullName}
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  placeholder="Nombre y apellido"
-                  autoComplete="name"
-                  className={fieldCls}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
                   Email <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -291,34 +284,64 @@ export default function CheckoutPage() {
                 <p className="text-xs text-muted-foreground mt-1.5">Podés crear una cuenta después de comprar.</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Teléfono <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="Ej. 0981 123456"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  className={fieldCls}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Nombre <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.firstName}
+                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    autoComplete="given-name"
+                    className={fieldCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Apellido <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.lastName}
+                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    autoComplete="family-name"
+                    className={fieldCls}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Número CI / RUC <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.document}
-                  onChange={(e) => setForm({ ...form, document: e.target.value })}
-                  autoComplete="off"
-                  className={fieldCls}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Número CI / RUC <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.document}
+                    onChange={(e) => setForm({ ...form, document: e.target.value })}
+                    autoComplete="off"
+                    className={fieldCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Teléfono (09xx123456) <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="0981123456"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    className={fieldCls}
+                  />
+                </div>
               </div>
 
               <div>
@@ -335,7 +358,7 @@ export default function CheckoutPage() {
                 />
               </div>
 
-              <div>
+              <div className="w-full sm:max-w-[50%]">
                 <label className="block text-sm font-medium text-foreground mb-1">
                   Ciudad <span className="text-destructive">*</span>
                 </label>
@@ -344,10 +367,10 @@ export default function CheckoutPage() {
                   onValueChange={(v) => setForm({ ...form, cityId: v === "__none" ? "" : v })}
                 >
                   <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
-                    <SelectValue placeholder="Seleccionar ciudad" />
+                    <SelectValue placeholder="Seleccionar Ciudad" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="__none">Seleccionar ciudad</SelectItem>
+                    <SelectItem value="__none">Seleccionar Ciudad</SelectItem>
                     {citiesByDepartment.map(([dept, list]) => (
                       <SelectGroup key={dept}>
                         <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
