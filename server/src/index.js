@@ -96,8 +96,20 @@ const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
   "https://www.pagopar.com/static/img/logo.png";
-/** Solo `vendedor_direccion` en el ítem (esta cuenta PagoPar valida jsonb con 9 claves por línea). */
-const PAGOPAR_VENDEDOR_DIRECCION = String(process.env.PAGOPAR_VENDEDOR_DIRECCION || "").slice(0, 300);
+/** Texto vacío si falta valor (PagoPar: sin null/undefined en compras_items). */
+function pagoparItemStr(v) {
+  if (v == null) return "";
+  return String(v);
+}
+const PAGOPAR_ITEM_DESCRIPCION = pagoparItemStr(process.env.PAGOPAR_ITEM_DESCRIPCION).slice(0, 500);
+const PAGOPAR_VENDEDOR_TELEFONO = pagoparItemStr(process.env.PAGOPAR_VENDEDOR_TELEFONO).slice(0, 40);
+const PAGOPAR_VENDEDOR_DIRECCION = pagoparItemStr(process.env.PAGOPAR_VENDEDOR_DIRECCION).slice(0, 300);
+const PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA = pagoparItemStr(
+  process.env.PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA
+).slice(0, 300);
+const PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS = pagoparItemStr(
+  process.env.PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS
+).slice(0, 300);
 /** Placeholder que reemplaza PagoPar en la URL de retorno (documentación / panel). */
 const PAGOPAR_RETURN_URL_DEFAULT =
   "https://greenyellow-goat-534491.hostingersite.com/success?hash=${hash}";
@@ -300,10 +312,7 @@ const PAGOPAR_COMPRADOR_KEYS = [
   "direccion_referencia",
 ];
 
-/**
- * Claves por línea en compras_items (9 claves; la cuenta PagoPar rechaza líneas con otras claves).
- * El precio unitario implícito es round(precio_total/cantidad); no se envía como campo aparte.
- */
+/** Claves por línea en compras_items (orden fijo; PagoPar valida estructura completa). */
 const PAGOPAR_ITEM_TOP_KEYS = [
   "ciudad",
   "nombre",
@@ -311,10 +320,27 @@ const PAGOPAR_ITEM_TOP_KEYS = [
   "categoria",
   "public_key",
   "url_imagen",
+  "descripcion",
   "id_producto",
   "precio_total",
+  "vendedor_telefono",
   "vendedor_direccion",
+  "vendedor_direccion_referencia",
+  "vendedor_direccion_coordenadas",
 ];
+
+const PAGOPAR_ITEM_STRING_KEYS = new Set([
+  "ciudad",
+  "nombre",
+  "categoria",
+  "public_key",
+  "url_imagen",
+  "descripcion",
+  "vendedor_telefono",
+  "vendedor_direccion",
+  "vendedor_direccion_referencia",
+  "vendedor_direccion_coordenadas",
+]);
 
 function assertPagoparCompradorShape(comprador) {
   const keys = new Set(Object.keys(comprador));
@@ -339,7 +365,10 @@ function assertPagoparCompradorShape(comprador) {
 function assertPagoparCompraItemShape(item) {
   const keys = new Set(Object.keys(item));
   if (keys.has("vendedor")) {
-    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; solo la clave plana vendedor_direccion.");
+    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; solo claves planas vendedor_*.");
+  }
+  if (keys.has("precio_unitario")) {
+    throw new Error("[pagopar] compras_items: no enviar precio_unitario.");
   }
   if (keys.size !== PAGOPAR_ITEM_TOP_KEYS.length) {
     throw new Error(`[pagopar] compras_items: se esperaban ${PAGOPAR_ITEM_TOP_KEYS.length} claves de primer nivel, hay ${keys.size}.`);
@@ -354,12 +383,24 @@ function assertPagoparCompraItemShape(item) {
       throw new Error(`[pagopar] compras_items: clave no permitida "${k}".`);
     }
   }
-  const cantidad = Math.round(Number(item.cantidad) || 0);
-  const precioTotal = Math.round(Number(item.precio_total) || 0);
-  if (cantidad <= 0) {
+  for (const k of PAGOPAR_ITEM_STRING_KEYS) {
+    if (typeof item[k] !== "string") {
+      throw new Error(`[pagopar] compras_items: "${k}" debe ser string (usar "" si no hay valor).`);
+    }
+  }
+  if (typeof item.cantidad !== "number" || !Number.isInteger(item.cantidad)) {
+    throw new Error("[pagopar] compras_items: cantidad debe ser number entero.");
+  }
+  if (typeof item.precio_total !== "number" || !Number.isInteger(item.precio_total)) {
+    throw new Error("[pagopar] compras_items: precio_total debe ser number entero (PYG).");
+  }
+  if (typeof item.id_producto !== "number" || !Number.isInteger(item.id_producto)) {
+    throw new Error("[pagopar] compras_items: id_producto debe ser number entero.");
+  }
+  if (item.cantidad <= 0) {
     throw new Error("[pagopar] compras_items: cantidad inválida.");
   }
-  if (precioTotal < 0) {
+  if (item.precio_total < 0) {
     throw new Error("[pagopar] compras_items: precio_total inválido.");
   }
 }
@@ -374,23 +415,27 @@ function assertComprasItemsPrecioTotalSum(compras_items, monto_total) {
   }
 }
 
-/** Una línea de compras_items (9 claves). precio_total = línea en PYG; cantidad ≥ 1. */
+/** Una línea de compras_items: 13 claves; strings siempre "" si no hay valor (nunca null/undefined). */
 function buildPagoparCompraItem(orderId, precioTotalLinea, cantidadLinea = 1) {
   const shortId = orderId.slice(0, 8);
-  const nombre = `Pedido Tradexpar ${shortId}`;
-  const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim() || "Tradexpar";
+  const nombre = pagoparItemStr(`Pedido Tradexpar ${shortId}`).slice(0, 200);
   const cantidad = Math.max(1, Math.round(Number(cantidadLinea) || 1));
   const precio_total = Math.round(Number(precioTotalLinea) || 0);
+  const id_producto = Math.round(Number(PAGOPAR_ITEM_PRODUCTO_ID) || 0) || 895;
   return {
-    ciudad: PAGOPAR_ITEM_CIUDAD,
+    ciudad: pagoparItemStr(PAGOPAR_ITEM_CIUDAD).slice(0, 50),
     nombre,
     cantidad,
-    categoria: PAGOPAR_ITEM_CATEGORIA,
-    public_key: PAGOPAR_PUBLIC_KEY,
-    url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
-    id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
+    categoria: pagoparItemStr(PAGOPAR_ITEM_CATEGORIA).slice(0, 50),
+    public_key: pagoparItemStr(PAGOPAR_PUBLIC_KEY),
+    url_imagen: pagoparItemStr(PAGOPAR_ITEM_IMAGEN_URL),
+    descripcion: PAGOPAR_ITEM_DESCRIPCION,
+    id_producto,
     precio_total,
-    vendedor_direccion: dir,
+    vendedor_telefono: PAGOPAR_VENDEDOR_TELEFONO,
+    vendedor_direccion: PAGOPAR_VENDEDOR_DIRECCION,
+    vendedor_direccion_referencia: PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA,
+    vendedor_direccion_coordenadas: PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS,
   };
 }
 
@@ -541,6 +586,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     assertPagoparCompradorShape(comprador);
     assertPagoparCompraItemShape(compras_items[0]);
     assertComprasItemsPrecioTotalSum(compras_items, montoTotal);
+    console.log("ITEM FINAL PAGOPAR:", compras_items[0]);
 
     const pagoparBody = {
       token,

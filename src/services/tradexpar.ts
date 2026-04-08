@@ -1163,55 +1163,86 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   if (row) return rowToCustomerUser(row);
 
   const prov = oauthProviderFromUser(u);
-  if (prov !== "google" && prov !== "facebook") return null;
+  const sessionUser = session.user;
 
-  const oauthIdentity = u.identities?.find((i) => i.provider === "google" || i.provider === "facebook");
-  const emailFromIdentity =
-    oauthIdentity && oauthIdentity.identity_data && typeof oauthIdentity.identity_data === "object"
-      ? String((oauthIdentity.identity_data as { email?: string }).email ?? "").trim()
-      : "";
-  const email = (u.email ?? session.user.email ?? emailFromIdentity ?? "").trim();
-  if (!email) return null;
-
-  const name =
+  const nameFromSession = (emailFallback: string) =>
     (u.user_metadata?.full_name as string) ||
     (u.user_metadata?.name as string) ||
-    (session.user.user_metadata?.full_name as string) ||
-    (session.user.user_metadata?.name as string) ||
-    email.split("@")[0] ||
+    (sessionUser.user_metadata?.full_name as string) ||
+    (sessionUser.user_metadata?.name as string) ||
+    emailFallback.split("@")[0] ||
     "Usuario";
 
-  const sb = tx();
-  const { data: rpcData, error: rpcErr } = await sb.rpc("upsert_customer_oauth", {
-    p_name: name,
-    p_email: email,
-    p_provider: prov,
-  });
-  if (!rpcErr && rpcData != null) {
-    const raw =
-      typeof rpcData === "string"
-        ? (JSON.parse(rpcData) as Record<string, unknown>)
-        : (rpcData as Record<string, unknown>);
-    return rowToCustomerUser(raw);
-  }
-  const rpcMsg = rpcErr?.message ?? "";
-  const rpcMissing =
-    rpcErr &&
-    (rpcMsg.includes("Could not find") ||
-      rpcMsg.includes("does not exist") ||
-      rpcMsg.includes("schema cache") ||
-      rpcErr.code === "PGRST202");
-  if (rpcErr && !rpcMissing) {
-    throw new Error(rpcErr.message);
+  async function insertCustomerOrFetchRace(sb: ReturnType<typeof tx>, insertRow: {
+    auth_user_id: string;
+    name: string;
+    email: string;
+    provider: string;
+  }) {
+    const { error: insErr } = await sb.from("customers").insert(insertRow);
+    if (!insErr) return;
+    if (insErr.code === "23505") {
+      row = await fetchCustomerByAuthId(uid);
+      if (row) return;
+    }
+    throw new Error(insErr.message);
   }
 
-  const { error: insErr } = await sb.from("customers").insert({
+  if (prov === "google" || prov === "facebook") {
+    const oauthIdentity = u.identities?.find((i) => i.provider === "google" || i.provider === "facebook");
+    const emailFromIdentity =
+      oauthIdentity && oauthIdentity.identity_data && typeof oauthIdentity.identity_data === "object"
+        ? String((oauthIdentity.identity_data as { email?: string }).email ?? "").trim()
+        : "";
+    const email = (u.email ?? sessionUser.email ?? emailFromIdentity ?? "").trim();
+    if (!email) return null;
+    const name = nameFromSession(email);
+
+    const sb = tx();
+    const { data: rpcData, error: rpcErr } = await sb.rpc("upsert_customer_oauth", {
+      p_name: name,
+      p_email: email,
+      p_provider: prov,
+    });
+    if (!rpcErr && rpcData != null) {
+      const raw =
+        typeof rpcData === "string"
+          ? (JSON.parse(rpcData) as Record<string, unknown>)
+          : (rpcData as Record<string, unknown>);
+      return rowToCustomerUser(raw);
+    }
+    const rpcMsg = rpcErr?.message ?? "";
+    const rpcMissing =
+      rpcErr &&
+      (rpcMsg.includes("Could not find") ||
+        rpcMsg.includes("does not exist") ||
+        rpcMsg.includes("schema cache") ||
+        rpcErr.code === "PGRST202");
+    if (rpcErr && !rpcMissing) {
+      throw new Error(rpcErr.message);
+    }
+
+    await insertCustomerOrFetchRace(sb, {
+      auth_user_id: uid,
+      name,
+      email,
+      provider: prov,
+    });
+    row = await fetchCustomerByAuthId(uid);
+    return row ? rowToCustomerUser(row) : null;
+  }
+
+  /** Email/contraseña (u otros): sin fila en `customers`, Mi cuenta y las RPC devuelven no_customer. */
+  const email = (u.email ?? sessionUser.email ?? "").trim();
+  if (!email) return null;
+  const name = nameFromSession(email);
+  const sb = tx();
+  await insertCustomerOrFetchRace(sb, {
     auth_user_id: uid,
     name,
     email,
-    provider: prov,
+    provider: "manual",
   });
-  if (insErr) throw new Error(insErr.message);
   row = await fetchCustomerByAuthId(uid);
   return row ? rowToCustomerUser(row) : null;
 }
