@@ -53,12 +53,24 @@ const ORDERS_SCHEMA = resolveOrdersSchema();
 const SUPABASE_LOG_DEBUG = String(process.env.SUPABASE_LOG_DEBUG ?? "1").trim() !== "0";
 const API_KEY = process.env.API_PUBLIC_KEY || process.env.API_KEY || "";
 
-const PAGOPAR_PUBLIC_KEY = stripPagoparSecret(
-  process.env.PAGOPAR_PUBLIC_KEY || process.env.PAGOPAR_PUBLIC_TOKEN || ""
-);
-const PAGOPAR_PRIVATE_KEY = stripPagoparSecret(
-  process.env.PAGOPAR_PRIVATE_KEY || process.env.PAGOPAR_PRIVATE_TOKEN || ""
-);
+const _ppPubKey = stripPagoparSecret(process.env.PAGOPAR_PUBLIC_KEY || "");
+const _ppPubTok = stripPagoparSecret(process.env.PAGOPAR_PUBLIC_TOKEN || "");
+const _ppPrivKey = stripPagoparSecret(process.env.PAGOPAR_PRIVATE_KEY || "");
+const _ppPrivTok = stripPagoparSecret(process.env.PAGOPAR_PRIVATE_TOKEN || "");
+
+if (_ppPubKey && _ppPubTok && _ppPubKey !== _ppPubTok) {
+  console.warn(
+    "[payments-api] ⚠️ PAGOPAR_PUBLIC_KEY y PAGOPAR_PUBLIC_TOKEN están definidos y difieren. Se usa PAGOPAR_PUBLIC_KEY. Eliminá el TOKEN duplicado en .env para evitar confusiones."
+  );
+}
+if (_ppPrivKey && _ppPrivTok && _ppPrivKey !== _ppPrivTok) {
+  console.warn(
+    "[payments-api] ⚠️ PAGOPAR_PRIVATE_KEY y PAGOPAR_PRIVATE_TOKEN están definidos y difieren. Se usa PAGOPAR_PRIVATE_KEY. Eliminá el TOKEN duplicado en .env para evitar confusiones."
+  );
+}
+
+const PAGOPAR_PUBLIC_KEY = _ppPubKey || _ppPubTok;
+const PAGOPAR_PRIVATE_KEY = _ppPrivKey || _ppPrivTok;
 const PAGOPAR_FORMA_PAGO = Number(process.env.PAGOPAR_FORMA_PAGO || 9);
 const PAGOPAR_ITEM_CATEGORIA = String(process.env.PAGOPAR_ITEM_CATEGORIA || "909");
 const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
@@ -72,12 +84,18 @@ const PAGOPAR_ITEM_IMAGEN_URL =
   "https://www.pagopar.com/static/img/logo.png";
 /** Solo `vendedor_direccion` en el ítem (esta cuenta PagoPar valida jsonb con 9 claves por línea). */
 const PAGOPAR_VENDEDOR_DIRECCION = String(process.env.PAGOPAR_VENDEDOR_DIRECCION || "").slice(0, 300);
-const PAGOPAR_RETURN_URL =
-  process.env.PAGOPAR_RETURN_URL ||
-  "https://greenyellow-goat-534491.hostingersite.com/success?hash=($hash)";
-const PAGOPAR_WEBHOOK_URL =
-  process.env.PAGOPAR_WEBHOOK_URL ||
+/** Placeholder que reemplaza PagoPar en la URL de retorno (documentación / panel). */
+const PAGOPAR_RETURN_URL_DEFAULT =
+  "https://greenyellow-goat-534491.hostingersite.com/success?hash=${hash}";
+const PAGOPAR_RETURN_URL = String(process.env.PAGOPAR_RETURN_URL || "").trim() || PAGOPAR_RETURN_URL_DEFAULT;
+const PAGOPAR_WEBHOOK_URL_DEFAULT =
   "https://greenyellow-goat-534491.hostingersite.com/api/pagopar/webhook";
+const PAGOPAR_WEBHOOK_URL = String(process.env.PAGOPAR_WEBHOOK_URL || "").trim() || PAGOPAR_WEBHOOK_URL_DEFAULT;
+/**
+ * Si es "1", incluye url_respuesta y url_notificacion en el JSON de iniciar-transacción.
+ * Por defecto off: el panel del comercio suele tener ya redirección y webhook configurados.
+ */
+const PAGOPAR_SEND_PAYLOAD_URLS = String(process.env.PAGOPAR_SEND_PAYLOAD_URLS || "").trim() === "1";
 /** Si es "true", no exige token de webhook (solo desarrollo). */
 const PAGOPAR_SKIP_WEBHOOK_VERIFY = String(process.env.PAGOPAR_SKIP_WEBHOOK_VERIFY || "") === "true";
 
@@ -87,12 +105,21 @@ const PAGOPAR_LOG_TOKEN_DEBUG = String(process.env.PAGOPAR_LOG_TOKEN_DEBUG ?? "1
 /** `PAGOPAR_LOG_ENDPOINTS=0` desactiva logs de entorno/URLs PagoPar al crear pago. */
 const PAGOPAR_LOG_ENDPOINTS = String(process.env.PAGOPAR_LOG_ENDPOINTS ?? "1").trim() !== "0";
 
+/**
+ * Body plano (documentación oficial iniciar-transacción 2.0) por defecto.
+ * Wrapper `{ orderPagopar: ... }` solo con PAGOPAR_ORDER_WRAPPER=1.
+ */
+const PAGOPAR_ORDER_WRAPPER = String(process.env.PAGOPAR_ORDER_WRAPPER ?? "0").trim() === "1";
+
+/** Logs detallados antes del POST a PagoPar (token + JSON completo). `PAGOPAR_LOG_INICIAR_TRANSACCION=0` para silenciar. */
+const PAGOPAR_LOG_INICIAR_TRANSACCION = String(process.env.PAGOPAR_LOG_INICIAR_TRANSACCION ?? "1").trim() !== "0";
+
 function requireEnv() {
   const miss = [];
   if (!SUPABASE_URL) miss.push("SUPABASE_URL");
   if (!SUPABASE_SERVICE_ROLE_KEY) miss.push("SUPABASE_SERVICE_ROLE_KEY");
-  if (!PAGOPAR_PUBLIC_KEY) miss.push("PAGOPAR_PUBLIC_KEY o PAGOPAR_PUBLIC_TOKEN");
-  if (!PAGOPAR_PRIVATE_KEY) miss.push("PAGOPAR_PRIVATE_KEY o PAGOPAR_PRIVATE_TOKEN");
+  if (!PAGOPAR_PUBLIC_KEY) miss.push("PAGOPAR_PUBLIC_KEY (recomendado; evitar solo *_TOKEN)");
+  if (!PAGOPAR_PRIVATE_KEY) miss.push("PAGOPAR_PRIVATE_KEY (recomendado; evitar solo *_TOKEN)");
   if (!API_KEY) miss.push("API_PUBLIC_KEY o API_KEY");
   if (miss.length) {
     console.warn("[payments-api] Faltan variables:", miss.join(", "));
@@ -439,7 +466,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     assertPagoparCompradorShape(comprador);
     assertPagoparCompraItemShape(compras_items[0]);
 
-    const orderPagopar = {
+    const pagoparBody = {
       token,
       comprador,
       public_key: PAGOPAR_PUBLIC_KEY,
@@ -451,31 +478,27 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       descripcion_resumen: `Tradexpar #${orderId.slice(0, 8)}`,
       forma_pago: PAGOPAR_FORMA_PAGO,
     };
-    if (PAGOPAR_RETURN_URL) {
-      orderPagopar.url_respuesta = PAGOPAR_RETURN_URL;
-    }
-    if (PAGOPAR_WEBHOOK_URL) {
-      orderPagopar.url_notificacion = PAGOPAR_WEBHOOK_URL;
+    if (PAGOPAR_SEND_PAYLOAD_URLS) {
+      pagoparBody.url_respuesta = PAGOPAR_RETURN_URL;
+      pagoparBody.url_notificacion = PAGOPAR_WEBHOOK_URL;
     }
 
     if (PAGOPAR_LOG_TOKEN_DEBUG) {
-      console.info("[create-payment][token-debug] orderPagopar (debe coincidir con inputs del token)", {
-        id_pedido_comercio_enviado: orderPagopar.id_pedido_comercio,
-        monto_total_enviado: orderPagopar.monto_total,
-        token_enviado: orderPagopar.token,
-        coincide_id: orderPagopar.id_pedido_comercio === idPedidoComercio,
-        coincide_monto: orderPagopar.monto_total === montoTotal,
+      console.info("[create-payment][token-debug] cuerpo iniciar-transacción (coincidencia token)", {
+        id_pedido_comercio_enviado: pagoparBody.id_pedido_comercio,
+        monto_total_enviado: pagoparBody.monto_total,
+        token_enviado: pagoparBody.token,
+        coincide_id: pagoparBody.id_pedido_comercio === idPedidoComercio,
+        coincide_monto: pagoparBody.monto_total === montoTotal,
       });
     }
 
-    /**
-     * El SDK PHP suele envolver en `orderPagopar`. Por defecto activo; desactivar con `PAGOPAR_ORDER_WRAPPER=0`.
-     */
-    const useOrderWrapper = String(process.env.PAGOPAR_ORDER_WRAPPER ?? "1").trim() !== "0";
-    const payload = useOrderWrapper ? { orderPagopar } : orderPagopar;
+    /** Documentación oficial: JSON plano. Wrapper solo si PAGOPAR_ORDER_WRAPPER=1. */
+    const payload = PAGOPAR_ORDER_WRAPPER ? { orderPagopar: pagoparBody } : pagoparBody;
 
     console.info("[create-payment][pagopar shape]", {
-      bodyWrapper: useOrderWrapper ? "orderPagopar" : "flat",
+      bodyWrapper: PAGOPAR_ORDER_WRAPPER ? "orderPagopar" : "flat",
+      urls_en_payload: PAGOPAR_SEND_PAYLOAD_URLS,
       compradorKeyCount: Object.keys(comprador).length,
       itemTopLevelKeyCount: Object.keys(compras_items[0]).length,
       itemKeys: Object.keys(compras_items[0]),
@@ -491,8 +514,6 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
 
     if (upErr) throw upErr;
 
-    console.log("[pagopar][payload_final]", JSON.stringify(payload, null, 2));
-
     if (PAGOPAR_LOG_ENDPOINTS) {
       const ep = getPagoparEndpoints();
       console.info("[create-payment][pagopar-endpoints]", {
@@ -506,11 +527,35 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       });
     }
 
-    const pp = await iniciarTransaccion(payload);
+    const bodyJsonParaPagopar = JSON.stringify(payload);
+    if (PAGOPAR_LOG_INICIAR_TRANSACCION) {
+      console.info("[create-payment][pagopar-iniciar] ANTES del POST a PagoPar", {
+        public_key_enmascarada: maskPagoparCredential(PAGOPAR_PUBLIC_KEY),
+        private_key_enmascarada: maskPagoparCredential(PAGOPAR_PRIVATE_KEY),
+        id_pedido_comercio_exacto: idPedidoComercio,
+        monto_total_exacto: montoTotal,
+        monto_str_para_sha1_strval_floatval: montoStrParaToken,
+        token_sha1_generado: token,
+        order_wrapper_enabled: PAGOPAR_ORDER_WRAPPER,
+        urls_incluidas_en_json: PAGOPAR_SEND_PAYLOAD_URLS,
+      });
+      console.info("[create-payment][pagopar-iniciar] JSON exacto enviado a iniciar-transacción:", bodyJsonParaPagopar);
+    }
+
+    const pp = await iniciarTransaccion(payload, {
+      omitRequestBodyInPagoparModuleLog: PAGOPAR_LOG_INICIAR_TRANSACCION,
+    });
 
     if (!isPagoparRespuestaOk(pp.respuesta)) {
-      const msg = pp.mensaje || pp.resultado || "PagoPar rechazó iniciar transacción";
-      return res.status(502).json({ error: String(msg), pagopar: pp });
+      return res.status(502).json({
+        error: "PagoPar rejected iniciar-transaccion",
+        pagopar: pp,
+        debug: {
+          id_pedido_comercio: idPedidoComercio,
+          monto_total: montoTotal,
+          wrapper_enabled: PAGOPAR_ORDER_WRAPPER,
+        },
+      });
     }
 
     const hashPedido = extractPagoparHashFromIniciarResult(pp);

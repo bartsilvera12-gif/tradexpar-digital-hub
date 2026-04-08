@@ -161,13 +161,22 @@ export function isPagoparRespuestaOk(respuesta) {
   return s === "true" || s === "t" || s === "1";
 }
 
-export async function iniciarTransaccion(payload) {
+/**
+ * @param {object} options
+ * @param {boolean} [options.omitRequestBodyInPagoparModuleLog] — si true, no vuelve a loguear el body (ya logueado en create-payment).
+ */
+export async function iniciarTransaccion(payload, options = {}) {
+  const { omitRequestBodyInPagoparModuleLog = false } = options;
   const { iniciarTransaccionUrl } = getPagoparEndpoints();
   const headers = { Accept: "application/json", "Content-Type": "application/json" };
   const bodyStr = JSON.stringify(payload);
   console.info("[pagopar][debug] POST", iniciarTransaccionUrl);
   console.info("[pagopar][debug] headers", JSON.stringify(headers));
-  console.info("[pagopar][debug] body (string length)", bodyStr.length, bodyStr.slice(0, 8000));
+  if (omitRequestBodyInPagoparModuleLog) {
+    console.info("[pagopar][debug] body omitido aquí (ver [create-payment][pagopar-iniciar]); length=", bodyStr.length);
+  } else {
+    console.info("[pagopar][debug] body (string length)", bodyStr.length, bodyStr.slice(0, 8000));
+  }
   const res = await fetch(iniciarTransaccionUrl, {
     method: "POST",
     headers,
