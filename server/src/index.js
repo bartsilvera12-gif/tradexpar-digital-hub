@@ -7,6 +7,7 @@ import {
   checkoutUrlFromHash,
   iniciarTransaccion,
   isPagoparRespuestaOk,
+  phpStrvalFloatval,
   stripPagoparSecret,
   verifyWebhookToken,
 } from "./pagopar.js";
@@ -70,6 +71,16 @@ const PAGOPAR_WEBHOOK_URL =
   "https://greenyellow-goat-534491.hostingersite.com/api/pagopar/webhook";
 /** Si es "true", no exige token de webhook (solo desarrollo). */
 const PAGOPAR_SKIP_WEBHOOK_VERIFY = String(process.env.PAGOPAR_SKIP_WEBHOOK_VERIFY || "") === "true";
+
+/** `PAGOPAR_LOG_TOKEN_DEBUG=0` desactiva logs de token (producción). Por defecto activo para depuración. */
+const PAGOPAR_LOG_TOKEN_DEBUG = String(process.env.PAGOPAR_LOG_TOKEN_DEBUG ?? "1").trim() !== "0";
+
+function maskPagoparPrivateKey(pk) {
+  const s = String(pk || "");
+  if (!s) return "(vacía)";
+  if (s.length <= 8) return `*** (${s.length} chars)`;
+  return `${s.slice(0, 4)}…${s.slice(-4)} (${s.length} chars)`;
+}
 
 function requireEnv() {
   const miss = [];
@@ -332,7 +343,27 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       return res.status(400).json({ error: "Total del pedido inválido" });
     }
 
+    const montoStrParaToken = phpStrvalFloatval(montoTotal);
+    if (PAGOPAR_LOG_TOKEN_DEBUG) {
+      console.info("[create-payment][token-debug] antes de SHA1 (fórmula PagoPar: private+id+strval(floatval(monto)))", {
+        private_key_enmascarada: maskPagoparPrivateKey(PAGOPAR_PRIVATE_KEY),
+        id_pedido_para_token: idPedidoComercio,
+        monto_total_numero_usado: montoTotal,
+        monto_str_strval_floatval: montoStrParaToken,
+        cadena_concat_longitud:
+          stripPagoparSecret(PAGOPAR_PRIVATE_KEY).length +
+          String(idPedidoComercio).length +
+          montoStrParaToken.length,
+      });
+    }
+
     const token = buildStartTransactionToken(PAGOPAR_PRIVATE_KEY, idPedidoComercio, montoTotal);
+
+    if (PAGOPAR_LOG_TOKEN_DEBUG) {
+      console.info("[create-payment][token-debug] token SHA1 generado", {
+        token_generado: token,
+      });
+    }
 
     const fechaMax = new Date();
     fechaMax.setDate(fechaMax.getDate() + 3);
@@ -360,6 +391,16 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     }
     if (PAGOPAR_WEBHOOK_URL) {
       orderPagopar.url_notificacion = PAGOPAR_WEBHOOK_URL;
+    }
+
+    if (PAGOPAR_LOG_TOKEN_DEBUG) {
+      console.info("[create-payment][token-debug] orderPagopar (debe coincidir con inputs del token)", {
+        id_pedido_comercio_enviado: orderPagopar.id_pedido_comercio,
+        monto_total_enviado: orderPagopar.monto_total,
+        token_enviado: orderPagopar.token,
+        coincide_id: orderPagopar.id_pedido_comercio === idPedidoComercio,
+        coincide_monto: orderPagopar.monto_total === montoTotal,
+      });
     }
 
     /**

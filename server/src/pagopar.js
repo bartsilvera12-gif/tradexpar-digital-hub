@@ -15,16 +15,30 @@ export function sha1Hex(str) {
 }
 
 /**
- * Misma fórmula que krugerdavid/laravel-pagopar (API 2.0 iniciar-transacción):
- * sha1(private_key + id_pedido_comercio + monto_entero)
- * El monto va como entero redondeado (string "1000"), no como float con decimales.
+ * Equivalente a PHP `strval(floatval($monto))` para concatenar en el token de iniciar-transacción.
+ * Debe usarse con el mismo valor numérico que se envía en `monto_total` del JSON.
+ */
+export function phpStrvalFloatval(monto) {
+  const n = Number(monto);
+  if (!Number.isFinite(n)) throw new Error(`Monto inválido: ${monto}`);
+  if (n < 0) throw new Error(`Monto inválido: ${monto}`);
+  const f = parseFloat(n);
+  const asInt = Math.round(f);
+  if (Math.abs(f - asInt) < 1e-9) {
+    return String(asInt);
+  }
+  let s = f.toFixed(10).replace(/0+$/, "").replace(/\.$/, "");
+  return s || "0";
+}
+
+/**
+ * Documentación PagoPar: sha1(private_key + idPedido + strval(floatval(monto_total)))
+ * idPedido = mismo valor que `id_pedido_comercio` en el cuerpo (como string en la concatenación).
  */
 export function buildStartTransactionToken(privateKey, idPedidoComercio, montoTotal) {
   const pk = stripPagoparSecret(privateKey);
   const idStr = String(idPedidoComercio);
-  const n = Math.round(Number(montoTotal));
-  if (!Number.isFinite(n) || n < 0) throw new Error(`Monto inválido: ${montoTotal}`);
-  const amountStr = String(n);
+  const amountStr = phpStrvalFloatval(montoTotal);
   return sha1Hex(`${pk}${idStr}${amountStr}`);
 }
 
