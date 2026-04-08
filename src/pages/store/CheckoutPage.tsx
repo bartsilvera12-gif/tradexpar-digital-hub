@@ -254,7 +254,7 @@ export default function CheckoutPage() {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="grid lg:grid-cols-3 gap-8 items-start max-w-5xl mx-auto lg:max-w-none">
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2">
             <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-5">
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold text-foreground">Datos del cliente</h2>
@@ -453,7 +453,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 lg:row-span-2">
             <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 lg:sticky lg:top-24 space-y-4">
               <div className="flex items-start justify-between gap-2">
                 <h2 className="font-semibold text-foreground">Resumen del pedido</h2>
@@ -468,15 +468,9 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {checkoutType === null ? (
+              {checkoutType === null && (
                 <p className="text-sm text-destructive">
                   Este carrito mezcla productos Tradexpar y Dropi. Deja solo un tipo de origen para continuar.
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {checkoutType === "dropi"
-                    ? "Pedido Dropi (todos los ítems son de catálogo Dropi)."
-                    : "Pedido Tradexpar (todos los ítems son propios)."}
                 </p>
               )}
 
@@ -503,23 +497,26 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
+
+          <div className="lg:col-span-2 space-y-4">
+            {error && (
+              <div className="p-4 rounded-xl bg-destructive/10 text-destructive text-sm">{error}</div>
+            )}
+            <button
+              type="submit"
+              disabled={loading || checkoutType === null}
+              className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
+                </>
+              ) : (
+                "Confirmar y pagar"
+              )}
+            </button>
+          </div>
         </div>
-
-        {error && <div className="p-4 rounded-xl bg-destructive/10 text-destructive text-sm">{error}</div>}
-
-        <button
-          type="submit"
-          disabled={loading || checkoutType === null}
-          className="w-full max-w-xl lg:max-w-none min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
-            </>
-          ) : (
-            "Confirmar y pagar"
-          )}
-        </button>
       </form>
     </div>
   );
