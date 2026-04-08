@@ -1,33 +1,41 @@
 import crypto from "node:crypto";
 
-/** Alineado a pagopar-sdk / Postman: parseFloat(monto).toString() sin ceros finales innecesarios. */
-export function normalizeAmountForSignature(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) throw new Error(`Monto inválido: ${amount}`);
-  let s = String(parseFloat(n.toFixed(2)));
-  if (s.includes(".")) {
-    s = s.replace(/\.?0+$/, "");
+/** Quita espacios, BOM y comillas típicas al pegar claves desde el panel PagoPar. */
+export function stripPagoparSecret(raw) {
+  let s = String(raw ?? "").trim();
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
   }
-  return s || "0";
+  return s;
 }
 
 export function sha1Hex(str) {
   return crypto.createHash("sha1").update(str, "utf8").digest("hex");
 }
 
+/**
+ * Misma fórmula que krugerdavid/laravel-pagopar (API 2.0 iniciar-transacción):
+ * sha1(private_key + id_pedido_comercio + monto_entero)
+ * El monto va como entero redondeado (string "1000"), no como float con decimales.
+ */
 export function buildStartTransactionToken(privateKey, idPedidoComercio, montoTotal) {
-  const norm = normalizeAmountForSignature(montoTotal);
-  return sha1Hex(`${privateKey}${String(idPedidoComercio)}${norm}`);
+  const pk = stripPagoparSecret(privateKey);
+  const idStr = String(idPedidoComercio);
+  const n = Math.round(Number(montoTotal));
+  if (!Number.isFinite(n) || n < 0) throw new Error(`Monto inválido: ${montoTotal}`);
+  const amountStr = String(n);
+  return sha1Hex(`${pk}${idStr}${amountStr}`);
 }
 
 export function buildGenericToken(privateKey, suffix) {
-  return sha1Hex(`${privateKey}${suffix}`);
+  return sha1Hex(`${stripPagoparSecret(privateKey)}${suffix}`);
 }
 
 /** Laravel krugerdavid/laravel-pagopar: sha1(private_key + hash) */
 export function verifyWebhookToken(privateKey, hashPedido, tokenRecibido) {
   if (!hashPedido || !tokenRecibido || !privateKey) return false;
-  const expected = sha1Hex(`${privateKey}${hashPedido}`);
+  const expected = sha1Hex(`${stripPagoparSecret(privateKey)}${hashPedido}`);
   try {
     const a = Buffer.from(expected, "utf8");
     const b = Buffer.from(String(tokenRecibido), "utf8");

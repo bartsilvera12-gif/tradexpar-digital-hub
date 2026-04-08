@@ -7,6 +7,7 @@ import {
   checkoutUrlFromHash,
   iniciarTransaccion,
   isPagoparRespuestaOk,
+  stripPagoparSecret,
   verifyWebhookToken,
 } from "./pagopar.js";
 
@@ -42,10 +43,12 @@ function resolveOrdersSchema() {
 const ORDERS_SCHEMA = resolveOrdersSchema();
 const API_KEY = process.env.API_PUBLIC_KEY || process.env.API_KEY || "";
 
-const PAGOPAR_PUBLIC_KEY =
-  process.env.PAGOPAR_PUBLIC_KEY || process.env.PAGOPAR_PUBLIC_TOKEN || "";
-const PAGOPAR_PRIVATE_KEY =
-  process.env.PAGOPAR_PRIVATE_KEY || process.env.PAGOPAR_PRIVATE_TOKEN || "";
+const PAGOPAR_PUBLIC_KEY = stripPagoparSecret(
+  process.env.PAGOPAR_PUBLIC_KEY || process.env.PAGOPAR_PUBLIC_TOKEN || ""
+);
+const PAGOPAR_PRIVATE_KEY = stripPagoparSecret(
+  process.env.PAGOPAR_PRIVATE_KEY || process.env.PAGOPAR_PRIVATE_TOKEN || ""
+);
 const PAGOPAR_FORMA_PAGO = Number(process.env.PAGOPAR_FORMA_PAGO || 9);
 const PAGOPAR_ITEM_CATEGORIA = String(process.env.PAGOPAR_ITEM_CATEGORIA || "909");
 const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
