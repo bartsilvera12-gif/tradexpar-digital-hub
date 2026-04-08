@@ -57,11 +57,8 @@ const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
   "https://www.pagopar.com/static/img/logo.png";
-/** Campos planos `vendedor_*` en cada ítem (documentación PagoPar iniciar-transacción 2.0). */
-const PAGOPAR_VENDEDOR_TELEFONO = String(process.env.PAGOPAR_VENDEDOR_TELEFONO || "").slice(0, 40);
+/** Solo `vendedor_direccion` en el ítem (esta cuenta PagoPar valida jsonb con 9 claves por línea). */
 const PAGOPAR_VENDEDOR_DIRECCION = String(process.env.PAGOPAR_VENDEDOR_DIRECCION || "").slice(0, 300);
-const PAGOPAR_VENDEDOR_DIR_REF = String(process.env.PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA || "").slice(0, 200);
-const PAGOPAR_VENDEDOR_COORDENADAS = String(process.env.PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS || "").slice(0, 80);
 const PAGOPAR_RETURN_URL =
   process.env.PAGOPAR_RETURN_URL ||
   "https://greenyellow-goat-534491.hostingersite.com/success?hash=($hash)";
@@ -185,7 +182,7 @@ const PAGOPAR_COMPRADOR_KEYS = [
   "direccion_referencia",
 ];
 
-/** Esquema oficial cada elemento de compras_items: 13 claves planas, sin objeto `vendedor`. */
+/** Cuenta PagoPar: exactamente 9 claves por ítem (sin descripcion ni más vendedor_*). */
 const PAGOPAR_ITEM_TOP_KEYS = [
   "ciudad",
   "nombre",
@@ -193,13 +190,9 @@ const PAGOPAR_ITEM_TOP_KEYS = [
   "categoria",
   "public_key",
   "url_imagen",
-  "descripcion",
   "id_producto",
   "precio_total",
-  "vendedor_telefono",
   "vendedor_direccion",
-  "vendedor_direccion_referencia",
-  "vendedor_direccion_coordenadas",
 ];
 
 function assertPagoparCompradorShape(comprador) {
@@ -225,7 +218,7 @@ function assertPagoparCompradorShape(comprador) {
 function assertPagoparCompraItemShape(item) {
   const keys = new Set(Object.keys(item));
   if (keys.has("vendedor")) {
-    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; usá campos planos vendedor_*.");
+    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; solo la clave plana vendedor_direccion.");
   }
   if (keys.size !== PAGOPAR_ITEM_TOP_KEYS.length) {
     throw new Error(`[pagopar] compras_items: se esperaban ${PAGOPAR_ITEM_TOP_KEYS.length} claves de primer nivel, hay ${keys.size}.`);
@@ -245,10 +238,7 @@ function assertPagoparCompraItemShape(item) {
 function buildPagoparCompraItem(orderId, montoTotal) {
   const shortId = orderId.slice(0, 8);
   const nombre = `Pedido Tradexpar ${shortId}`;
-  const tel = String(PAGOPAR_VENDEDOR_TELEFONO || "").trim();
   const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim() || "Tradexpar";
-  const ref = String(PAGOPAR_VENDEDOR_DIR_REF || "").trim();
-  const coo = String(PAGOPAR_VENDEDOR_COORDENADAS || "").trim();
   return {
     ciudad: PAGOPAR_ITEM_CIUDAD,
     nombre,
@@ -256,13 +246,9 @@ function buildPagoparCompraItem(orderId, montoTotal) {
     categoria: PAGOPAR_ITEM_CATEGORIA,
     public_key: PAGOPAR_PUBLIC_KEY,
     url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
-    descripcion: `Tradexpar — ${nombre}`,
     id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
     precio_total: montoTotal,
-    vendedor_telefono: tel,
     vendedor_direccion: dir,
-    vendedor_direccion_referencia: ref,
-    vendedor_direccion_coordenadas: coo,
   };
 }
 
