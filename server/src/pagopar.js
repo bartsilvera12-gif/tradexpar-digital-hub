@@ -1,5 +1,12 @@
 import crypto from "node:crypto";
 
+/** Hosts documentados para checkout / API de medios de pago (producción). */
+export const PAGOPAR_OFFICIAL_PRODUCTION_API_BASE = "https://api.pagopar.com";
+export const PAGOPAR_OFFICIAL_PRODUCTION_CHECKOUT_BASE = "https://www.pagopar.com/pagos";
+
+/** Ruta oficial iniciar transacción 2.0 (misma en ambos entornos si PagoPar te da otro host base). */
+export const PAGOPAR_INICIAR_TRANSACCION_PATH = "/api/comercios/2.0/iniciar-transaccion";
+
 /** Quita espacios, BOM y comillas típicas al pegar claves desde el panel PagoPar. */
 export function stripPagoparSecret(raw) {
   let s = String(raw ?? "").trim();
@@ -8,6 +15,94 @@ export function stripPagoparSecret(raw) {
     s = s.slice(1, -1).trim();
   }
   return s;
+}
+
+/** Vista parcial de claves en logs (pública o privada). */
+export function maskPagoparCredential(key) {
+  const s = String(key || "");
+  if (!s) return "(vacía)";
+  if (s.length <= 8) return `*** (${s.length} chars)`;
+  return `${s.slice(0, 4)}…${s.slice(-4)} (${s.length} chars)`;
+}
+
+function trimBaseUrl(u) {
+  return String(u || "")
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+/**
+ * `production` (default) | `staging`.
+ * staging: dev, test, desarrollo
+ */
+export function normalizePagoparEnv(raw) {
+  const s = String(raw || "production").trim().toLowerCase();
+  if (["staging", "stage", "development", "dev", "test", "desarrollo"].includes(s)) {
+    return "staging";
+  }
+  return "production";
+}
+
+let cachedPagoparEndpoints = null;
+
+/**
+ * Resuelve API + checkout según PAGOPAR_ENV sin mezclar reglas:
+ *
+ * - **production**: por defecto hosts oficiales documentados. Opcional override con
+ *   `PAGOPAR_API_BASE_URL` / `PAGOPAR_CHECKOUT_BASE_URL` (mismo par para tu despliegue).
+ * - **staging**: obligatorio definir `PAGOPAR_API_BASE_URL` y `PAGOPAR_CHECKOUT_BASE_URL`
+ *   (URLs que te indique soporte PagoPar), **o** `PAGOPAR_STAGING_USE_OFFICIAL_HOSTS=1` si
+ *   probás con credenciales de prueba contra los mismos hosts públicos (caso habitual en la KB).
+ */
+export function getPagoparEndpoints() {
+  if (cachedPagoparEndpoints) return cachedPagoparEndpoints;
+
+  const env = normalizePagoparEnv(process.env.PAGOPAR_ENV);
+  const apiOverride = trimBaseUrl(process.env.PAGOPAR_API_BASE_URL);
+  const checkoutOverride = trimBaseUrl(process.env.PAGOPAR_CHECKOUT_BASE_URL);
+  const stagingOfficial =
+    String(process.env.PAGOPAR_STAGING_USE_OFFICIAL_HOSTS || "").trim() === "1";
+
+  if (env === "production") {
+    const apiBase = apiOverride || PAGOPAR_OFFICIAL_PRODUCTION_API_BASE;
+    const checkoutBase = checkoutOverride || PAGOPAR_OFFICIAL_PRODUCTION_CHECKOUT_BASE;
+    cachedPagoparEndpoints = {
+      env: "production",
+      apiBase,
+      checkoutBase,
+      iniciarTransaccionUrl: `${apiBase}${PAGOPAR_INICIAR_TRANSACCION_PATH}`,
+      stagingUsesOfficialHosts: false,
+    };
+    return cachedPagoparEndpoints;
+  }
+
+  if (apiOverride && checkoutOverride) {
+    cachedPagoparEndpoints = {
+      env: "staging",
+      apiBase: apiOverride,
+      checkoutBase: checkoutOverride,
+      iniciarTransaccionUrl: `${apiOverride}${PAGOPAR_INICIAR_TRANSACCION_PATH}`,
+      stagingUsesOfficialHosts: false,
+    };
+    return cachedPagoparEndpoints;
+  }
+
+  if (stagingOfficial) {
+    cachedPagoparEndpoints = {
+      env: "staging",
+      apiBase: PAGOPAR_OFFICIAL_PRODUCTION_API_BASE,
+      checkoutBase: PAGOPAR_OFFICIAL_PRODUCTION_CHECKOUT_BASE,
+      iniciarTransaccionUrl: `${PAGOPAR_OFFICIAL_PRODUCTION_API_BASE}${PAGOPAR_INICIAR_TRANSACCION_PATH}`,
+      stagingUsesOfficialHosts: true,
+    };
+    return cachedPagoparEndpoints;
+  }
+
+  throw new Error(
+    "[pagopar] PAGOPAR_ENV=staging: configurá ambas URLs (PAGOPAR_API_BASE_URL y PAGOPAR_CHECKOUT_BASE_URL) " +
+      "según lo que te indique PagoPar, o bien PAGOPAR_STAGING_USE_OFFICIAL_HOSTS=1 si usás credenciales de prueba " +
+      "contra los hosts oficiales api.pagopar.com / www.pagopar.com."
+  );
 }
 
 export function sha1Hex(str) {
@@ -59,8 +154,6 @@ export function verifyWebhookToken(privateKey, hashPedido, tokenRecibido) {
   }
 }
 
-const PAGOPAR_API = "https://api.pagopar.com";
-
 /** PagoPar a veces devuelve `respuesta` como string `"false"` / `"true"`. */
 export function isPagoparRespuestaOk(respuesta) {
   if (respuesta === true) return true;
@@ -69,13 +162,13 @@ export function isPagoparRespuestaOk(respuesta) {
 }
 
 export async function iniciarTransaccion(payload) {
-  const url = `${PAGOPAR_API}/api/comercios/2.0/iniciar-transaccion`;
+  const { iniciarTransaccionUrl } = getPagoparEndpoints();
   const headers = { Accept: "application/json", "Content-Type": "application/json" };
   const bodyStr = JSON.stringify(payload);
-  console.info("[pagopar][debug] POST", url);
+  console.info("[pagopar][debug] POST", iniciarTransaccionUrl);
   console.info("[pagopar][debug] headers", JSON.stringify(headers));
   console.info("[pagopar][debug] body (string length)", bodyStr.length, bodyStr.slice(0, 8000));
-  const res = await fetch(url, {
+  const res = await fetch(iniciarTransaccionUrl, {
     method: "POST",
     headers,
     body: bodyStr,
@@ -95,5 +188,7 @@ export async function iniciarTransaccion(payload) {
 }
 
 export function checkoutUrlFromHash(hashPedido) {
-  return `https://www.pagopar.com/pagos/${hashPedido}`;
+  const { checkoutBase } = getPagoparEndpoints();
+  const h = String(hashPedido || "").replace(/^\/+/, "");
+  return `${checkoutBase.replace(/\/+$/, "")}/${h}`;
 }

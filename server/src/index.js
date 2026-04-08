@@ -5,8 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 import {
   buildStartTransactionToken,
   checkoutUrlFromHash,
+  getPagoparEndpoints,
   iniciarTransaccion,
   isPagoparRespuestaOk,
+  maskPagoparCredential,
   phpStrvalFloatval,
   stripPagoparSecret,
   verifyWebhookToken,
@@ -82,12 +84,8 @@ const PAGOPAR_SKIP_WEBHOOK_VERIFY = String(process.env.PAGOPAR_SKIP_WEBHOOK_VERI
 /** `PAGOPAR_LOG_TOKEN_DEBUG=0` desactiva logs de token (producción). Por defecto activo para depuración. */
 const PAGOPAR_LOG_TOKEN_DEBUG = String(process.env.PAGOPAR_LOG_TOKEN_DEBUG ?? "1").trim() !== "0";
 
-function maskPagoparPrivateKey(pk) {
-  const s = String(pk || "");
-  if (!s) return "(vacía)";
-  if (s.length <= 8) return `*** (${s.length} chars)`;
-  return `${s.slice(0, 4)}…${s.slice(-4)} (${s.length} chars)`;
-}
+/** `PAGOPAR_LOG_ENDPOINTS=0` desactiva logs de entorno/URLs PagoPar al crear pago. */
+const PAGOPAR_LOG_ENDPOINTS = String(process.env.PAGOPAR_LOG_ENDPOINTS ?? "1").trim() !== "0";
 
 function requireEnv() {
   const miss = [];
@@ -316,6 +314,20 @@ app.get("/health", (_req, res) => {
   } catch {
     supabaseHost = "";
   }
+  let pagoparHealth = null;
+  try {
+    const ep = getPagoparEndpoints();
+    pagoparHealth = {
+      pagopar_env: ep.env,
+      pagopar_api_base: ep.apiBase,
+      pagopar_checkout_base: ep.checkoutBase,
+      pagopar_iniciar_transaccion_url: ep.iniciarTransaccionUrl,
+      pagopar_staging_official_hosts: ep.stagingUsesOfficialHosts,
+    };
+  } catch (e) {
+    pagoparHealth = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   res.json({
     ok: true,
     service: "tradexpar-payments-api",
@@ -324,6 +336,7 @@ app.get("/health", (_req, res) => {
     supabase_url_configured: Boolean(SUPABASE_URL),
     rest_v1_orders_hint: SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/orders` : null,
     createClient_uses_db_schema: true,
+    pagopar: pagoparHealth,
   });
 });
 
@@ -398,7 +411,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const montoStrParaToken = phpStrvalFloatval(montoTotal);
     if (PAGOPAR_LOG_TOKEN_DEBUG) {
       console.info("[create-payment][token-debug] antes de SHA1 (fórmula PagoPar: private+id+strval(floatval(monto)))", {
-        private_key_enmascarada: maskPagoparPrivateKey(PAGOPAR_PRIVATE_KEY),
+        private_key_enmascarada: maskPagoparCredential(PAGOPAR_PRIVATE_KEY),
         id_pedido_para_token: idPedidoComercio,
         monto_total_numero_usado: montoTotal,
         monto_str_strval_floatval: montoStrParaToken,
@@ -479,6 +492,19 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     if (upErr) throw upErr;
 
     console.log("[pagopar][payload_final]", JSON.stringify(payload, null, 2));
+
+    if (PAGOPAR_LOG_ENDPOINTS) {
+      const ep = getPagoparEndpoints();
+      console.info("[create-payment][pagopar-endpoints]", {
+        pagopar_env_resuelto: ep.env,
+        api_base: ep.apiBase,
+        checkout_base: ep.checkoutBase,
+        iniciar_transaccion_url: ep.iniciarTransaccionUrl,
+        staging_usa_hosts_oficiales: ep.stagingUsesOfficialHosts,
+        public_key_enmascarada: maskPagoparCredential(PAGOPAR_PUBLIC_KEY),
+        private_key_enmascarada: maskPagoparCredential(PAGOPAR_PRIVATE_KEY),
+      });
+    }
 
     const pp = await iniciarTransaccion(payload);
 
@@ -686,6 +712,17 @@ app.post("/api/pagopar/webhook", async (req, res) => {
 });
 
 requireEnv();
+try {
+  const ep = getPagoparEndpoints();
+  console.info(
+    `[payments-api] PagoPar entorno="${ep.env}" API=${ep.apiBase} checkout=${ep.checkoutBase}` +
+      (ep.stagingUsesOfficialHosts ? " (staging: credenciales de prueba + hosts oficiales)" : "")
+  );
+} catch (e) {
+  console.error("[payments-api] Config PagoPar:", e instanceof Error ? e.message : e);
+  process.exit(1);
+}
+
 app.listen(PORT, () => {
   console.log(`[payments-api] listening on :${PORT} (orders → PostgREST schema "${ORDERS_SCHEMA}")`);
 });
