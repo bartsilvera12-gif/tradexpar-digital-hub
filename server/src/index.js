@@ -12,16 +12,21 @@ import {
   verifyWebhookToken,
 } from "./pagopar.js";
 
+/**
+ * Base del proyecto PostgREST (sin `/rest/v1`). Si pegás la URL del curl completo, se quita el sufijo.
+ */
 function normalizeSupabaseUrl(raw) {
-  const u = (raw || "").trim();
+  let u = (raw || "").trim();
   if (!u) return "";
-  if (/^https?:\/\//i.test(u)) return u.replace(/\/+$/, "");
-  return `https://${u.replace(/\/+$/, "")}`;
+  if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+  u = u.replace(/\/+$/, "");
+  u = u.replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/, "");
+  return u;
 }
 
 const PORT = Number(process.env.PORT || 8787);
 const SUPABASE_URL = normalizeSupabaseUrl(process.env.SUPABASE_URL);
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
 /**
  * Schema PostgREST donde vive `orders` (tabla de la tienda). No debe ser `public` en este proyecto.
@@ -42,6 +47,8 @@ function resolveOrdersSchema() {
 }
 
 const ORDERS_SCHEMA = resolveOrdersSchema();
+/** `SUPABASE_LOG_DEBUG=0` silencia logs Supabase. Por defecto activo para alinear con curl / depuración. */
+const SUPABASE_LOG_DEBUG = String(process.env.SUPABASE_LOG_DEBUG ?? "1").trim() !== "0";
 const API_KEY = process.env.API_PUBLIC_KEY || process.env.API_KEY || "";
 
 const PAGOPAR_PUBLIC_KEY = stripPagoparSecret(
@@ -94,11 +101,35 @@ function requireEnv() {
   }
 }
 
+let supabaseAdminSingleton = null;
+
+/**
+ * Un solo cliente con `db.schema` = PostgREST `Accept-Profile` / `Content-Profile` (mismo efecto que el curl con tradexpar).
+ * Además `orders(sb)` encadena `.schema(ORDERS_SCHEMA)` por claridad.
+ */
 function supabaseAdmin() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    /** Sin `db.schema` global: todas las lecturas/escrituras de pedidos pasan por `orders()` → `.schema(ORDERS_SCHEMA)` para fijar `Accept-Profile` y evitar caer en `public`. */
-  });
+  if (!supabaseAdminSingleton) {
+    supabaseAdminSingleton = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      db: { schema: ORDERS_SCHEMA },
+    });
+    if (SUPABASE_LOG_DEBUG) {
+      let host = "";
+      try {
+        host = SUPABASE_URL ? new URL(SUPABASE_URL).host : "";
+      } catch {
+        host = "";
+      }
+      console.info("[payments-api][supabase-client] createClient inicial (singleton)", {
+        supabase_url_efectiva: SUPABASE_URL,
+        host,
+        rest_v1_base: SUPABASE_URL ? `${SUPABASE_URL}/rest/v1` : "",
+        db_schema_en_createClient: ORDERS_SCHEMA,
+        service_role_key_longitud: SUPABASE_SERVICE_ROLE_KEY.length,
+      });
+    }
+  }
+  return supabaseAdminSingleton;
 }
 
 /** Siempre `ORDERS_SCHEMA` + `orders` → PostgREST `Accept-Profile` / ruta correcta (p. ej. tradexpar.orders). */
@@ -290,6 +321,9 @@ app.get("/health", (_req, res) => {
     service: "tradexpar-payments-api",
     orders_schema: ORDERS_SCHEMA,
     supabase_host: supabaseHost,
+    supabase_url_configured: Boolean(SUPABASE_URL),
+    rest_v1_orders_hint: SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/orders` : null,
+    createClient_uses_db_schema: true,
   });
 });
 
@@ -314,14 +348,32 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     });
     const sb = supabaseAdmin();
 
+    const selectCols =
+      "id, total, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, status";
+    if (SUPABASE_LOG_DEBUG) {
+      const enc = encodeURIComponent;
+      console.info("[create-payment][supabase-debug] lectura orders (equivalente curl Accept-Profile / Content-Profile)", {
+        supabase_url: SUPABASE_URL,
+        schema_efectivo: ORDERS_SCHEMA,
+        createClient_db_schema: ORDERS_SCHEMA,
+        cadena_orders: `schema("${ORDERS_SCHEMA}").from("orders")`,
+        get_url_equivalente: `${SUPABASE_URL}/rest/v1/orders?select=${enc(selectCols)}&id=eq.${enc(orderId)}`,
+        headers_esperados_como_curl: {
+          apikey: "(service_role)",
+          Authorization: "Bearer (service_role)",
+          "Accept-Profile": ORDERS_SCHEMA,
+          "Content-Profile": ORDERS_SCHEMA,
+        },
+      });
+    }
+
     const { data: order, error: fetchErr } = await orders(sb)
-      .select(
-        "id, total, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, status"
-      )
+      .select(selectCols)
       .eq("id", orderId)
       .maybeSingle();
 
     if (fetchErr) {
+      console.error("[create-payment][supabase-debug] error completo supabase-js:", JSON.stringify(fetchErr, null, 2));
       console.error("[create-payment][debug] error Supabase al leer pedido:", fetchErr);
       throw fetchErr;
     }
