@@ -25,8 +25,8 @@ const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 type CheckoutForm = {
-  firstName: string;
-  lastName: string;
+  /** Nombre y apellido en un solo campo (como en el diseño de checkout). */
+  fullName: string;
   email: string;
   document: string;
   phone: string;
@@ -47,14 +47,6 @@ function legacyParaguayCityOptions(): ParaguayCity[] {
   }));
 }
 
-function splitDisplayName(full: string): { first: string; last: string } {
-  const t = full.trim();
-  if (!t) return { first: "", last: "" };
-  const i = t.indexOf(" ");
-  if (i === -1) return { first: t, last: "" };
-  return { first: t.slice(0, i), last: t.slice(i + 1).trim() };
-}
-
 export default function CheckoutPage() {
   const { items, clearCart } = useCart();
   const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
@@ -62,8 +54,7 @@ export default function CheckoutPage() {
   const { user } = useCustomerAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState<CheckoutForm>({
-    firstName: "",
-    lastName: "",
+    fullName: "",
     email: "",
     document: "",
     phone: "",
@@ -116,12 +107,10 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!user) return;
-    const { first, last } = splitDisplayName(user.name || "");
     setForm((prev) => ({
       ...prev,
       email: user.email,
-      firstName: first || prev.firstName,
-      lastName: last || prev.lastName,
+      fullName: (user.name || "").trim() || prev.fullName,
     }));
     const LOC_MS = 14_000;
     let cancelled = false;
@@ -162,8 +151,12 @@ export default function CheckoutPage() {
       if (!form.email.trim()) {
         throw new Error("El email es obligatorio.");
       }
-      if (!form.firstName.trim() || !form.lastName.trim()) {
-        throw new Error("Nombre y apellido son obligatorios.");
+      const fullName = form.fullName.trim();
+      if (fullName.length < 3) {
+        throw new Error("El nombre es obligatorio.");
+      }
+      if (!/\s/.test(fullName)) {
+        throw new Error("Ingresá nombre y apellido (al menos dos palabras).");
       }
       if (!form.document.trim()) {
         throw new Error("El número de CI / RUC es obligatorio.");
@@ -195,8 +188,6 @@ export default function CheckoutPage() {
         });
         customerLocationId = created.id;
       }
-
-      const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
 
       const order = await tradexpar.createOrder({
         items: items.map((i) => ({
@@ -251,33 +242,38 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 sm:py-10 max-w-6xl min-w-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Checkout</h1>
-        <nav className="flex items-center gap-2 text-sm" aria-label="Pasos del checkout">
-          <span className="rounded-full bg-primary text-primary-foreground px-3 py-1 font-medium">
-            Envío
-          </span>
-          <span className="text-muted-foreground" aria-hidden>
-            →
-          </span>
-          <span className="rounded-full bg-muted text-muted-foreground px-3 py-1 font-medium">
-            Revisión y pagos
-          </span>
-        </nav>
-      </div>
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-6 sm:mb-8">Checkout</h1>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="grid lg:grid-cols-3 gap-8 items-start">
+        <div className="grid lg:grid-cols-3 gap-8 items-start max-w-5xl mx-auto lg:max-w-none">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-5">
               <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold text-foreground">Dirección de envío</h2>
+                <h2 className="text-lg font-semibold text-foreground">Datos del cliente</h2>
+                <p className="text-xs text-muted-foreground">
+                  Completá los datos para el envío, la facturación y el pago con PagoPar.
+                </p>
                 {!citiesFromDb && (
                   <p className="text-xs text-amber-700 dark:text-amber-400/90">
                     No se cargaron las ciudades desde la base: usando lista corta PagoPar. Ejecutá en Supabase{" "}
                     <code className="text-[0.7rem] rounded bg-muted px-1">tradexpar_paraguay_cities.sql</code> y el seed.
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Nombre <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.fullName}
+                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  placeholder="Nombre y apellido"
+                  autoComplete="name"
+                  className={fieldCls}
+                />
               </div>
 
               <div>
@@ -295,64 +291,34 @@ export default function CheckoutPage() {
                 <p className="text-xs text-muted-foreground mt-1.5">Podés crear una cuenta después de comprar.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Nombre <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={form.firstName}
-                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                    autoComplete="given-name"
-                    className={fieldCls}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Apellido <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={form.lastName}
-                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                    autoComplete="family-name"
-                    className={fieldCls}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Teléfono <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="Ej. 0981 123456"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  className={fieldCls}
+                />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Número CI / RUC <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={form.document}
-                    onChange={(e) => setForm({ ...form, document: e.target.value })}
-                    autoComplete="off"
-                    className={fieldCls}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Teléfono <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="09xx123456"
-                    autoComplete="tel"
-                    inputMode="tel"
-                    className={fieldCls}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Número CI / RUC <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.document}
+                  onChange={(e) => setForm({ ...form, document: e.target.value })}
+                  autoComplete="off"
+                  className={fieldCls}
+                />
               </div>
 
               <div>
@@ -400,7 +366,9 @@ export default function CheckoutPage() {
 
               {user && locations.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Ubicaciones guardadas</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Ubicaciones guardadas <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </label>
                   <Select
                     value={selectedLocationId || "__none"}
                     onValueChange={(v) => {
@@ -430,7 +398,7 @@ export default function CheckoutPage() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Enlace a Google Maps <span className="text-muted-foreground font-normal">(opcional)</span>
+                  URL de ubicación <span className="text-muted-foreground font-normal">(opcional)</span>
                 </label>
                 <input
                   type="url"
@@ -441,7 +409,7 @@ export default function CheckoutPage() {
                   className={fieldCls}
                 />
                 <p className="text-xs text-muted-foreground mt-1.5">
-                  Si no pegás un enlace, usamos tu dirección y ciudad para generar uno en el pedido.
+                  Si lo dejás vacío, armamos el enlace con tu dirección y ciudad.
                 </p>
               </div>
 
@@ -454,7 +422,7 @@ export default function CheckoutPage() {
                     type="text"
                     value={form.locationLabel}
                     onChange={(e) => setForm({ ...form, locationLabel: e.target.value })}
-                    placeholder="Casa, Oficina…"
+                    placeholder="Casa, Oficina, Depósito…"
                     className={fieldCls}
                   />
                 </div>
