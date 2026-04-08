@@ -49,10 +49,7 @@ const PAGOPAR_PRIVATE_KEY =
 const PAGOPAR_FORMA_PAGO = Number(process.env.PAGOPAR_FORMA_PAGO || 9);
 const PAGOPAR_ITEM_CATEGORIA = String(process.env.PAGOPAR_ITEM_CATEGORIA || "909");
 const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
-/**
- * PagoPar valida `comprador` como jsonb con exactamente 9 claves (error "cantidad no es 9" si sobran).
- * Incluye `ciudad` (string); no enviar `ciudad_id`, `ruc` ni `razon_social` en el mismo objeto.
- */
+/** Ciudad comprador: solo `ciudad` string; nunca `ciudad_id`. `ruc` / `razon_social` vacíos si no aplica. */
 const PAGOPAR_COMPRADOR_CIUDAD = String(
   process.env.PAGOPAR_COMPRADOR_CIUDAD || process.env.PAGOPAR_ITEM_CIUDAD || "1"
 ).trim() || "1";
@@ -60,7 +57,7 @@ const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 
 const PAGOPAR_ITEM_IMAGEN_URL =
   process.env.PAGOPAR_ITEM_IMAGEN_URL ||
   "https://www.pagopar.com/static/img/logo.png";
-/** Valores del objeto anidado `compras_items[].vendedor` (no usar claves planas `vendedor_*`). */
+/** Campos planos `vendedor_*` en cada ítem (documentación PagoPar iniciar-transacción 2.0). */
 const PAGOPAR_VENDEDOR_TELEFONO = String(process.env.PAGOPAR_VENDEDOR_TELEFONO || "").slice(0, 40);
 const PAGOPAR_VENDEDOR_DIRECCION = String(process.env.PAGOPAR_VENDEDOR_DIRECCION || "").slice(0, 300);
 const PAGOPAR_VENDEDOR_DIR_REF = String(process.env.PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA || "").slice(0, 200);
@@ -150,7 +147,7 @@ function extractPagoparHashFromIniciarResult(body) {
   return null;
 }
 
-/** Solo `ciudad` string (p. ej. "1"). Nunca `ciudad_id` ni `ruc` / `razon_social` en este jsonb. */
+/** Esquema oficial comprador: 11 claves fijas (orden estable para inspección en logs). */
 function buildPagoparCompradorFromOrder(order) {
   const nombre = (order.customer_name || "Cliente").toString().slice(0, 200);
   const email = (order.customer_email || "sin-email@tradexpar.local").toString().slice(0, 200);
@@ -160,31 +157,35 @@ function buildPagoparCompradorFromOrder(order) {
   const ciudad = String(order.customer_city_code || PAGOPAR_COMPRADOR_CIUDAD).trim() || "1";
   const direccion = (order.customer_address || "").toString().slice(0, 200);
   return {
-    nombre,
+    ruc: "",
     email,
     ciudad,
+    nombre,
     telefono,
-    tipo_documento: "CI",
-    documento,
     direccion,
-    direccion_referencia: "",
+    documento,
     coordenadas: "",
+    razon_social: "",
+    tipo_documento: "CI",
+    direccion_referencia: "",
   };
 }
 
 const PAGOPAR_COMPRADOR_KEYS = [
-  "nombre",
+  "ruc",
   "email",
   "ciudad",
+  "nombre",
   "telefono",
-  "tipo_documento",
-  "documento",
   "direccion",
-  "direccion_referencia",
+  "documento",
   "coordenadas",
+  "razon_social",
+  "tipo_documento",
+  "direccion_referencia",
 ];
 
-/** PagoPar exige `vendedor_direccion` (y resto) como claves planas en el ítem; el objeto anidado `vendedor` no alcanza. */
+/** Esquema oficial cada elemento de compras_items: 13 claves planas, sin objeto `vendedor`. */
 const PAGOPAR_ITEM_TOP_KEYS = [
   "ciudad",
   "nombre",
@@ -192,6 +193,7 @@ const PAGOPAR_ITEM_TOP_KEYS = [
   "categoria",
   "public_key",
   "url_imagen",
+  "descripcion",
   "id_producto",
   "precio_total",
   "vendedor_telefono",
@@ -223,10 +225,7 @@ function assertPagoparCompradorShape(comprador) {
 function assertPagoparCompraItemShape(item) {
   const keys = new Set(Object.keys(item));
   if (keys.has("vendedor")) {
-    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; usá vendedor_* planos.");
-  }
-  if (keys.has("descripcion")) {
-    throw new Error("[pagopar] compras_items: no enviar descripcion en el ítem.");
+    throw new Error("[pagopar] compras_items: no enviar objeto vendedor anidado; usá campos planos vendedor_*.");
   }
   if (keys.size !== PAGOPAR_ITEM_TOP_KEYS.length) {
     throw new Error(`[pagopar] compras_items: se esperaban ${PAGOPAR_ITEM_TOP_KEYS.length} claves de primer nivel, hay ${keys.size}.`);
@@ -243,23 +242,25 @@ function assertPagoparCompraItemShape(item) {
   }
 }
 
-/** Sin `descripcion`. `vendedor_*` planos (requisito real de la API; ver mensaje vendedor_direccion). */
 function buildPagoparCompraItem(orderId, montoTotal) {
+  const shortId = orderId.slice(0, 8);
+  const nombre = `Pedido Tradexpar ${shortId}`;
   const tel = String(PAGOPAR_VENDEDOR_TELEFONO || "").trim();
-  const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim();
+  const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim() || "Tradexpar";
   const ref = String(PAGOPAR_VENDEDOR_DIR_REF || "").trim();
   const coo = String(PAGOPAR_VENDEDOR_COORDENADAS || "").trim();
   return {
     ciudad: PAGOPAR_ITEM_CIUDAD,
-    nombre: `Pedido Tradexpar ${orderId.slice(0, 8)}`,
+    nombre,
     cantidad: 1,
     categoria: PAGOPAR_ITEM_CATEGORIA,
     public_key: PAGOPAR_PUBLIC_KEY,
     url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
+    descripcion: `Tradexpar — ${nombre}`,
     id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
     precio_total: montoTotal,
     vendedor_telefono: tel,
-    vendedor_direccion: dir || "Tradexpar",
+    vendedor_direccion: dir,
     vendedor_direccion_referencia: ref,
     vendedor_direccion_coordenadas: coo,
   };
@@ -373,10 +374,9 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     }
 
     /**
-     * Algunas integraciones PHP envuelven el pedido en `orderPagopar`. Por defecto se manda plano (como antes);
-     * si seguís viendo errores de estructura, probá `PAGOPAR_ORDER_WRAPPER=1` en el .env del server.
+     * El SDK PHP suele envolver en `orderPagopar`. Por defecto activo; desactivar con `PAGOPAR_ORDER_WRAPPER=0`.
      */
-    const useOrderWrapper = String(process.env.PAGOPAR_ORDER_WRAPPER || "").trim() === "1";
+    const useOrderWrapper = String(process.env.PAGOPAR_ORDER_WRAPPER ?? "1").trim() !== "0";
     const payload = useOrderWrapper ? { orderPagopar } : orderPagopar;
 
     console.info("[create-payment][pagopar shape]", {
@@ -395,6 +395,8 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       .eq("id", orderId);
 
     if (upErr) throw upErr;
+
+    console.log("[pagopar][payload_final]", JSON.stringify(payload, null, 2));
 
     const pp = await iniciarTransaccion(payload);
 
