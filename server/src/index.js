@@ -300,7 +300,7 @@ const PAGOPAR_COMPRADOR_KEYS = [
   "direccion_referencia",
 ];
 
-/** Cuenta PagoPar: exactamente 9 claves por ítem (sin descripcion ni más vendedor_*). */
+/** Claves por línea en compras_items (incluye precio_unitario en PYG entero). */
 const PAGOPAR_ITEM_TOP_KEYS = [
   "ciudad",
   "nombre",
@@ -310,6 +310,7 @@ const PAGOPAR_ITEM_TOP_KEYS = [
   "url_imagen",
   "id_producto",
   "precio_total",
+  "precio_unitario",
   "vendedor_direccion",
 ];
 
@@ -351,21 +352,53 @@ function assertPagoparCompraItemShape(item) {
       throw new Error(`[pagopar] compras_items: clave no permitida "${k}".`);
     }
   }
+  const cantidad = Math.round(Number(item.cantidad) || 0);
+  const precioTotal = Math.round(Number(item.precio_total) || 0);
+  const pu = item.precio_unitario;
+  if (typeof pu !== "number" || !Number.isInteger(pu)) {
+    throw new Error("[pagopar] compras_items: precio_unitario debe ser number entero (PYG).");
+  }
+  if (cantidad <= 0) {
+    throw new Error("[pagopar] compras_items: cantidad inválida.");
+  }
+  const esperadoUnit = Math.round(precioTotal / cantidad);
+  if (pu !== esperadoUnit) {
+    throw new Error(
+      `[pagopar] compras_items: precio_unitario debe ser round(precio_total/cantidad); esperado ${esperadoUnit}, recibido ${pu}.`
+    );
+  }
 }
 
-function buildPagoparCompraItem(orderId, montoTotal) {
+/** Suma de precio_total de todas las líneas debe coincidir con monto_total del pedido PagoPar. */
+function assertComprasItemsPrecioTotalSum(compras_items, monto_total) {
+  const sum = compras_items.reduce((acc, it) => acc + Math.round(Number(it.precio_total) || 0), 0);
+  if (sum !== monto_total) {
+    throw new Error(
+      `[pagopar] monto_total (${monto_total}) no coincide con la suma de precio_total de compras_items (${sum}).`
+    );
+  }
+}
+
+/**
+ * Una línea de compras_items. precio_unitario = round(precio_total / cantidad), PYG entero, tipo number.
+ */
+function buildPagoparCompraItem(orderId, precioTotalLinea, cantidadLinea = 1) {
   const shortId = orderId.slice(0, 8);
   const nombre = `Pedido Tradexpar ${shortId}`;
   const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim() || "Tradexpar";
+  const cantidad = Math.max(1, Math.round(Number(cantidadLinea) || 1));
+  const precio_total = Math.round(Number(precioTotalLinea) || 0);
+  const precio_unitario = Math.round(precio_total / cantidad);
   return {
     ciudad: PAGOPAR_ITEM_CIUDAD,
     nombre,
-    cantidad: 1,
+    cantidad,
     categoria: PAGOPAR_ITEM_CATEGORIA,
     public_key: PAGOPAR_PUBLIC_KEY,
     url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
     id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
-    precio_total: montoTotal,
+    precio_total,
+    precio_unitario,
     vendedor_direccion: dir,
   };
 }
@@ -513,9 +546,10 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const fecha_maxima_pago = fechaMax.toISOString().slice(0, 19).replace("T", " ");
 
     const comprador = buildPagoparCompradorFromOrder(order);
-    const compras_items = [buildPagoparCompraItem(orderId, montoTotal)];
+    const compras_items = [buildPagoparCompraItem(orderId, montoTotal, 1)];
     assertPagoparCompradorShape(comprador);
     assertPagoparCompraItemShape(compras_items[0]);
+    assertComprasItemsPrecioTotalSum(compras_items, montoTotal);
 
     const pagoparBody = {
       token,
