@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "sobre:split-collage": "python scripts/split-sobre-collage.py",
+    "data:paraguay-cities": "node scripts/generate-paraguay-cities-sql.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "supabase:config-push": "supabase config push",

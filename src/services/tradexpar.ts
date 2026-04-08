@@ -24,6 +24,7 @@ import type {
   CustomerUser,
   CustomerWishlistItem,
   CustomerLocation,
+  ParaguayCity,
 } from "@/types";
 import { deriveOrderKind } from "@/lib/adminOrdersUtils";
 import {
@@ -578,6 +579,18 @@ async function adminSetCustomerPasswordViaEdge(customerId: string, newPassword: 
 }
 
 export const tradexpar = {
+  /** Catálogo de ciudades para checkout (requiere `tradexpar_paraguay_cities.sql` + seed en la base). */
+  listParaguayCities: async (): Promise<ParaguayCity[]> => {
+    const { data, error } = await tx()
+      .from("paraguay_cities")
+      .select("id,name,department,pagopar_city_code,sort_order")
+      .order("department", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as ParaguayCity[];
+  },
+
   getProducts: async (): Promise<Product[]> => {
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt <= STORE_CATALOG_RETRIES; attempt++) {

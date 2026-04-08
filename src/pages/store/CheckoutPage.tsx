@@ -7,7 +7,9 @@ import { Loader2, User } from "lucide-react";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -16,8 +18,8 @@ import { deriveCheckoutTypeFromItems } from "@/lib/productHelpers";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
-import type { CustomerLocation } from "@/types";
-import { PAGOPAR_CIUDADES_PY, pagoparCiudadLabel } from "@/config/pagoparCiudadesPy";
+import type { CustomerLocation, ParaguayCity } from "@/types";
+import { PAGOPAR_CIUDADES_PY } from "@/config/pagoparCiudadesPy";
 
 const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -29,10 +31,21 @@ type CheckoutForm = {
   document: string;
   phone: string;
   address: string;
-  cityCode: string;
+  /** id UUID de `paraguay_cities` o `legacy-{code}` si falla la carga desde la base. */
+  cityId: string;
   locationUrl: string;
   locationLabel: string;
 };
+
+function legacyParaguayCityOptions(): ParaguayCity[] {
+  return PAGOPAR_CIUDADES_PY.map((c, i) => ({
+    id: `legacy-${c.code}`,
+    name: c.label,
+    department: "Lista corta PagoPar",
+    pagopar_city_code: c.code,
+    sort_order: i,
+  }));
+}
 
 function splitDisplayName(full: string): { first: string; last: string } {
   const t = full.trim();
@@ -55,14 +68,51 @@ export default function CheckoutPage() {
     document: "",
     phone: "",
     address: "",
-    cityCode: "",
+    cityId: "",
     locationUrl: "",
     locationLabel: "",
   });
+  const [cities, setCities] = useState<ParaguayCity[]>([]);
+  const [citiesFromDb, setCitiesFromDb] = useState(true);
   const [locations, setLocations] = useState<CustomerLocation[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void tradexpar
+      .listParaguayCities()
+      .then((rows) => {
+        if (cancelled) return;
+        if (rows.length > 0) {
+          setCities(rows);
+          setCitiesFromDb(true);
+        } else {
+          setCities(legacyParaguayCityOptions());
+          setCitiesFromDb(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCities(legacyParaguayCityOptions());
+          setCitiesFromDb(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const citiesByDepartment = useMemo(() => {
+    const m = new Map<string, ParaguayCity[]>();
+    for (const c of cities) {
+      const arr = m.get(c.department) ?? [];
+      arr.push(c);
+      m.set(c.department, arr);
+    }
+    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "es"));
+  }, [cities]);
 
   useEffect(() => {
     if (!user) return;
@@ -124,11 +174,15 @@ export default function CheckoutPage() {
       if (!form.address.trim()) {
         throw new Error("La dirección es obligatoria.");
       }
-      if (!form.cityCode) {
+      if (!form.cityId) {
         throw new Error("Seleccioná una ciudad.");
       }
-
-      const cityLabel = pagoparCiudadLabel(form.cityCode);
+      const cityRow = cities.find((c) => c.id === form.cityId);
+      if (!cityRow) {
+        throw new Error("Ciudad no válida. Recargá la página.");
+      }
+      const cityLabel = `${cityRow.name}, ${cityRow.department}`;
+      const cityCode = cityRow.pagopar_city_code;
       const location_url =
         form.locationUrl.trim() ||
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address.trim()}, ${cityLabel}, Paraguay`)}`;
@@ -157,7 +211,7 @@ export default function CheckoutPage() {
           phone: form.phone.trim(),
           document: form.document.trim(),
           address: form.address.trim(),
-          city_code: form.cityCode,
+          city_code: cityCode,
         },
         location_url,
         customer_location_id: customerLocationId,
@@ -197,13 +251,34 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 sm:py-10 max-w-6xl min-w-0">
-      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-6 sm:mb-8">Checkout</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Checkout</h1>
+        <nav className="flex items-center gap-2 text-sm" aria-label="Pasos del checkout">
+          <span className="rounded-full bg-primary text-primary-foreground px-3 py-1 font-medium">
+            Envío
+          </span>
+          <span className="text-muted-foreground" aria-hidden>
+            →
+          </span>
+          <span className="rounded-full bg-muted text-muted-foreground px-3 py-1 font-medium">
+            Revisión y pagos
+          </span>
+        </nav>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="grid lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-5">
-              <h2 className="text-lg font-semibold text-foreground">Dirección de envío</h2>
+              <div className="flex flex-col gap-1">
+                <h2 className="text-lg font-semibold text-foreground">Dirección de envío</h2>
+                {!citiesFromDb && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400/90">
+                    No se cargaron las ciudades desde la base: usando lista corta PagoPar. Ejecutá en Supabase{" "}
+                    <code className="text-[0.7rem] rounded bg-muted px-1">tradexpar_paraguay_cities.sql</code> y el seed.
+                  </p>
+                )}
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
@@ -272,7 +347,7 @@ export default function CheckoutPage() {
                     required
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="09xx 123456"
+                    placeholder="09xx123456"
                     autoComplete="tel"
                     inputMode="tel"
                     className={fieldCls}
@@ -299,18 +374,25 @@ export default function CheckoutPage() {
                   Ciudad <span className="text-destructive">*</span>
                 </label>
                 <Select
-                  value={form.cityCode || "__none"}
-                  onValueChange={(v) => setForm({ ...form, cityCode: v === "__none" ? "" : v })}
+                  value={form.cityId || "__none"}
+                  onValueChange={(v) => setForm({ ...form, cityId: v === "__none" ? "" : v })}
                 >
                   <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
                     <SelectValue placeholder="Seleccionar ciudad" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[min(22rem,50vh)]">
                     <SelectItem value="__none">Seleccionar ciudad</SelectItem>
-                    {PAGOPAR_CIUDADES_PY.map((c) => (
-                      <SelectItem key={c.code} value={c.code}>
-                        {c.label}
-                      </SelectItem>
+                    {citiesByDepartment.map(([dept, list]) => (
+                      <SelectGroup key={dept}>
+                        <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                          {dept}
+                        </SelectLabel>
+                        {list.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>

@@ -1,6 +1,6 @@
 /**
- * Códigos de ciudad para PagoPar (string, p. ej. "1" = Asunción).
- * Ajustá IDs según el listado oficial de tu comercio en PagoPar si difieren.
+ * Códigos hub PagoPar (1–15) usados en `paraguay_cities.pagopar_city_code` y como respaldo si la tabla no está cargada.
+ * El checkout prioriza `tradexpar.paraguay_cities` (263 municipios); esta lista es la referencia de hubs.
  */
 export const PAGOPAR_CIUDADES_PY = [
   { code: "1", label: "Asunción" },

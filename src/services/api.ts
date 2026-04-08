@@ -26,10 +26,31 @@ import type { PaymentResponse, PaymentStatus } from "@/types";
  * Solo pasarela / estado de pago en backend externo.
  * Catálogo, pedidos, clientes, wishlist y admin de datos → `tradexpar` (Supabase).
  */
-async function createPaymentRequest(orderId: string): Promise<PaymentResponse> {
+export type CreatePaymentPagoparOptions = {
+  product_mode?: "physical" | "virtual" | string;
+  mode?: string;
+  item_categoria?: string;
+  item_descripcion?: string;
+  item_ciudad?: string;
+  vendedor_telefono?: string;
+  vendedor_direccion?: string;
+  vendedor_direccion_referencia?: string;
+  vendedor_direccion_coordenadas?: string;
+  id_producto?: number | string;
+};
+
+async function createPaymentRequest(
+  orderId: string,
+  options?: { pagopar?: CreatePaymentPagoparOptions }
+): Promise<PaymentResponse> {
   try {
+    const body =
+      options?.pagopar && Object.keys(options.pagopar).length > 0
+        ? JSON.stringify({ pagopar: options.pagopar })
+        : JSON.stringify({});
     return await apiFetch<PaymentResponse>(`/api/public/orders/${orderId}/create-payment`, {
       method: "POST",
+      body,
     });
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
@@ -44,7 +65,8 @@ async function createPaymentRequest(orderId: string): Promise<PaymentResponse> {
 }
 
 export const api = {
-  createPayment: (orderId: string) => createPaymentRequest(orderId),
+  createPayment: (orderId: string, options?: { pagopar?: CreatePaymentPagoparOptions }) =>
+    createPaymentRequest(orderId, options),
 
   getPaymentStatus: (orderId: string, ref: string, hash?: string) => {
     const q = new URLSearchParams();

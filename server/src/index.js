@@ -86,6 +86,15 @@ if (_ppPrivKey && _ppPrivTok && _ppPrivKey !== _ppPrivTok) {
 const PAGOPAR_PUBLIC_KEY = _ppPubKey || _ppPubTok;
 const PAGOPAR_PRIVATE_KEY = _ppPrivKey || _ppPrivTok;
 const PAGOPAR_FORMA_PAGO = Number(process.env.PAGOPAR_FORMA_PAGO || 9);
+/**
+ * Modo por defecto para armar compras_items: physical = envío / comercio físico; virtual = ítems sin logística.
+ * Sobrescribible con body POST `pagopar.product_mode` o `pagopar.mode`.
+ * Nota: PagoPar no documenta en abierto una tabla fija «categoría X = virtual»; suelen usar el id de categoría
+ * del catálogo del comercio en el panel + datos de comprador/ítem. Ajustá *_PHYSICAL / *_VIRTUAL con soporte PagoPar.
+ */
+const PAGOPAR_PRODUCT_MODE = String(process.env.PAGOPAR_PRODUCT_MODE || "physical").trim().toLowerCase();
+const PAGOPAR_PHYSICAL_REQUIRE_BUYER_SHIPPING =
+  String(process.env.PAGOPAR_PHYSICAL_REQUIRE_BUYER_SHIPPING || "").trim() === "1";
 const PAGOPAR_ITEM_CATEGORIA = String(process.env.PAGOPAR_ITEM_CATEGORIA || "909");
 const PAGOPAR_ITEM_CIUDAD = String(process.env.PAGOPAR_ITEM_CIUDAD || "1");
 /** Ciudad comprador: solo `ciudad` string; nunca `ciudad_id`. `ruc` / `razon_social` vacíos si no aplica. */
@@ -110,6 +119,70 @@ const PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA = pagoparItemStr(
 const PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS = pagoparItemStr(
   process.env.PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS
 ).slice(0, 300);
+
+function normalizePagoparProductMode(raw) {
+  const base =
+    raw != null && String(raw).trim() !== ""
+      ? String(raw).trim()
+      : String(PAGOPAR_PRODUCT_MODE || "physical").trim();
+  const s = base.toLowerCase();
+  if (s === "virtual" || s === "digital" || s === "v") return "virtual";
+  return "physical";
+}
+
+function envTrim(key) {
+  const v = process.env[key];
+  if (v == null) return "";
+  return String(v).trim();
+}
+
+/** Valor específico del modo; si falta, usa `fallback` (p. ej. variable compartida ya resuelta). */
+function pickModeEnv(mode, physicalKey, virtualKey, fallback) {
+  if (mode === "virtual") {
+    const sv = envTrim(virtualKey);
+    return sv || fallback;
+  }
+  const sp = envTrim(physicalKey);
+  return sp || fallback;
+}
+
+function pagoparTemplate(str, orderId) {
+  if (str == null) return "";
+  return String(str)
+    .replaceAll("{order_short}", orderId.slice(0, 8))
+    .replaceAll("{order_id}", orderId);
+}
+
+/**
+ * Extrae overrides opcionales del POST (mismo request que create-payment).
+ * @returns {{ mode: string | null, overrides: Record<string, string | number | undefined> }}
+ */
+function extractPagoparRequestOptions(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { mode: null, overrides: {} };
+  }
+  const p = body.pagopar;
+  if (!p || typeof p !== "object" || Array.isArray(p)) {
+    return { mode: null, overrides: {} };
+  }
+  const mode = p.product_mode ?? p.mode ?? null;
+  const overrides = {
+    item_categoria: p.item_categoria,
+    item_descripcion: p.item_descripcion,
+    item_ciudad: p.item_ciudad,
+    vendedor_telefono: p.vendedor_telefono,
+    vendedor_direccion: p.vendedor_direccion,
+    vendedor_direccion_referencia: p.vendedor_direccion_referencia,
+    vendedor_direccion_coordenadas: p.vendedor_direccion_coordenadas,
+    id_producto: p.id_producto,
+  };
+  const cleaned = {};
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") cleaned[k] = v;
+  }
+  return { mode, overrides: cleaned };
+}
+
 /** Placeholder que reemplaza PagoPar en la URL de retorno (documentación / panel). */
 const PAGOPAR_RETURN_URL_DEFAULT =
   "https://greenyellow-goat-534491.hostingersite.com/success?hash=${hash}";
@@ -415,28 +488,151 @@ function assertComprasItemsPrecioTotalSum(compras_items, monto_total) {
   }
 }
 
+/**
+ * Resuelve categoria, descripcion, ciudad del ítem y datos vendedor según modo físico/virtual (env + overrides).
+ */
+function resolvePagoparComprasItemConfig(order, orderId, mode, overrides) {
+  const o = order && typeof order === "object" ? order : {};
+  const buyerCity = pagoparItemStr(o.customer_city_code).trim().slice(0, 50);
+  const defaultCiudad = pagoparItemStr(PAGOPAR_ITEM_CIUDAD).slice(0, 50);
+  const envCiudadMode = pickModeEnv(
+    mode,
+    "PAGOPAR_ITEM_CIUDAD_PHYSICAL",
+    "PAGOPAR_ITEM_CIUDAD_VIRTUAL",
+    defaultCiudad
+  );
+  const ciudad = pagoparItemStr(
+    overrides.item_ciudad != null
+      ? overrides.item_ciudad
+      : mode === "physical" && buyerCity
+        ? buyerCity
+        : envCiudadMode
+  ).slice(0, 50);
+
+  const categoria = pagoparItemStr(
+    overrides.item_categoria != null
+      ? overrides.item_categoria
+      : pickModeEnv(
+          mode,
+          "PAGOPAR_ITEM_CATEGORIA_PHYSICAL",
+          "PAGOPAR_ITEM_CATEGORIA_VIRTUAL",
+          PAGOPAR_ITEM_CATEGORIA
+        )
+  ).slice(0, 50);
+
+  const descRaw =
+    overrides.item_descripcion != null
+      ? String(overrides.item_descripcion)
+      : pickModeEnv(
+          mode,
+          "PAGOPAR_ITEM_DESCRIPCION_PHYSICAL",
+          "PAGOPAR_ITEM_DESCRIPCION_VIRTUAL",
+          PAGOPAR_ITEM_DESCRIPCION
+        );
+  const descripcion = pagoparTemplate(descRaw, orderId).slice(0, 500);
+
+  const vendedor_telefono = pagoparItemStr(
+    overrides.vendedor_telefono != null
+      ? overrides.vendedor_telefono
+      : pickModeEnv(
+          mode,
+          "PAGOPAR_VENDEDOR_TELEFONO_PHYSICAL",
+          "PAGOPAR_VENDEDOR_TELEFONO_VIRTUAL",
+          PAGOPAR_VENDEDOR_TELEFONO
+        )
+  ).slice(0, 40);
+
+  const vendedor_direccion = pagoparItemStr(
+    overrides.vendedor_direccion != null
+      ? overrides.vendedor_direccion
+      : pickModeEnv(
+          mode,
+          "PAGOPAR_VENDEDOR_DIRECCION_PHYSICAL",
+          "PAGOPAR_VENDEDOR_DIRECCION_VIRTUAL",
+          PAGOPAR_VENDEDOR_DIRECCION
+        )
+  ).slice(0, 300);
+
+  const vendedor_direccion_referencia = pagoparItemStr(
+    overrides.vendedor_direccion_referencia != null
+      ? overrides.vendedor_direccion_referencia
+      : pickModeEnv(
+          mode,
+          "PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA_PHYSICAL",
+          "PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA_VIRTUAL",
+          PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA
+        )
+  ).slice(0, 300);
+
+  const vendedor_direccion_coordenadas = pagoparItemStr(
+    overrides.vendedor_direccion_coordenadas != null
+      ? overrides.vendedor_direccion_coordenadas
+      : pickModeEnv(
+          mode,
+          "PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS_PHYSICAL",
+          "PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS_VIRTUAL",
+          PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS
+        )
+  ).slice(0, 300);
+
+  let id_producto;
+  if (overrides.id_producto != null && overrides.id_producto !== "") {
+    id_producto = Math.round(Number(overrides.id_producto) || 0) || 895;
+  } else {
+    const idStr = pickModeEnv(
+      mode,
+      "PAGOPAR_ITEM_PRODUCTO_ID_PHYSICAL",
+      "PAGOPAR_ITEM_PRODUCTO_ID_VIRTUAL",
+      String(PAGOPAR_ITEM_PRODUCTO_ID)
+    );
+    id_producto = Math.round(Number(idStr) || 0) || 895;
+  }
+
+  return {
+    ciudad,
+    categoria,
+    descripcion,
+    vendedor_telefono,
+    vendedor_direccion,
+    vendedor_direccion_referencia,
+    vendedor_direccion_coordenadas,
+    id_producto,
+  };
+}
+
 /** Una línea de compras_items: 13 claves; strings siempre "" si no hay valor (nunca null/undefined). */
-function buildPagoparCompraItem(orderId, precioTotalLinea, cantidadLinea = 1) {
+function buildPagoparCompraItem(order, orderId, precioTotalLinea, cantidadLinea, mode, overrides) {
   const shortId = orderId.slice(0, 8);
   const nombre = pagoparItemStr(`Pedido Tradexpar ${shortId}`).slice(0, 200);
   const cantidad = Math.max(1, Math.round(Number(cantidadLinea) || 1));
   const precio_total = Math.round(Number(precioTotalLinea) || 0);
-  const id_producto = Math.round(Number(PAGOPAR_ITEM_PRODUCTO_ID) || 0) || 895;
+  const cfg = resolvePagoparComprasItemConfig(order, orderId, mode, overrides);
   return {
-    ciudad: pagoparItemStr(PAGOPAR_ITEM_CIUDAD).slice(0, 50),
+    ciudad: cfg.ciudad,
     nombre,
     cantidad,
-    categoria: pagoparItemStr(PAGOPAR_ITEM_CATEGORIA).slice(0, 50),
+    categoria: cfg.categoria,
     public_key: pagoparItemStr(PAGOPAR_PUBLIC_KEY),
     url_imagen: pagoparItemStr(PAGOPAR_ITEM_IMAGEN_URL),
-    descripcion: PAGOPAR_ITEM_DESCRIPCION,
-    id_producto,
+    descripcion: cfg.descripcion,
+    id_producto: cfg.id_producto,
     precio_total,
-    vendedor_telefono: PAGOPAR_VENDEDOR_TELEFONO,
-    vendedor_direccion: PAGOPAR_VENDEDOR_DIRECCION,
-    vendedor_direccion_referencia: PAGOPAR_VENDEDOR_DIRECCION_REFERENCIA,
-    vendedor_direccion_coordenadas: PAGOPAR_VENDEDOR_DIRECCION_COORDENADAS,
+    vendedor_telefono: cfg.vendedor_telefono,
+    vendedor_direccion: cfg.vendedor_direccion,
+    vendedor_direccion_referencia: cfg.vendedor_direccion_referencia,
+    vendedor_direccion_coordenadas: cfg.vendedor_direccion_coordenadas,
   };
+}
+
+function resolvePagoparDescripcionResumen(orderId, mode) {
+  const tpl = pickModeEnv(
+    mode,
+    "PAGOPAR_DESCRIPCION_RESUMEN_PHYSICAL",
+    "PAGOPAR_DESCRIPCION_RESUMEN_VIRTUAL",
+    ""
+  );
+  if (!tpl) return `Tradexpar #${orderId.slice(0, 8)}`;
+  return pagoparTemplate(tpl, orderId).slice(0, 300);
 }
 
 const app = express();
@@ -545,6 +741,19 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     }
     console.info("[create-payment][debug] pedido encontrado id=", order.id, "status=", order.status);
 
+    const { mode: reqPagoparMode, overrides: pagoparOverrides } = extractPagoparRequestOptions(req.body);
+    const pagoparProductMode = normalizePagoparProductMode(reqPagoparMode);
+    if (pagoparProductMode === "physical" && PAGOPAR_PHYSICAL_REQUIRE_BUYER_SHIPPING) {
+      const addr = pagoparItemStr(order.customer_address).trim();
+      const cc = pagoparItemStr(order.customer_city_code).trim();
+      if (!addr || !cc) {
+        return res.status(400).json({
+          error:
+            "Pedido físico (PagoPar): faltan dirección o ciudad del comprador en el pedido. Completá el checkout o desactivá PAGOPAR_PHYSICAL_REQUIRE_BUYER_SHIPPING.",
+        });
+      }
+    }
+
     const idPedidoComercio = randomIdPedidoComercio();
     const ref = String(idPedidoComercio);
     const montoTotal = Math.max(0, Math.round(Number(order.total) || 0));
@@ -582,7 +791,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const fecha_maxima_pago = fechaMax.toISOString().slice(0, 19).replace("T", " ");
 
     const comprador = buildPagoparCompradorFromOrder(order);
-    const compras_items = [buildPagoparCompraItem(orderId, montoTotal, 1)];
+    const compras_items = [buildPagoparCompraItem(order, orderId, montoTotal, 1, pagoparProductMode, pagoparOverrides)];
     assertPagoparCompradorShape(comprador);
     assertPagoparCompraItemShape(compras_items[0]);
     assertComprasItemsPrecioTotalSum(compras_items, montoTotal);
@@ -597,7 +806,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       compras_items,
       fecha_maxima_pago,
       id_pedido_comercio: idPedidoComercio,
-      descripcion_resumen: `Tradexpar #${orderId.slice(0, 8)}`,
+      descripcion_resumen: resolvePagoparDescripcionResumen(orderId, pagoparProductMode),
       forma_pago: PAGOPAR_FORMA_PAGO,
     };
     if (PAGOPAR_SEND_PAYLOAD_URLS) {
@@ -621,6 +830,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     console.info("[create-payment][pagopar shape]", {
       bodyWrapper: PAGOPAR_ORDER_WRAPPER ? "orderPagopar" : "flat",
       urls_en_payload: PAGOPAR_SEND_PAYLOAD_URLS,
+      pagopar_product_mode: pagoparProductMode,
       compradorKeyCount: Object.keys(comprador).length,
       itemTopLevelKeyCount: Object.keys(compras_items[0]).length,
       itemKeys: Object.keys(compras_items[0]),

@@ -93,6 +93,15 @@ export interface Order {
   };
 }
 
+/** Municipio/distrito (tabla `tradexpar.paraguay_cities`). */
+export interface ParaguayCity {
+  id: string;
+  name: string;
+  department: string;
+  pagopar_city_code: string;
+  sort_order: number;
+}
+
 export interface CustomerUser {
   id: string;
   name: string;
