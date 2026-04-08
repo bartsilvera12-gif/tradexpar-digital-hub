@@ -300,7 +300,10 @@ const PAGOPAR_COMPRADOR_KEYS = [
   "direccion_referencia",
 ];
 
-/** Claves por línea en compras_items (incluye precio_unitario en PYG entero). */
+/**
+ * Claves por línea en compras_items (9 claves; la cuenta PagoPar rechaza líneas con otras claves).
+ * El precio unitario implícito es round(precio_total/cantidad); no se envía como campo aparte.
+ */
 const PAGOPAR_ITEM_TOP_KEYS = [
   "ciudad",
   "nombre",
@@ -310,7 +313,6 @@ const PAGOPAR_ITEM_TOP_KEYS = [
   "url_imagen",
   "id_producto",
   "precio_total",
-  "precio_unitario",
   "vendedor_direccion",
 ];
 
@@ -354,18 +356,11 @@ function assertPagoparCompraItemShape(item) {
   }
   const cantidad = Math.round(Number(item.cantidad) || 0);
   const precioTotal = Math.round(Number(item.precio_total) || 0);
-  const pu = item.precio_unitario;
-  if (typeof pu !== "number" || !Number.isInteger(pu)) {
-    throw new Error("[pagopar] compras_items: precio_unitario debe ser number entero (PYG).");
-  }
   if (cantidad <= 0) {
     throw new Error("[pagopar] compras_items: cantidad inválida.");
   }
-  const esperadoUnit = Math.round(precioTotal / cantidad);
-  if (pu !== esperadoUnit) {
-    throw new Error(
-      `[pagopar] compras_items: precio_unitario debe ser round(precio_total/cantidad); esperado ${esperadoUnit}, recibido ${pu}.`
-    );
+  if (precioTotal < 0) {
+    throw new Error("[pagopar] compras_items: precio_total inválido.");
   }
 }
 
@@ -379,16 +374,13 @@ function assertComprasItemsPrecioTotalSum(compras_items, monto_total) {
   }
 }
 
-/**
- * Una línea de compras_items. precio_unitario = round(precio_total / cantidad), PYG entero, tipo number.
- */
+/** Una línea de compras_items (9 claves). precio_total = línea en PYG; cantidad ≥ 1. */
 function buildPagoparCompraItem(orderId, precioTotalLinea, cantidadLinea = 1) {
   const shortId = orderId.slice(0, 8);
   const nombre = `Pedido Tradexpar ${shortId}`;
   const dir = String(PAGOPAR_VENDEDOR_DIRECCION || "").trim() || "Tradexpar";
   const cantidad = Math.max(1, Math.round(Number(cantidadLinea) || 1));
   const precio_total = Math.round(Number(precioTotalLinea) || 0);
-  const precio_unitario = Math.round(precio_total / cantidad);
   return {
     ciudad: PAGOPAR_ITEM_CIUDAD,
     nombre,
@@ -398,7 +390,6 @@ function buildPagoparCompraItem(orderId, precioTotalLinea, cantidadLinea = 1) {
     url_imagen: PAGOPAR_ITEM_IMAGEN_URL,
     id_producto: PAGOPAR_ITEM_PRODUCTO_ID,
     precio_total,
-    precio_unitario,
     vendedor_direccion: dir,
   };
 }
