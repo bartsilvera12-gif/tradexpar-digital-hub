@@ -1,5 +1,15 @@
 # SPA (React Router): /products, /admin, etc. deben servir index.html
 # Apache + mod_rewrite (Hostinger). Copiado a dist/ desde public/ al hacer build.
+#
+# Evita que index.html quede cacheado: sin esto el navegador/CDN puede seguir sirviendo
+# un index viejo que apunta a JS antiguo aunque subas assets nuevos.
+<IfModule mod_headers.c>
+  <Files "index.html">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+  </Files>
+</IfModule>
+
 RewriteEngine On
 RewriteBase /
 
