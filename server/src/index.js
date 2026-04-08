@@ -3,13 +3,14 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import {
-  buildStartTransactionToken,
   checkoutUrlFromHash,
   getPagoparEndpoints,
+  getPagoparIniciarTransaccionTokenInputParts,
   iniciarTransaccion,
   isPagoparRespuestaOk,
   maskPagoparCredential,
   phpStrvalFloatval,
+  sha1Hex,
   stripPagoparSecret,
   verifyWebhookToken,
 } from "./pagopar.js";
@@ -57,15 +58,28 @@ const _ppPubKey = stripPagoparSecret(process.env.PAGOPAR_PUBLIC_KEY || "");
 const _ppPubTok = stripPagoparSecret(process.env.PAGOPAR_PUBLIC_TOKEN || "");
 const _ppPrivKey = stripPagoparSecret(process.env.PAGOPAR_PRIVATE_KEY || "");
 const _ppPrivTok = stripPagoparSecret(process.env.PAGOPAR_PRIVATE_TOKEN || "");
+const _envHasPubTok = String(process.env.PAGOPAR_PUBLIC_TOKEN ?? "").trim().length > 0;
+const _envHasPrivTok = String(process.env.PAGOPAR_PRIVATE_TOKEN ?? "").trim().length > 0;
+
+if (_envHasPubTok) {
+  console.error(
+    "[payments-api] ❌ PAGOPAR_PUBLIC_TOKEN está definido en el entorno. Eliminá esa variable del .env del VPS y usá solo PAGOPAR_PUBLIC_KEY para que no quede una clave vieja mezclada en runtime."
+  );
+}
+if (_envHasPrivTok) {
+  console.error(
+    "[payments-api] ❌ PAGOPAR_PRIVATE_TOKEN está definido en el entorno. Eliminá esa variable del .env del VPS y usá solo PAGOPAR_PRIVATE_KEY."
+  );
+}
 
 if (_ppPubKey && _ppPubTok && _ppPubKey !== _ppPubTok) {
-  console.warn(
-    "[payments-api] ⚠️ PAGOPAR_PUBLIC_KEY y PAGOPAR_PUBLIC_TOKEN están definidos y difieren. Se usa PAGOPAR_PUBLIC_KEY. Eliminá el TOKEN duplicado en .env para evitar confusiones."
+  console.error(
+    `[payments-api] ❌ PAGOPAR_PUBLIC_KEY y PAGOPAR_PUBLIC_TOKEN difieren. PRIORIZADA: PAGOPAR_PUBLIC_KEY (efectivo ${maskPagoparCredential(_ppPubKey)}). Borrá PAGOPAR_PUBLIC_TOKEN del .env.`
   );
 }
 if (_ppPrivKey && _ppPrivTok && _ppPrivKey !== _ppPrivTok) {
-  console.warn(
-    "[payments-api] ⚠️ PAGOPAR_PRIVATE_KEY y PAGOPAR_PRIVATE_TOKEN están definidos y difieren. Se usa PAGOPAR_PRIVATE_KEY. Eliminá el TOKEN duplicado en .env para evitar confusiones."
+  console.error(
+    `[payments-api] ❌ PAGOPAR_PRIVATE_KEY y PAGOPAR_PRIVATE_TOKEN difieren. PRIORIZADA: PAGOPAR_PRIVATE_KEY (${maskPagoparCredential(_ppPrivKey)}). Borrá PAGOPAR_PRIVATE_TOKEN del .env.`
   );
 }
 
@@ -99,8 +113,8 @@ const PAGOPAR_SEND_PAYLOAD_URLS = String(process.env.PAGOPAR_SEND_PAYLOAD_URLS |
 /** Si es "true", no exige token de webhook (solo desarrollo). */
 const PAGOPAR_SKIP_WEBHOOK_VERIFY = String(process.env.PAGOPAR_SKIP_WEBHOOK_VERIFY || "") === "true";
 
-/** `PAGOPAR_LOG_TOKEN_DEBUG=0` desactiva logs de token (producción). Por defecto activo para depuración. */
-const PAGOPAR_LOG_TOKEN_DEBUG = String(process.env.PAGOPAR_LOG_TOKEN_DEBUG ?? "1").trim() !== "0";
+/** Solo con PAGOPAR_LOG_TOKEN_DEBUG=1 (VPS / depuración). Por defecto apagado. */
+const PAGOPAR_LOG_TOKEN_DEBUG = String(process.env.PAGOPAR_LOG_TOKEN_DEBUG ?? "").trim() === "1";
 
 /** `PAGOPAR_LOG_ENDPOINTS=0` desactiva logs de entorno/URLs PagoPar al crear pago. */
 const PAGOPAR_LOG_ENDPOINTS = String(process.env.PAGOPAR_LOG_ENDPOINTS ?? "1").trim() !== "0";
@@ -111,8 +125,42 @@ const PAGOPAR_LOG_ENDPOINTS = String(process.env.PAGOPAR_LOG_ENDPOINTS ?? "1").t
  */
 const PAGOPAR_ORDER_WRAPPER = String(process.env.PAGOPAR_ORDER_WRAPPER ?? "0").trim() === "1";
 
-/** Logs detallados antes del POST a PagoPar (token + JSON completo). `PAGOPAR_LOG_INICIAR_TRANSACCION=0` para silenciar. */
-const PAGOPAR_LOG_INICIAR_TRANSACCION = String(process.env.PAGOPAR_LOG_INICIAR_TRANSACCION ?? "1").trim() !== "0";
+/** Solo con PAGOPAR_LOG_INICIAR_TRANSACCION=1: bloque completo antes del POST (VPS). Por defecto apagado. */
+const PAGOPAR_LOG_INICIAR_TRANSACCION = String(process.env.PAGOPAR_LOG_INICIAR_TRANSACCION ?? "").trim() === "1";
+
+/** EXTREMO: loguea la cadena completa private+id+monto (filtra la clave privada). Solo PAGOPAR_LOG_SHA1_PLAINTEXT=1 */
+const PAGOPAR_LOG_SHA1_PLAINTEXT = String(process.env.PAGOPAR_LOG_SHA1_PLAINTEXT ?? "").trim() === "1";
+
+/** Núcleo habitual iniciar-transacción 2.0 (referencia documentación). */
+const PAGOPAR_INICIAR_CORE_KEYS = new Set([
+  "token",
+  "comprador",
+  "public_key",
+  "monto_total",
+  "tipo_pedido",
+  "compras_items",
+  "fecha_maxima_pago",
+  "id_pedido_comercio",
+  "descripcion_resumen",
+  "forma_pago",
+]);
+const PAGOPAR_INICIAR_COMMON_OPTIONAL = new Set(["url_respuesta", "url_notificacion"]);
+
+function analyzePagoparIniciarPayloadShape(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { body_mode: "invalid", inner_keys: [], top_level_extra_vs_core: [], optional_doc_present: [] };
+  }
+  const inner = payload.orderPagopar && typeof payload.orderPagopar === "object" ? payload.orderPagopar : payload;
+  const keys = Object.keys(inner);
+  return {
+    body_mode: payload.orderPagopar ? "wrapper_orderPagopar" : "flat",
+    inner_keys: keys,
+    top_level_extra_vs_core: keys.filter(
+      (k) => !PAGOPAR_INICIAR_CORE_KEYS.has(k) && !PAGOPAR_INICIAR_COMMON_OPTIONAL.has(k)
+    ),
+    optional_doc_present: keys.filter((k) => PAGOPAR_INICIAR_COMMON_OPTIONAL.has(k)),
+  };
+}
 
 function requireEnv() {
   const miss = [];
@@ -449,12 +497,15 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       });
     }
 
-    const token = buildStartTransactionToken(PAGOPAR_PRIVATE_KEY, idPedidoComercio, montoTotal);
+    const tokenInputParts = getPagoparIniciarTransaccionTokenInputParts(
+      PAGOPAR_PRIVATE_KEY,
+      idPedidoComercio,
+      montoTotal
+    );
+    const token = sha1Hex(tokenInputParts.plaintextConcat);
 
     if (PAGOPAR_LOG_TOKEN_DEBUG) {
-      console.info("[create-payment][token-debug] token SHA1 generado", {
-        token_generado: token,
-      });
+      console.info("[create-payment][token-debug] token SHA1 generado", { token_generado: token });
     }
 
     const fechaMax = new Date();
@@ -528,17 +579,34 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     }
 
     const bodyJsonParaPagopar = JSON.stringify(payload);
+    const payloadShape = analyzePagoparIniciarPayloadShape(payload);
     if (PAGOPAR_LOG_INICIAR_TRANSACCION) {
+      const sha1SafePattern = `<PRIVATE:${tokenInputParts.privateKeySanitizedLength}chars>${tokenInputParts.idStr}${tokenInputParts.amountStr}`;
       console.info("[create-payment][pagopar-iniciar] ANTES del POST a PagoPar", {
         public_key_enmascarada: maskPagoparCredential(PAGOPAR_PUBLIC_KEY),
         private_key_enmascarada: maskPagoparCredential(PAGOPAR_PRIVATE_KEY),
         id_pedido_comercio_exacto: idPedidoComercio,
+        typeof_id_pedido_comercio: typeof idPedidoComercio,
         monto_total_exacto: montoTotal,
-        monto_str_para_sha1_strval_floatval: montoStrParaToken,
-        token_sha1_generado: token,
+        typeof_monto_total: typeof montoTotal,
+        id_str_usada_en_sha1: tokenInputParts.idStr,
+        amount_str_usada_en_sha1: tokenInputParts.amountStr,
+        private_key_sanitized_length: tokenInputParts.privateKeySanitizedLength,
+        sha1_concat_pattern_sin_exponer_private: sha1SafePattern,
+        token_sha1_resultante: token,
         order_wrapper_enabled: PAGOPAR_ORDER_WRAPPER,
+        body_mode: payloadShape.body_mode,
         urls_incluidas_en_json: PAGOPAR_SEND_PAYLOAD_URLS,
+        campos_top_level_inner: payloadShape.inner_keys,
+        campos_opcionales_doc_presentes: payloadShape.optional_doc_present,
+        campos_extra_vs_nucleo_doc: payloadShape.top_level_extra_vs_core,
       });
+      if (PAGOPAR_LOG_SHA1_PLAINTEXT) {
+        console.warn(
+          "[create-payment][pagopar-iniciar] ⚠️ PAGOPAR_LOG_SHA1_PLAINTEXT=1 — cadena completa para SHA1 (contiene clave privada; desactivá tras depurar):",
+          tokenInputParts.plaintextConcat
+        );
+      }
       console.info("[create-payment][pagopar-iniciar] JSON exacto enviado a iniciar-transacción:", bodyJsonParaPagopar);
     }
 
@@ -770,4 +838,7 @@ try {
 
 app.listen(PORT, () => {
   console.log(`[payments-api] listening on :${PORT} (orders → PostgREST schema "${ORDERS_SCHEMA}")`);
+  console.log(
+    `[payments-api] PagoPar: ORDER_WRAPPER default off (flat body). Depuración token en VPS: PAGOPAR_LOG_INICIAR_TRANSACCION=1 y PAGOPAR_LOG_TOKEN_DEBUG=1`
+  );
 });

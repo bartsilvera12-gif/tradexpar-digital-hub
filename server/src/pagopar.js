@@ -127,14 +127,32 @@ export function phpStrvalFloatval(monto) {
 }
 
 /**
+ * Partes exactas que entran en SHA1 (misma lógica que buildStartTransactionToken).
+ * `plaintextConcat` solo para depuración local; no loguear en producción.
+ */
+export function getPagoparIniciarTransaccionTokenInputParts(privateKey, idPedidoComercio, montoTotal) {
+  const pk = stripPagoparSecret(privateKey);
+  const idStr = String(idPedidoComercio);
+  const amountStr = phpStrvalFloatval(montoTotal);
+  return {
+    privateKeySanitizedLength: pk.length,
+    idStr,
+    amountStr,
+    plaintextConcat: `${pk}${idStr}${amountStr}`,
+  };
+}
+
+/**
  * Documentación PagoPar: sha1(private_key + idPedido + strval(floatval(monto_total)))
  * idPedido = mismo valor que `id_pedido_comercio` en el cuerpo (como string en la concatenación).
  */
 export function buildStartTransactionToken(privateKey, idPedidoComercio, montoTotal) {
-  const pk = stripPagoparSecret(privateKey);
-  const idStr = String(idPedidoComercio);
-  const amountStr = phpStrvalFloatval(montoTotal);
-  return sha1Hex(`${pk}${idStr}${amountStr}`);
+  const { plaintextConcat } = getPagoparIniciarTransaccionTokenInputParts(
+    privateKey,
+    idPedidoComercio,
+    montoTotal
+  );
+  return sha1Hex(plaintextConcat);
 }
 
 export function buildGenericToken(privateKey, suffix) {
