@@ -12,6 +12,7 @@
     "sobre:split-collage": "python scripts/split-sobre-collage.py",
     "data:paraguay-cities": "node scripts/generate-paraguay-cities-sql.mjs",
     "test": "vitest run",
+    "test:fastrax-map": "npx --yes deno@2.1.4 test --allow-env supabase/functions/fastrax-sync-catalog/map_fastrax_row_test.ts",
     "test:watch": "vitest",
     "supabase:config-push": "supabase config push",
     "supabase:deploy:admin-password": "npx supabase functions deploy admin-set-customer-password --use-api --no-verify-jwt",

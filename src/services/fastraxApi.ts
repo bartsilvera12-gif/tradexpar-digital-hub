@@ -2,7 +2,8 @@
  * Fastrax — cliente HTTP reusable (POST) y utilidades de formato.
  *
  * IMPORTANTE: las credenciales (`cod`, `pas`) y la URL **no** deben vivir en `VITE_*`.
- * En esta app la sync masiva corre en la Edge Function `fastrax-sync-catalog`.
+ * En esta app la sync masiva corre en la Edge Function `fastrax-sync-catalog`, que mapea campos doc
+ * Fastrax (ej. sku, sal, crc, sta, atv en ope=1; nom, pre, prm, des, bre, cat, mar, img en ope=2).
  *
  * Las funciones `buildFastrax*` y `parseFastraxResponseText` son seguras en el bundle (sin secretos).
  * `executeFastraxPost` está pensada para **entornos server-side** (Edge, Node); no la llames desde
@@ -138,6 +139,8 @@ export type FastraxSyncSuccessResponse = {
   mode: string;
   stats: FastraxSyncStats;
   products_seen: number;
+  /** Primer error PostgREST (p. ej. check constraint sin fastrax o columnas faltantes). */
+  db_error_sample?: string;
 };
 
 export type FastraxSyncErrorResponse = {

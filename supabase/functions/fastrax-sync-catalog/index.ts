@@ -2,6 +2,21 @@
  * Sincroniza catálogo Fastrax → tradexpar.products (solo lectura API Fastrax, upsert local).
  * Secretos: FASTRAX_API_URL, FASTRAX_COD, FASTRAX_PAS (secrets de Supabase, no VITE_).
  */
+import {
+  extractProductRows,
+  isPlainObject,
+  pickActive,
+  pickCategory,
+  pickDescription,
+  pickFastraxCrc,
+  pickImageUrl,
+  pickName,
+  pickPrice,
+  pickSku,
+  pickStock,
+  str,
+} from "./map_fastrax_row.ts";
+
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -51,151 +66,6 @@ async function isSuperAdmin(
   return Array.isArray(rows) && rows.length > 0 && rows[0]?.is_super_admin === true;
 }
 
-function num(v: unknown): number {
-  if (typeof v === "number" && !Number.isNaN(v)) return v;
-  if (typeof v === "string") {
-    const n = Number(String(v).replace(",", "."));
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
-
-function str(v: unknown): string {
-  if (v == null) return "";
-  const s = String(v).trim();
-  return s;
-}
-
-function truthy(v: unknown): boolean {
-  if (v === true) return true;
-  if (v === false || v == null) return false;
-  if (typeof v === "string") {
-    const t = v.trim().toLowerCase();
-    return t === "1" || t === "true" || t === "s" || t === "si" || t === "yes";
-  }
-  if (typeof v === "number") return v !== 0;
-  return false;
-}
-
-function pickSku(row: Record<string, unknown>): string {
-  const keys = [
-    "sku", "SKU", "codigo", "Codigo", "cod_art", "CodArt", "COD_ART", "articulo", "Articulo",
-    "codigo_articulo", "id_articulo",
-  ];
-  for (const k of keys) {
-    const v = str(row[k]);
-    if (v) return v;
-  }
-  return "";
-}
-
-function pickName(row: Record<string, unknown>): string {
-  const keys = ["nombre", "Nombre", "name", "titulo", "Titulo", "descripcion_corta", "descripcion", "Descripcion"];
-  for (const k of keys) {
-    const v = str(row[k]);
-    if (v) return v.slice(0, 500);
-  }
-  return "";
-}
-
-function pickDescription(row: Record<string, unknown>): string {
-  const longKeys = ["descripcion_larga", "detalle", "observacion", "DescripcionLarga", "descripcion_web"];
-  for (const k of longKeys) {
-    const v = str(row[k]);
-    if (v.length > 3) return v.slice(0, 8000);
-  }
-  const short = str(row.descripcion ?? row.Descripcion ?? row.descripcion_corta);
-  if (short) return short.slice(0, 8000);
-  return pickName(row);
-}
-
-function pickCategory(row: Record<string, unknown>): string {
-  const keys = ["categoria", "Categoria", "rubro", "Rubro", "marca", "Marca", "familia", "Familia"];
-  for (const k of keys) {
-    const v = str(row[k]);
-    if (v) return v.slice(0, 200);
-  }
-  return "";
-}
-
-/** Precio efectivo: promo si aplica, si no normal. */
-function pickPrice(row: Record<string, unknown>): number {
-  const promoKeys = [
-    "precio_promo", "precio_promocional", "PrecioPromo", "precio_oferta", "PrecioOferta", "precio_especial",
-  ];
-  const normalKeys = ["precio", "Precio", "precio_venta", "PrecioVenta", "precio_lista", "importe"];
-  const promoActive = truthy(row.promo_activa ?? row.promoActiva ?? row.en_promo ?? row.EnPromo);
-  for (const k of promoKeys) {
-    const p = num(row[k]);
-    if (p > 0 && (promoActive || promoKeys.includes(k))) return Math.max(0, p);
-  }
-  for (const k of promoKeys) {
-    const p = num(row[k]);
-    if (p > 0) return Math.max(0, p);
-  }
-  for (const k of normalKeys) {
-    const p = num(row[k]);
-    if (p > 0) return Math.max(0, p);
-  }
-  return 0;
-}
-
-function pickStock(row: Record<string, unknown>): number {
-  const keys = ["saldo", "Saldo", "stock", "Stock", "cantidad", "existencia", "disponible"];
-  for (const k of keys) {
-    const n = Math.floor(num(row[k]));
-    if (n >= 0) return n;
-  }
-  return 0;
-}
-
-function pickActive(row: Record<string, unknown>): boolean {
-  if (truthy(row.bloqueado ?? row.Bloqueado ?? row.inactivo ?? row.Inactivo)) return false;
-  if (str(row.estado).toLowerCase() === "b") return false;
-  return truthy(row.activo ?? row.Activo ?? row.habilitado ?? row.vigente ?? true);
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return v != null && typeof v === "object" && !Array.isArray(v);
-}
-
-/** Extrae filas tipo producto de respuestas anidadas habituales en APIs ERP. */
-function extractProductRows(root: unknown, depth = 0): Record<string, unknown>[] {
-  if (depth > 8) return [];
-  if (root == null) return [];
-  if (Array.isArray(root)) {
-    if (root.length === 0) return [];
-    const first = root[0];
-    if (isPlainObject(first) && pickSku(first as Record<string, unknown>)) {
-      return root.filter(isPlainObject) as Record<string, unknown>[];
-    }
-    const merged: Record<string, unknown>[] = [];
-    for (const el of root) {
-      merged.push(...extractProductRows(el, depth + 1));
-    }
-    return merged;
-  }
-  if (!isPlainObject(root)) return [];
-  const preferredKeys = [
-    "productos", "Productos", "datos", "Datos", "data", "Data", "result", "Result", "rows", "items",
-    "lista", "Table", "articulos", "Articulos",
-  ];
-  for (const k of preferredKeys) {
-    if (k in root) {
-      const inner = extractProductRows(root[k], depth + 1);
-      if (inner.length) return inner;
-    }
-  }
-  if (pickSku(root)) return [root];
-  const merged: Record<string, unknown>[] = [];
-  for (const v of Object.values(root)) {
-    if (Array.isArray(v) || isPlainObject(v)) {
-      merged.push(...extractProductRows(v, depth + 1));
-    }
-  }
-  return merged;
-}
-
 async function sha256Hex(s: string): Promise<string> {
   const data = new TextEncoder().encode(s);
   const buf = await crypto.subtle.digest("SHA-256", data);
@@ -214,7 +84,12 @@ async function fastraxCall(
   const cod = Deno.env.get("FASTRAX_COD") ?? "";
   const pas = Deno.env.get("FASTRAX_PAS") ?? "";
   if (!url || !str(cod) || !str(pas)) {
-    return { ok: false, status: 500, message: "fastrax_env_missing" };
+    return {
+      ok: false,
+      status: 500,
+      message:
+        "Faltan secretos en Supabase (Edge Function fastrax-sync-catalog): FASTRAX_API_URL, FASTRAX_COD y FASTRAX_PAS.",
+    };
   }
   const fmt = (Deno.env.get("FASTRAX_REQUEST_FORMAT") ?? "json").toLowerCase();
   let res: Response;
@@ -280,7 +155,7 @@ async function fetchImageDataUrl(
   if (!r.ok) return null;
   const rows = extractProductRows(r.parsed);
   const row = rows[0] ?? (isPlainObject(r.parsed) ? r.parsed : {});
-  const b64Keys = ["imagen", "Imagen", "base64", "foto", "data", "binario", "contenido"];
+  const b64Keys = ["img", "Img", "imagen", "Imagen", "base64", "foto", "data", "binario", "contenido", "b64"];
   for (const k of b64Keys) {
     const raw = str((row as Record<string, unknown>)[k]);
     if (raw.length > 40) {
@@ -320,7 +195,7 @@ async function restUpsertProduct(
   serviceKey: string,
   row: Record<string, unknown>,
   mode: "insert" | "update"
-): Promise<{ ok: boolean; id?: string }> {
+): Promise<{ ok: boolean; id?: string; dbError?: string }> {
   const baseHeaders: Record<string, string> = {
     apikey: serviceKey,
     Authorization: `Bearer ${serviceKey}`,
@@ -335,7 +210,11 @@ async function restUpsertProduct(
       headers: { ...baseHeaders, Prefer: "return=representation" },
       body: JSON.stringify(insertRow),
     });
-    if (!res.ok) return { ok: false };
+    if (!res.ok) {
+      const errText = (await res.text()).slice(0, 800);
+      console.error("[fastrax-sync-catalog] POST products failed", res.status, errText);
+      return { ok: false, dbError: errText || `HTTP ${res.status}` };
+    }
     try {
       const arr = (await res.json()) as { id?: string }[];
       const id = Array.isArray(arr) && arr[0]?.id != null ? String(arr[0].id) : undefined;
@@ -352,7 +231,12 @@ async function restUpsertProduct(
     headers: { ...baseHeaders, Prefer: "return=minimal" },
     body: JSON.stringify(patch),
   });
-  return { ok: res.ok };
+  if (!res.ok) {
+    const errText = (await res.text()).slice(0, 800);
+    console.error("[fastrax-sync-catalog] PATCH products failed", res.status, errText);
+    return { ok: false, dbError: errText || `HTTP ${res.status}` };
+  }
+  return { ok: true };
 }
 
 async function restDeactivateMissing(
@@ -583,12 +467,15 @@ Deno.serve(async (req) => {
   const imageMax = Math.max(0, Math.min(80, Number(Deno.env.get("FASTRAX_IMAGE_MAX") ?? "25") || 25));
 
   if (mode === "full" && merged.size === 0) {
+    const fmt = (Deno.env.get("FASTRAX_REQUEST_FORMAT") ?? "json").toLowerCase();
     return new Response(
       JSON.stringify({
         ok: false,
         error: "empty_catalog",
-        message: "La API no devolvió productos reconocibles (ope=1/98). Revisá credenciales o formato de respuesta.",
+        message:
+          "La API respondió pero no se encontraron filas con SKU reconocible (ope=1/91–94/98). Probá secret FASTRAX_REQUEST_FORMAT=form si la API usa form-urlencoded; revisá credenciales y el JSON real en logs de esta función.",
         stats,
+        hint_request_format: fmt,
       }),
       { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -598,6 +485,7 @@ Deno.serve(async (req) => {
   const skuToId = new Map(existing.map((e) => [e.external_product_id, e.id]));
   const activeSkus = new Set<string>();
   let imageBudget = imageMax;
+  let firstDbError: string | undefined;
 
   for (const [sku, raw0] of merged) {
     if (!sku) {
@@ -644,7 +532,8 @@ Deno.serve(async (req) => {
       a: active,
       c: cat2,
     });
-    const crc = await sha256Hex(crcPayload);
+    const crcFromApi = pickFastraxCrc(raw);
+    const crc = crcFromApi ?? await sha256Hex(crcPayload);
     const now = new Date().toISOString();
 
     const external_active = active;
@@ -655,7 +544,7 @@ Deno.serve(async (req) => {
       category: cat2,
       price,
       stock: external_active ? stock : 0,
-      image: image || str(raw.image ?? raw.imagen ?? raw.url_imagen ?? ""),
+      image: image || pickImageUrl(raw),
       images: images.length ? images : null,
       product_source_type: SOURCE_TYPE,
       external_provider: PROVIDER,
@@ -671,16 +560,22 @@ Deno.serve(async (req) => {
     try {
       if (existingId) {
         dbRow.id = existingId;
-        const { ok } = await restUpsertProduct(projectUrl, service, dbRow, "update");
+        const { ok, dbError } = await restUpsertProduct(projectUrl, service, dbRow, "update");
         if (ok) stats.updated += 1;
-        else stats.failed += 1;
+        else {
+          stats.failed += 1;
+          if (!firstDbError && dbError) firstDbError = dbError.slice(0, 500);
+        }
       } else {
         dbRow.created_at = now;
-        const { ok, id: newId } = await restUpsertProduct(projectUrl, service, dbRow, "insert");
+        const { ok, id: newId, dbError } = await restUpsertProduct(projectUrl, service, dbRow, "insert");
         if (ok) {
           stats.inserted += 1;
           if (newId) skuToId.set(sku, newId);
-        } else stats.failed += 1;
+        } else {
+          stats.failed += 1;
+          if (!firstDbError && dbError) firstDbError = dbError.slice(0, 500);
+        }
       }
     } catch {
       stats.failed += 1;
@@ -697,6 +592,7 @@ Deno.serve(async (req) => {
       mode,
       stats,
       products_seen: merged.size,
+      ...(firstDbError && stats.failed > 0 ? { db_error_sample: firstDbError } : {}),
     }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );

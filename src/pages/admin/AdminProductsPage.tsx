@@ -125,19 +125,34 @@ export default function AdminProductsPage() {
     try {
       const res = await syncFastraxProducts();
       const s = res.stats;
-      toast({
-        title: "Fastrax actualizado",
-        description: [
-          `Procesados (API): ${res.products_seen}`,
-          `Nuevos ${s.inserted}, actualizados ${s.updated}`,
-          s.skipped ? `Omitidos: ${s.skipped}` : null,
-          s.images_fetched ? `Imágenes: ${s.images_fetched}` : null,
-          s.failed ? `Fallidos: ${s.failed}` : null,
-          s.deactivated ? `Marcados inactivos: ${s.deactivated}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      });
+      const nothingWritten = s.inserted + s.updated === 0 && res.products_seen > 0;
+      const partialOk = s.inserted + s.updated > 0 && s.failed > 0;
+      const lines = [
+        `Procesados (API): ${res.products_seen}`,
+        `Nuevos ${s.inserted}, actualizados ${s.updated}`,
+        s.skipped ? `Omitidos: ${s.skipped}` : null,
+        s.images_fetched ? `Imágenes: ${s.images_fetched}` : null,
+        s.failed ? `Fallidos: ${s.failed}` : null,
+        s.deactivated ? `Marcados inactivos: ${s.deactivated}` : null,
+        res.db_error_sample ? `DB: ${res.db_error_sample}` : null,
+      ].filter(Boolean);
+      if (nothingWritten && s.failed > 0) {
+        toast({
+          variant: "destructive",
+          title: "Fastrax: no se guardó ningún producto",
+          description: lines.join(" · "),
+        });
+      } else if (partialOk) {
+        toast({
+          title: "Fastrax: sincronización parcial",
+          description: lines.join(" · "),
+        });
+      } else {
+        toast({
+          title: "Fastrax actualizado",
+          description: lines.join(" · "),
+        });
+      }
       refreshProductsQuiet();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
