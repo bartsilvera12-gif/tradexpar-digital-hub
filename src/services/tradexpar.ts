@@ -85,6 +85,26 @@ export function clearOAuthReturnPending(): void {
   }
 }
 
+/** Pantalla de login del panel: no hidratar flujo tienda (evita competir con signIn del admin en GoTrue). */
+export function isAdminLoginPath(): boolean {
+  if (typeof window === "undefined") return false;
+  return /\/admin\/login\b/.test(window.location.pathname);
+}
+
+let adminPanelSignInDepth = 0;
+
+/** True mientras corre el login del panel (signInWithPassword + assertAdminProfile). */
+export function isAdminPanelSignInBusy(): boolean {
+  return adminPanelSignInDepth > 0;
+}
+
+function withAdminPanelSignIn<T>(fn: () => Promise<T>): Promise<T> {
+  adminPanelSignInDepth += 1;
+  return fn().finally(() => {
+    adminPanelSignInDepth = Math.max(0, adminPanelSignInDepth - 1);
+  });
+}
+
 function tx() {
   if (!isSupabaseConfigured()) {
     throw new Error(
@@ -213,6 +233,10 @@ function mapProduct(row: Record<string, unknown>): Product {
   const allImages =
     imageUrls.length > 0 ? imageUrls : primary ? [primary] : [];
 
+  const pstRaw = String(row.product_source_type ?? "tradexpar");
+  const product_source_type: Product["product_source_type"] =
+    pstRaw === "dropi" ? "dropi" : pstRaw === "fastrax" ? "fastrax" : "tradexpar";
+
   return {
     id: String(row.id),
     name: String(row.name ?? ""),
@@ -233,7 +257,15 @@ function mapProduct(row: Record<string, unknown>): Product {
           : row.createdAt != null
             ? String(row.createdAt)
             : undefined,
-    product_source_type: (row.product_source_type as Product["product_source_type"]) ?? "tradexpar",
+    product_source_type,
+    external_provider: row.external_provider != null ? String(row.external_provider) : null,
+    external_product_id: row.external_product_id != null ? String(row.external_product_id) : null,
+    external_payload: row.external_payload,
+    external_sync_crc: row.external_sync_crc != null ? String(row.external_sync_crc) : null,
+    external_last_sync_at: row.external_last_sync_at != null ? String(row.external_last_sync_at) : null,
+    external_active: row.external_active === null || row.external_active === undefined
+      ? null
+      : Boolean(row.external_active),
     discount_type: (row.discount_type as Product["discount_type"]) ?? null,
     discount_value: row.discount_value != null ? Number(row.discount_value) : null,
     discount_starts_at: row.discount_starts_at != null ? String(row.discount_starts_at) : null,
@@ -336,8 +368,9 @@ async function enrichOrdersWithProductMeta(
   return orders.map((o) => {
     const items = o.items.map((i) => {
       const p = pmap.get(i.product_id);
-      const pst =
-        p?.product_source_type === "dropi" ? "dropi" : ("tradexpar" as const);
+      const raw = p?.product_source_type ?? "tradexpar";
+      const pst: OrderLineItem["product_source_type"] =
+        raw === "dropi" ? "dropi" : raw === "fastrax" ? "fastrax" : "tradexpar";
       return {
         ...i,
         sku: p?.sku ?? i.sku,
@@ -432,7 +465,7 @@ async function assertAdminProfile(userId: string) {
     .select("is_super_admin")
     .eq("id", userId)
     .maybeSingle()
-    .abortSignal(AbortSignal.timeout(12_000));
+    .abortSignal(requestAbortSignal(12_000));
   if (error) {
     const msg = error.message ?? String(error);
     await getSupabaseAuth().auth.signOut({ scope: "local" });
@@ -908,37 +941,58 @@ export const tradexpar = {
 
   adminLogin: async (payload: { email: string; password: string }) => {
     /**
-     * `runAuthExclusive` serializa con otros `getSession`/signOut de la app.
-     * No anidar otro `runAuthExclusive` dentro de `assertAdminProfile` (signOut directo).
-     * Sin `Promise.race` artificial: si falla, debe verse el error real de red o de Supabase.
+     * Sin `runAuthExclusive`: evita cola bloqueada por getSession de otros módulos.
+     * `withAdminPanelSignIn`: mientras corre, `syncStoreCustomer` / onAuthStateChange no compiten
+     * con el mismo cliente GoTrue (misma causa de «botón cargando» infinito).
      */
-    return runAuthExclusive(async () => {
-      const { data, error } = await getSupabaseAuth().auth.signInWithPassword({
-        email: payload.email.trim(),
-        password: payload.password,
-      });
-      if (error) throw new Error(error.message);
-      const uid = data.user?.id;
-      if (!uid) throw new Error("Sesión inválida");
-      const accessToken = data.session?.access_token ?? null;
-      if (accessToken) setDataClientAccessToken(accessToken);
-      await assertAdminProfile(uid);
-      const meta = data.user;
-      const name =
-        (meta.user_metadata?.full_name as string) ||
-        (meta.user_metadata?.name as string) ||
-        meta.email?.split("@")[0] ||
-        "Admin";
-      return {
-        token: accessToken ?? "",
-        user: {
-          id: uid,
-          email: meta.email ?? payload.email,
-          name,
-          role: "admin",
-        },
-      };
-    });
+    const ADMIN_LOGIN_TIMEOUT_MS = 28_000;
+    const timeoutMessage =
+      "El inicio de sesión tardó demasiado. Cerrá otras pestañas de esta tienda, comprobá tu red o intentá de nuevo.";
+
+    try {
+      return await withAdminPanelSignIn(() =>
+        Promise.race([
+          (async () => {
+            const { data, error } = await getSupabaseAuth().auth.signInWithPassword({
+              email: payload.email.trim(),
+              password: payload.password,
+            });
+            if (error) throw new Error(error.message);
+            const uid = data.user?.id;
+            if (!uid) throw new Error("Sesión inválida");
+            /** Igual que customerLogin: no encadenar getSession/refresh aquí (puede bloquearse con el lock de GoTrue). */
+            const accessToken = data.session?.access_token ?? null;
+            if (accessToken) setDataClientAccessToken(accessToken);
+            await assertAdminProfile(uid);
+            const meta = data.user;
+            const name =
+              (meta.user_metadata?.full_name as string) ||
+              (meta.user_metadata?.name as string) ||
+              meta.email?.split("@")[0] ||
+              "Admin";
+            return {
+              token: accessToken ?? "",
+              user: {
+                id: uid,
+                email: meta.email ?? payload.email,
+                name,
+                role: "admin",
+              },
+            };
+          })(),
+          new Promise<never>((_, rej) => {
+            setTimeout(() => rej(new Error(timeoutMessage)), ADMIN_LOGIN_TIMEOUT_MS);
+          }),
+        ])
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === timeoutMessage) {
+        await getSupabaseAuth().auth.signOut({ scope: "local" }).catch(() => {});
+        setDataClientAccessToken(null);
+      }
+      throw e instanceof Error ? e : new Error(msg);
+    }
   },
 
   adminGetOrders: async () => {
@@ -1153,15 +1207,22 @@ export const tradexpar = {
  */
 async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   if (!isSupabaseConfigured()) return null;
+  if (isAdminLoginPath() || isAdminPanelSignInBusy()) {
+    return null;
+  }
   const auth = getSupabaseAuth().auth;
   /** `initialize()` puede limpiar el hash; guardar antes si venimos de OAuth. */
   const oauthReturn = isOAuthCallbackUrl() || isOAuthReturnPending();
+  /** Si la SPA navegó a /admin/login mientras corría el hydrate, no bloquear GoTrue. */
+  if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
   await auth.initialize();
+  if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
   let session = (await auth.getSession()).data.session;
   /** Tras redirect OAuth (PKCE puede tardar), la sesión puede aparecer tarde. */
   if (oauthReturn && !session?.user) {
     /** ~4s máx.; el hydrate global lleva otro timeout para no colgar la app. */
     for (let i = 0; i < 40; i++) {
+      if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
       await new Promise((r) => setTimeout(r, 100));
       session = (await auth.getSession()).data.session;
       if (session?.user) break;

@@ -156,7 +156,9 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
   return rows.map((o) => {
     const items = o.items.map((i) => {
       const p = pmap.get(i.product_id);
-      const pst = p?.product_source_type === "dropi" ? "dropi" : ("tradexpar" as const);
+      const raw = p?.product_source_type ?? "tradexpar";
+      const pst: OrderLineItem["product_source_type"] =
+        raw === "dropi" ? "dropi" : raw === "fastrax" ? "fastrax" : "tradexpar";
       return { ...i, sku: p?.sku ?? i.sku, product_source_type: pst };
     });
     return { ...o, items, order_kind: deriveOrderKind(items) };

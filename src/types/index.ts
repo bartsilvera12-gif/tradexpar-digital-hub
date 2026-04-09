@@ -13,7 +13,13 @@ export interface Product {
   description: string;
   category: string;
   created_at?: string;
-  product_source_type?: "tradexpar" | "dropi";
+  product_source_type?: "tradexpar" | "dropi" | "fastrax";
+  external_provider?: string | null;
+  external_product_id?: string | null;
+  external_payload?: unknown;
+  external_sync_crc?: string | null;
+  external_last_sync_at?: string | null;
+  external_active?: boolean | null;
   discount_type?: "percentage" | "fixed" | null;
   discount_value?: number | null;
   discount_starts_at?: string | null;
@@ -40,7 +46,7 @@ export interface OrderLineItem extends OrderItem {
   line_subtotal?: number;
   line_status?: string;
   sku?: string;
-  product_source_type?: "tradexpar" | "dropi";
+  product_source_type?: "tradexpar" | "dropi" | "fastrax";
   external_provider?: string | null;
   external_product_id?: string | null;
   external_order_id?: string | null;

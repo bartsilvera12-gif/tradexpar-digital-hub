@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { CustomerUser } from "@/types";
-import { clearOAuthReturnPending, isOAuthCallbackUrl, isOAuthReturnPending, tradexpar } from "@/services/tradexpar";
+import {
+  clearOAuthReturnPending,
+  isAdminLoginPath,
+  isAdminPanelSignInBusy,
+  isOAuthCallbackUrl,
+  isOAuthReturnPending,
+  tradexpar,
+} from "@/services/tradexpar";
 import { getSupabaseAuth, runAuthExclusive, setDataClientAccessToken } from "@/lib/supabaseClient";
 
 interface CustomerAuthContextType {
@@ -54,6 +61,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     const oauthHydrateTimeoutMs = 45000;
 
     const trySync = async () => {
+      /** Misma pestaña en /admin/login: no llamar initialize/getSession de tienda (bloquea login del panel). */
+      if (typeof window !== "undefined" && isAdminLoginPath()) {
+        if (!cancelled) setInitializing(false);
+        return;
+      }
       const oauthFlow =
         typeof window !== "undefined" && (isOAuthCallbackUrl() || isOAuthReturnPending());
       const timeoutMs = oauthFlow ? oauthHydrateTimeoutMs : hydrateTimeoutMs;
@@ -87,6 +99,8 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       if (credentialAuthInProgressRef.current && event === "SIGNED_IN") {
         return;
       }
+      if (typeof window !== "undefined" && isAdminLoginPath()) return;
+      if (isAdminPanelSignInBusy()) return;
       /** USER_UPDATED: metadatos/identidades OAuth tras redirect. */
       if (
         event === "INITIAL_SESSION" ||

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/adminModuleLayout";
 import { formatGuaraniesInteger, parseGuaraniesInput } from "@/lib/paraguayNumberFormat";
 import { tradexpar } from "@/services/tradexpar";
+import { syncFastraxProducts } from "@/services/fastraxCatalog";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { getDiscountPercentage, getEffectivePrice, getStockLabel } from "@/lib/productHelpers";
@@ -88,6 +89,7 @@ export default function AdminProductsPage() {
   const [openForm, setOpenForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Product>>(emptyForm);
+  const [fastraxSyncing, setFastraxSyncing] = useState(false);
 
   const fetchProducts = () => {
     setLoading(true);
@@ -99,9 +101,53 @@ export default function AdminProductsPage() {
       .finally(() => setLoading(false));
   };
 
+  /** Recarga lista sin overlay (p. ej. tras sync Fastrax). */
+  const refreshProductsQuiet = () => {
+    tradexpar
+      .getProducts()
+      .then(setProducts)
+      .catch((err) => setError(err.message));
+  };
+
   useEffect(() => { fetchProducts(); }, []);
 
-  const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const searchNorm = search.toLowerCase().trim();
+  const filtered = products.filter((p) => {
+    if (!searchNorm) return true;
+    const name = (p.name ?? "").toLowerCase();
+    const sku = (p.sku ?? "").toLowerCase();
+    return name.includes(searchNorm) || sku.includes(searchNorm);
+  });
+
+  const handleFastraxSync = async () => {
+    if (fastraxSyncing) return;
+    setFastraxSyncing(true);
+    try {
+      const res = await syncFastraxProducts();
+      const s = res.stats;
+      toast({
+        title: "Fastrax actualizado",
+        description: [
+          `API: ${res.products_seen} ítems`,
+          `Nuevos ${s.inserted}, actualizados ${s.updated}`,
+          s.failed ? `Fallidos: ${s.failed}` : null,
+          s.deactivated ? `Inactivos: ${s.deactivated}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      });
+      refreshProductsQuiet();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({
+        variant: "destructive",
+        title: "No se pudo sincronizar Fastrax",
+        description: msg,
+      });
+    } finally {
+      setFastraxSyncing(false);
+    }
+  };
 
   const startCreate = () => {
     setEditingId(null);
@@ -167,31 +213,62 @@ export default function AdminProductsPage() {
     }
   };
 
+  const catalogActionButtons = (
+    <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:justify-end">
+      <Button
+        type="button"
+        variant="outline"
+        size="default"
+        onClick={() => void handleFastraxSync()}
+        disabled={fastraxSyncing}
+        className="gap-2 w-full min-h-11 border-2 border-amber-600/60 bg-amber-100 text-amber-950 font-semibold hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-50 dark:hover:bg-amber-950/60 sm:w-auto sm:min-w-[220px]"
+        aria-label="Sincronizar catálogo Fastrax"
+      >
+        {fastraxSyncing ? (
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+        ) : (
+          <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
+        )}
+        Actualizar productos Fastrax
+      </Button>
+      <Button
+        type="button"
+        onClick={startCreate}
+        className="gap-2 gradient-celeste text-primary-foreground shadow-sm w-full min-h-11 font-semibold sm:w-auto sm:min-w-[180px]"
+        aria-label="Crear producto nuevo"
+      >
+        <Plus className="h-4 w-4" />
+        Nuevo producto
+      </Button>
+    </div>
+  );
+
   return (
-    <AdminPageShell title="Productos">
+    <AdminPageShell title="Productos" description="Fastrax: botones en la caja ámbar (Edge Function + SQL + secretos). También en Configuración.">
+      {/* Caja a ancho completo: no depende del header en dos columnas (evita recortes con sidebar / overflow). */}
+      <div
+        className="w-full max-w-full rounded-xl border-2 border-dashed border-amber-500/50 bg-amber-50/80 dark:bg-amber-950/25 px-3 py-3 sm:px-4 space-y-3"
+        data-testid="admin-products-actions"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+          Acciones de catálogo
+        </p>
+        {catalogActionButtons}
+      </div>
+
       <div className="space-y-3 w-full">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2.5 w-full">
           Buscar en catálogo
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-          <div className="relative flex-1 min-w-0 w-full sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Nombre o SKU…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={cn(ADMIN_FORM_CONTROL, "pl-10 w-full")}
-            />
-          </div>
-          <Button
-            type="button"
-            onClick={startCreate}
-            className="gap-2 gradient-celeste text-primary-foreground shadow-sm shrink-0 w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo producto
-          </Button>
+        <div className="relative flex-1 min-w-0 w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Nombre o SKU…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={cn(ADMIN_FORM_CONTROL, "pl-10 w-full")}
+          />
         </div>
       </div>
 
@@ -249,8 +326,20 @@ export default function AdminProductsPage() {
                       </div>
                     </td>
                     <td className={ADMIN_TD}>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${p.product_source_type === "dropi" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
-                        {p.product_source_type === "dropi" ? "Dropi" : "Tradexpar"}
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          p.product_source_type === "dropi"
+                            ? "bg-violet-100 text-violet-700"
+                            : p.product_source_type === "fastrax"
+                              ? "bg-amber-100 text-amber-900"
+                              : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {p.product_source_type === "dropi"
+                          ? "Dropi"
+                          : p.product_source_type === "fastrax"
+                            ? "Fastrax"
+                            : "Tradexpar"}
                       </span>
                     </td>
                     <td className={`${ADMIN_TD} text-right`}>
@@ -349,7 +438,9 @@ export default function AdminProductsPage() {
                 <Label className={ADMIN_FORM_LABEL}>Origen del catálogo</Label>
                 <Select
                   value={form.product_source_type || "tradexpar"}
-                  onValueChange={(v) => setForm({ ...form, product_source_type: v as "tradexpar" | "dropi" })}
+                  onValueChange={(v) =>
+                    setForm({ ...form, product_source_type: v as "tradexpar" | "dropi" | "fastrax" })
+                  }
                 >
                   <SelectTrigger className={ADMIN_FORM_CONTROL}>
                     <SelectValue placeholder="Elegí origen" />
@@ -357,6 +448,7 @@ export default function AdminProductsPage() {
                   <SelectContent>
                     <SelectItem value="tradexpar">Tradexpar</SelectItem>
                     <SelectItem value="dropi">Dropi</SelectItem>
+                    <SelectItem value="fastrax">Fastrax (recomendado vía sincronización)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -48,11 +48,15 @@ export function orderKindLabel(k: OrderKindComputed): string {
 }
 
 export function productTypeLabel(src: OrderLineItem["product_source_type"]): string {
-  return src === "dropi" ? "Dropi" : "Tradexpar";
+  if (src === "dropi") return "Dropi";
+  if (src === "fastrax") return "Fastrax";
+  return "Tradexpar";
 }
 
 export function sourceLabel(src: OrderLineItem["product_source_type"]): string {
-  return src === "dropi" ? "Dropi" : "Tradexpar";
+  if (src === "dropi") return "Dropi";
+  if (src === "fastrax") return "Fastrax";
+  return "Tradexpar";
 }
 
 export function isDropiLine(it: OrderLineItem): boolean {
@@ -132,7 +136,8 @@ export function orderLineGroupKey(it: OrderLineItem): string {
   const skuNorm = (it.sku || "").trim().toLowerCase() || "_";
   const idPart = pid || skuNorm;
   const price = Number(it.price) || 0;
-  const src = it.product_source_type === "dropi" ? "dropi" : "int";
+  const src =
+    it.product_source_type === "dropi" ? "dropi" : it.product_source_type === "fastrax" ? "fastrax" : "int";
   return `${idPart}|${skuNorm}|${price.toFixed(4)}|${src}`;
 }
 

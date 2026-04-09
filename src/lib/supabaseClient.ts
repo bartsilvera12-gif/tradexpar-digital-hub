@@ -269,70 +269,90 @@ function clearAdminPanelSession(): void {
 
  */
 
+const ADMIN_TOKEN_SYNC_RACE_MS = 12_000;
+
 export async function syncDataClientTokenFromAuthSession(): Promise<void> {
 
   if (!isSupabaseConfigured()) return;
 
   if (tryApplyCachedAdminJwt()) return;
 
-  await runAuthExclusive(async () => {
-    const auth = getSupabaseAuth();
+  try {
+    await Promise.race([
+      runAuthExclusive(async () => {
+        const auth = getSupabaseAuth();
 
-    const { data: { session }, error } = await auth.auth.getSession();
+        const { data: { session }, error } = await auth.auth.getSession();
 
-    if (error) {
-      const m = error.message ?? "";
-      if (isInvalidRefreshTokenError(m)) clearAdminPanelSession();
-      throw new Error(m || "No se pudo leer la sesión.");
+        if (error) {
+          const m = error.message ?? "";
+          if (isInvalidRefreshTokenError(m)) clearAdminPanelSession();
+          throw new Error(m || "No se pudo leer la sesión.");
+        }
+
+        let token = session?.access_token ?? null;
+
+        const expMs = (() => {
+          const sec = session?.expires_at;
+          if (sec != null) return sec * 1000;
+          if (!token) return 0;
+          try {
+            const p = JSON.parse(atob(token.split(".")[1])) as { exp?: number };
+            return p.exp != null ? p.exp * 1000 : 0;
+          } catch {
+            return 0;
+          }
+        })();
+
+        const stale = !token || (expMs > 0 && expMs < Date.now() + 60_000);
+
+        if (stale) {
+          let refreshed: string | null = null;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const { data, error: rErr } = await auth.auth.refreshSession();
+            if (!rErr && data.session?.access_token) {
+              refreshed = data.session.access_token;
+              break;
+            }
+            const rMsg = rErr?.message ?? "";
+            if (isInvalidRefreshTokenError(rMsg)) {
+              clearAdminPanelSession();
+              throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
+            }
+            if (attempt === 0 && isTransientAuthSdkError(rMsg)) {
+              await sleep(450);
+              continue;
+            }
+            throw new Error(
+              rMsg || "Sesión expirada. Volvé a iniciar sesión en el panel."
+            );
+          }
+          if (!refreshed) {
+            throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
+          }
+          token = refreshed;
+        }
+
+        if (!token) throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
+        sessionStorage.setItem("tradexpar_admin_token", token);
+        setDataClientAccessToken(token);
+      }),
+      new Promise<void>((_, rej) =>
+        setTimeout(() => rej(new Error("__admin_token_sync_timeout__")), ADMIN_TOKEN_SYNC_RACE_MS)
+      ),
+    ]);
+  } catch (e) {
+    const m = e instanceof Error ? e.message : "";
+    if (m === "__admin_token_sync_timeout__") {
+      const t =
+        typeof sessionStorage !== "undefined" ? sessionStorage.getItem("tradexpar_admin_token") : null;
+      if (t?.trim()) {
+        setDataClientAccessToken(t.trim());
+        return;
+      }
     }
-
-    let token = session?.access_token ?? null;
-
-    const expMs = (() => {
-      const sec = session?.expires_at;
-      if (sec != null) return sec * 1000;
-      if (!token) return 0;
-      try {
-        const p = JSON.parse(atob(token.split(".")[1])) as { exp?: number };
-        return p.exp != null ? p.exp * 1000 : 0;
-      } catch {
-        return 0;
-      }
-    })();
-
-    const stale = !token || (expMs > 0 && expMs < Date.now() + 60_000);
-
-    if (stale) {
-      let refreshed: string | null = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const { data, error: rErr } = await auth.auth.refreshSession();
-        if (!rErr && data.session?.access_token) {
-          refreshed = data.session.access_token;
-          break;
-        }
-        const rMsg = rErr?.message ?? "";
-        if (isInvalidRefreshTokenError(rMsg)) {
-          clearAdminPanelSession();
-          throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
-        }
-        if (attempt === 0 && isTransientAuthSdkError(rMsg)) {
-          await sleep(450);
-          continue;
-        }
-        throw new Error(
-          rMsg || "Sesión expirada. Volvé a iniciar sesión en el panel."
-        );
-      }
-      if (!refreshed) {
-        throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
-      }
-      token = refreshed;
-    }
-
-    if (!token) throw new Error("Sesión expirada. Volvé a iniciar sesión en el panel.");
-    sessionStorage.setItem("tradexpar_admin_token", token);
-    setDataClientAccessToken(token);
-  });
+    throw e;
+  }
 }
 
 

@@ -1,6 +1,8 @@
 import type { CartItem, Product } from "@/types";
 
-/** Origen comercial del producto: solo Tradexpar o Dropi (sin “mixto”). */
+/**
+ * Canal de checkout: Dropi aparte; Tradexpar y Fastrax comparten el mismo flujo local (sin pedido en Fastrax).
+ */
 export function normalizeProductSource(product: Product): "tradexpar" | "dropi" {
   return product.product_source_type === "dropi" ? "dropi" : "tradexpar";
 }

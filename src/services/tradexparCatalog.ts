@@ -13,6 +13,9 @@ function assertConfigured() {
 
 export function mapProductRow(row: Record<string, unknown>): Product {
   const imgs = row.images;
+  const pstRaw = String(row.product_source_type ?? "tradexpar");
+  const product_source_type: Product["product_source_type"] =
+    pstRaw === "dropi" ? "dropi" : pstRaw === "fastrax" ? "fastrax" : "tradexpar";
   return {
     id: String(row.id),
     name: String(row.name ?? ""),
@@ -26,7 +29,16 @@ export function mapProductRow(row: Record<string, unknown>): Product {
     description: String(row.description ?? ""),
     category: String(row.category ?? ""),
     created_at: row.created_at as string | undefined,
-    product_source_type: (row.product_source_type as Product["product_source_type"]) || "tradexpar",
+    product_source_type,
+    external_provider: row.external_provider != null ? String(row.external_provider) : null,
+    external_product_id: row.external_product_id != null ? String(row.external_product_id) : null,
+    external_payload: row.external_payload,
+    external_sync_crc: row.external_sync_crc != null ? String(row.external_sync_crc) : null,
+    external_last_sync_at: row.external_last_sync_at != null ? String(row.external_last_sync_at) : null,
+    external_active:
+      row.external_active === null || row.external_active === undefined
+        ? null
+        : Boolean(row.external_active),
     discount_type: (row.discount_type as Product["discount_type"]) ?? null,
     discount_value: row.discount_value != null ? Number(row.discount_value) : null,
     discount_starts_at: (row.discount_starts_at as string) ?? null,
