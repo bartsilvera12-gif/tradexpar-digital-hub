@@ -21,7 +21,7 @@ export function AdminPageShell({ title, description, actions, children, classNam
             ) : null}
           </div>
           {actions ? (
-            <div className="w-full min-w-0 lg:w-auto lg:shrink-0 flex flex-wrap gap-2 justify-stretch sm:justify-end lg:pt-0.5">
+            <div className="w-full min-w-0 lg:w-auto lg:shrink-0 flex flex-wrap items-center gap-2 justify-end lg:justify-end lg:pt-0.5">
               {actions}
             </div>
           ) : null}

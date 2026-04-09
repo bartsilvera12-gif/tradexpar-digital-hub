@@ -128,10 +128,12 @@ export default function AdminProductsPage() {
       toast({
         title: "Fastrax actualizado",
         description: [
-          `API: ${res.products_seen} ítems`,
+          `Procesados (API): ${res.products_seen}`,
           `Nuevos ${s.inserted}, actualizados ${s.updated}`,
+          s.skipped ? `Omitidos: ${s.skipped}` : null,
+          s.images_fetched ? `Imágenes: ${s.images_fetched}` : null,
           s.failed ? `Fallidos: ${s.failed}` : null,
-          s.deactivated ? `Inactivos: ${s.deactivated}` : null,
+          s.deactivated ? `Marcados inactivos: ${s.deactivated}` : null,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -213,15 +215,15 @@ export default function AdminProductsPage() {
     }
   };
 
-  const catalogActionButtons = (
-    <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:justify-end">
+  const headerActions = (
+    <div className="flex flex-row flex-wrap items-center justify-end gap-2 w-full lg:w-auto shrink-0">
       <Button
         type="button"
         variant="outline"
         size="default"
         onClick={() => void handleFastraxSync()}
         disabled={fastraxSyncing}
-        className="gap-2 w-full min-h-11 border-2 border-amber-600/60 bg-amber-100 text-amber-950 font-semibold hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-50 dark:hover:bg-amber-950/60 sm:w-auto sm:min-w-[220px]"
+        className="gap-2 min-h-10 whitespace-nowrap"
         aria-label="Sincronizar catálogo Fastrax"
       >
         {fastraxSyncing ? (
@@ -234,7 +236,7 @@ export default function AdminProductsPage() {
       <Button
         type="button"
         onClick={startCreate}
-        className="gap-2 gradient-celeste text-primary-foreground shadow-sm w-full min-h-11 font-semibold sm:w-auto sm:min-w-[180px]"
+        className="gap-2 gradient-celeste text-primary-foreground shadow-sm min-h-10 whitespace-nowrap"
         aria-label="Crear producto nuevo"
       >
         <Plus className="h-4 w-4" />
@@ -244,18 +246,11 @@ export default function AdminProductsPage() {
   );
 
   return (
-    <AdminPageShell title="Productos" description="Fastrax: botones en la caja ámbar (Edge Function + SQL + secretos). También en Configuración.">
-      {/* Caja a ancho completo: no depende del header en dos columnas (evita recortes con sidebar / overflow). */}
-      <div
-        className="w-full max-w-full rounded-xl border-2 border-dashed border-amber-500/50 bg-amber-50/80 dark:bg-amber-950/25 px-3 py-3 sm:px-4 space-y-3"
-        data-testid="admin-products-actions"
-      >
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
-          Acciones de catálogo
-        </p>
-        {catalogActionButtons}
-      </div>
-
+    <AdminPageShell
+      title="Productos"
+      description="Administrá el catálogo local. Los productos Fastrax se guardan aquí y usan el mismo flujo de carrito y pedidos que el resto."
+      actions={headerActions}
+    >
       <div className="space-y-3 w-full">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2.5 w-full">
           Buscar en catálogo

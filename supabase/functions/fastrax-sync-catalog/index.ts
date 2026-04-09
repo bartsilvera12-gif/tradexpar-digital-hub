@@ -436,12 +436,86 @@ Deno.serve(async (req) => {
     }
   }
 
-  let body: { mode?: string; since?: string };
+  let body: { mode?: string; since?: string; probe?: string; sku?: string };
   try {
-    body = (await req.json()) as { mode?: string; since?: string };
+    body = (await req.json()) as { mode?: string; since?: string; probe?: string; sku?: string };
   } catch {
     body = {};
   }
+
+  const skuProbe = typeof body.sku === "string" ? body.sku.trim() : "";
+  const sinceForProbe = typeof body.since === "string" ? body.since.trim() : "";
+
+  if (body.probe === "products") {
+    const r = await fastraxCall(1, {});
+    if (!r.ok) {
+      return new Response(
+        JSON.stringify({ ok: false, ope: 1, message: r.message }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify({ ok: true, ope: 1, data: r.parsed }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (body.probe === "changed") {
+    const extra: Record<string, unknown> = {};
+    if (sinceForProbe) {
+      const paramName = (Deno.env.get("FASTRAX_CHANGED_SINCE_PARAM") ?? "fecha").trim() || "fecha";
+      extra[paramName] = sinceForProbe;
+    }
+    const r = await fastraxCall(99, extra);
+    if (!r.ok) {
+      return new Response(
+        JSON.stringify({ ok: false, ope: 99, message: r.message }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify({ ok: true, ope: 99, data: r.parsed }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (body.probe === "detail" && skuProbe) {
+    const r = await fastraxCall(2, {
+      sku: skuProbe,
+      codigo: skuProbe,
+      cod_art: skuProbe,
+      articulo: skuProbe,
+    });
+    if (!r.ok) {
+      return new Response(
+        JSON.stringify({ ok: false, ope: 2, message: r.message }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify({ ok: true, ope: 2, data: r.parsed }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  if (body.probe === "images" && skuProbe) {
+    const r = await fastraxCall(94, {
+      sku: skuProbe,
+      codigo: skuProbe,
+      cod_art: skuProbe,
+      articulo: skuProbe,
+    });
+    if (!r.ok) {
+      return new Response(
+        JSON.stringify({ ok: false, ope: 94, message: r.message }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(JSON.stringify({ ok: true, ope: 94, data: r.parsed }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const mode = body.mode === "changed" ? "changed" : "full";
   const sinceParam = typeof body.since === "string" ? body.since.trim() : "";
 
