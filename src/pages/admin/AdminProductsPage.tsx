@@ -125,11 +125,13 @@ export default function AdminProductsPage() {
     try {
       const res = await syncFastraxProducts();
       const s = res.stats;
-      const nothingWritten = s.inserted + s.updated === 0 && res.products_seen > 0;
+      const nothingWritten = s.inserted + s.updated === 0 && s.failed > 0 && res.products_seen > 0;
       const partialOk = s.inserted + s.updated > 0 && s.failed > 0;
       const lines = [
         `Procesados (API): ${res.products_seen}`,
+        res.sync_mode_used ? `Modo: ${res.sync_mode_used}${res.changed_fallback_used ? " (fallback desde ope=99)" : ""}` : null,
         `Nuevos ${s.inserted}, actualizados ${s.updated}`,
+        s.unchanged ? `Sin cambios: ${s.unchanged}` : null,
         s.skipped ? `Omitidos: ${s.skipped}` : null,
         s.images_fetched ? `Imágenes: ${s.images_fetched}` : null,
         s.failed ? `Fallidos: ${s.failed}` : null,

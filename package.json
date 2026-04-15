@@ -13,10 +13,11 @@
     "data:paraguay-cities": "node scripts/generate-paraguay-cities-sql.mjs",
     "test": "vitest run",
     "test:fastrax-map": "npx --yes deno@2.1.4 test --allow-env supabase/functions/fastrax-sync-catalog/map_fastrax_row_test.ts",
+    "fastrax:smoke": "node scripts/fastrax-api-smoke.mjs",
     "test:watch": "vitest",
     "supabase:config-push": "supabase config push",
     "supabase:deploy:admin-password": "npx supabase functions deploy admin-set-customer-password --use-api --no-verify-jwt",
-    "supabase:deploy:fastrax-sync": "npx supabase functions deploy fastrax-sync-catalog --use-api --no-verify-jwt"
+    "supabase:deploy:fastrax-sync": "npx supabase functions deploy fastrax-sync-catalog --use-api"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

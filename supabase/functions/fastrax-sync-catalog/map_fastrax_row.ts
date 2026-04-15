@@ -36,7 +36,7 @@ export function pickSku(row: Record<string, unknown>): string {
   const keys = [
     "sku", "SKU",
     "codigo", "Codigo", "cod_art", "CodArt", "COD_ART", "articulo", "Articulo",
-    "codigo_articulo", "id_articulo",
+    "codigo_articulo", "id_articulo", "CODIGO", "CodigoArticulo", "codigoArt", "ref", "Ref",
   ];
   for (const k of keys) {
     const v = str(row[k]);
@@ -165,7 +165,8 @@ export function extractProductRows(root: unknown, depth = 0): Record<string, unk
   if (!isPlainObject(root)) return [];
   const preferredKeys = [
     "productos", "Productos", "datos", "Datos", "data", "Data", "result", "Result", "rows", "items",
-    "lista", "Table", "articulos", "Articulos", "registros", "Registros", "d", "D",
+    "lista", "Table", "articulos", "Articulos", "lineas", "Lineas", "detalle", "Detalle",
+    "registros", "Registros", "d", "D",
   ];
   for (const k of preferredKeys) {
     if (k in root) {

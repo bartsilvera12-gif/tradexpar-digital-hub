@@ -34,7 +34,7 @@ begin
     where n.nspname = 'tradexpar' and t.relname = 'products' and c.conname = 'products_source_type_chk'
   ) then
     alter table tradexpar.products
-      add constraint products_source_type_chk check (product_source_type in ('tradexpar', 'dropi'));
+      add constraint products_source_type_chk check (product_source_type in ('tradexpar', 'dropi', 'fastrax'));
   end if;
 exception when duplicate_object then null;
 end $$;

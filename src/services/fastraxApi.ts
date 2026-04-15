@@ -29,7 +29,7 @@ export type FastraxCredentials = {
   pas: string;
 };
 
-export type FastraxPostFormat = "json" | "form";
+export type FastraxPostFormat = "json" | "form" | "urlencoded";
 
 export type FastraxPostResult =
   | { ok: true; status: number; parsed: unknown }
@@ -81,6 +81,15 @@ export function parseFastraxResponseText(text: string): unknown {
 /**
  * POST a la API Fastrax. Usar solo en servidor (Edge Function, scripts Node), nunca en el browser con credenciales.
  */
+function defaultFastraxSignal(override?: AbortSignal): AbortSignal {
+  const ms = 90_000;
+  const t = AbortSignal.timeout(ms);
+  if (!override) return t;
+  const anyFn = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
+  if (typeof anyFn === "function") return anyFn([override, t]);
+  return override;
+}
+
 export async function executeFastraxPost(
   creds: FastraxCredentials,
   ope: number,
@@ -90,7 +99,9 @@ export async function executeFastraxPost(
   const url = (creds.apiUrl ?? "").trim().replace(/\/$/, "");
   if (!url) return { ok: false, status: 0, message: "FASTRAX_API_URL vacía" };
 
-  const fmt = options?.format ?? "json";
+  const rawFmt = options?.format ?? "json";
+  const fmt: "json" | "form" = rawFmt === "form" || rawFmt === "urlencoded" ? "form" : "json";
+  const signal = defaultFastraxSignal(options?.signal);
   let res: Response;
   try {
     if (fmt === "form") {
@@ -98,18 +109,21 @@ export async function executeFastraxPost(
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: buildFastraxFormBody(ope, creds, extra),
-        signal: options?.signal,
+        signal,
       });
     } else {
       res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: buildFastraxJsonPayload(ope, creds, extra),
-        signal: options?.signal,
+        signal,
       });
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("abort") || msg.includes("Timeout")) {
+      return { ok: false, status: 504, message: "timeout" };
+    }
     return { ok: false, status: 0, message: `red:${msg}` };
   }
 
@@ -129,6 +143,7 @@ export type FastraxSyncStats = {
   inserted: number;
   updated: number;
   skipped: number;
+  unchanged: number;
   failed: number;
   deactivated: number;
   images_fetched: number;
@@ -137,6 +152,8 @@ export type FastraxSyncStats = {
 export type FastraxSyncSuccessResponse = {
   ok: true;
   mode: string;
+  sync_mode_used?: "full" | "changed";
+  changed_fallback_used?: boolean;
   stats: FastraxSyncStats;
   products_seen: number;
   /** Primer error PostgREST (p. ej. check constraint sin fastrax o columnas faltantes). */

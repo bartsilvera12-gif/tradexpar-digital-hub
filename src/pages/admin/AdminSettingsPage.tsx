@@ -26,7 +26,11 @@ export default function AdminSettingsPage() {
       toast.success("Productos Fastrax actualizados", {
         description: [
           `Vistos en API: ${res.products_seen}`,
+          res.sync_mode_used
+            ? `Modo: ${res.sync_mode_used}${res.changed_fallback_used ? " (fallback ope=99→full)" : ""}`
+            : null,
           `Nuevos: ${s.inserted} · Actualizados: ${s.updated}`,
+          s.unchanged ? `Sin cambios: ${s.unchanged}` : null,
           s.skipped ? `Omitidos: ${s.skipped}` : null,
           s.failed ? `Fallidos: ${s.failed}` : null,
           s.deactivated ? `Marcados inactivos: ${s.deactivated}` : null,

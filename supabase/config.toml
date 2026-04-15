@@ -381,7 +381,7 @@ allow_dynamic_registration = false
 verify_jwt = false
 
 [functions.fastrax-sync-catalog]
-verify_jwt = false
+verify_jwt = true
 
 [edge_runtime]
 enabled = true

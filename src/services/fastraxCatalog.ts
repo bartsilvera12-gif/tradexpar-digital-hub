@@ -166,6 +166,7 @@ export function emptyFastraxSyncStats(): FastraxSyncStats {
     inserted: 0,
     updated: 0,
     skipped: 0,
+    unchanged: 0,
     failed: 0,
     deactivated: 0,
     images_fetched: 0,
