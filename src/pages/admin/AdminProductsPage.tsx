@@ -130,6 +130,7 @@ export default function AdminProductsPage() {
       const lines = [
         `Procesados (API): ${res.products_seen}`,
         res.sync_mode_used ? `Modo: ${res.sync_mode_used}${res.changed_fallback_used ? " (fallback desde ope=99)" : ""}` : null,
+        res.catalog_list_ope ? `Listado API: ope=${res.catalog_list_ope}` : null,
         `Nuevos ${s.inserted}, actualizados ${s.updated}`,
         s.unchanged ? `Sin cambios: ${s.unchanged}` : null,
         s.skipped ? `Omitidos: ${s.skipped}` : null,

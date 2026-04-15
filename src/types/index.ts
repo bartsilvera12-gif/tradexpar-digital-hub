@@ -12,6 +12,12 @@ export interface Product {
   sku: string;
   description: string;
   category: string;
+  /** Marca (Fastrax u otros catálogos). */
+  brand?: string;
+  /** Peso en kg. */
+  weight_kg?: number | null;
+  /** Dimensiones legibles (ej. Fastrax car/alt/lgr). */
+  dimensions_label?: string | null;
   created_at?: string;
   product_source_type?: "tradexpar" | "dropi" | "fastrax";
   external_provider?: string | null;

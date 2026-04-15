@@ -1,6 +1,6 @@
 /**
- * Mapeo de filas JSON Fastrax (documentación: ope 1/2/98/99) → campos locales.
- * Campos típicos: sku, sta, sal, crc (ope=1); nom, pre, prm, des, bre, cat, mar, img (ope=2); atv activo.
+ * Mapeo JSON Fastrax (manual: ope 1/2/3/4/91–94/98/99) → campos locales.
+ * No loguear ni persistir credenciales.
  */
 
 export function num(v: unknown): number {
@@ -45,7 +45,7 @@ export function pickSku(row: Record<string, unknown>): string {
   return "";
 }
 
-/** Doc Fastrax ope=2: `nom` */
+/** Doc ope=2: `nom` */
 export function pickName(row: Record<string, unknown>): string {
   const keys = ["nom", "Nom", "nombre", "Nombre", "name", "titulo", "Titulo", "descripcion_corta", "descripcion", "Descripcion"];
   for (const k of keys) {
@@ -55,11 +55,14 @@ export function pickName(row: Record<string, unknown>): string {
   return "";
 }
 
-/** Doc: `des` o `bre` */
+/** Larga `des`, breve `bre` (se concatenan en la Edge si hace falta). */
 export function pickDescription(row: Record<string, unknown>): string {
   const des = str(row.des ?? row.Des);
-  if (des.length > 0) return des.slice(0, 8000);
   const bre = str(row.bre ?? row.Bre);
+  if (des.length > 0 && bre.length > 0 && des !== bre) {
+    return `${des}\n\n${bre}`.slice(0, 8000);
+  }
+  if (des.length > 0) return des.slice(0, 8000);
   if (bre.length > 0) return bre.slice(0, 8000);
   const longKeys = ["descripcion_larga", "detalle", "observacion", "DescripcionLarga", "descripcion_web"];
   for (const k of longKeys) {
@@ -71,13 +74,42 @@ export function pickDescription(row: Record<string, unknown>): string {
   return pickName(row);
 }
 
-/** Doc: `cat`, `mar` */
-export function pickCategory(row: Record<string, unknown>): string {
-  const cat = str(row.cat ?? row.Cat ?? row.categoria ?? row.Categoria);
-  const mar = str(row.mar ?? row.Mar ?? row.marca ?? row.Marca);
-  if (cat && mar) return `${cat.slice(0, 100)} — ${mar.slice(0, 100)}`.slice(0, 200);
+/** Código o nombre crudo de categoría (ope=2 `cat`, `caw`). */
+export function pickCategoryCode(row: Record<string, unknown>): string {
+  return str(row.cat ?? row.Cat ?? row.categoria ?? row.Categoria);
+}
+
+/** Marca cruda o código (ope=2 `mar`). */
+export function pickBrandCode(row: Record<string, unknown>): string {
+  return str(row.mar ?? row.Mar ?? row.marca ?? row.Marca);
+}
+
+export type TaxonomyMaps = {
+  catWeb: Map<string, string>;
+  brands: Map<string, string>;
+  catSys: Map<string, string>;
+};
+
+function resolveCode(maps: Map<string, string>[], code: string): string {
+  const c = code.trim();
+  if (!c) return "";
+  for (const m of maps) {
+    const x = m.get(c);
+    if (x) return x;
+  }
+  return c;
+}
+
+/** Categoría legible para UI / columna `category` (sin mezclar marca). */
+export function pickCategoryDisplay(row: Record<string, unknown>, tax?: TaxonomyMaps): string {
+  const caw = str(row.caw ?? row.Caw);
+  if (caw) return caw.slice(0, 200);
+  const cat = pickCategoryCode(row);
+  if (cat && tax) {
+    const resolved = resolveCode([tax.catWeb, tax.catSys], cat);
+    return resolved.slice(0, 200);
+  }
   if (cat) return cat.slice(0, 200);
-  if (mar) return mar.slice(0, 200);
   const keys = ["rubro", "Rubro", "familia", "Familia"];
   for (const k of keys) {
     const v = str(row[k]);
@@ -86,34 +118,71 @@ export function pickCategory(row: Record<string, unknown>): string {
   return "";
 }
 
+/** Marca legible para columna `brand`. */
+export function pickBrandDisplay(row: Record<string, unknown>, tax?: TaxonomyMaps): string {
+  const mar = pickBrandCode(row);
+  if (mar && tax) {
+    const r = resolveCode([tax.brands], mar);
+    return r.slice(0, 200);
+  }
+  return mar.slice(0, 200);
+}
+
+/** Compat: categoría + marca en un solo string (p. ej. listados legacy). */
+export function pickCategory(row: Record<string, unknown>, tax?: TaxonomyMaps): string {
+  const c = pickCategoryDisplay(row, tax);
+  const b = pickBrandDisplay(row, tax);
+  if (c && b) return `${c} — ${b}`.slice(0, 240);
+  return (c || b).slice(0, 240);
+}
+
 /**
- * Doc: `pre` lista, precio promo `prm` / `precopromo` si promo activa (`pmp`, `ppm`, `pro`, etc.).
+ * Precio efectivo venta: manual ope=98 `promo` + `precopromo`; ope=2 `prm`, `pre`.
  */
 export function pickPrice(row: Record<string, unknown>): number {
   const pre = num(row.pre ?? row.Pre);
-  const prm = num(row.prm ?? row.Prm ?? row.precopromo ?? row.PrecioPromo);
-  /** Promo solo con bandera explícita (doc: si hay promo activa), no inferir solo comparando prm y pre. */
+  const prm = num(row.prm ?? row.Prm);
+  const precopromo = num(row.precopromo ?? row.PrecioPromo ?? row.prc_promo);
+
   const promoOn = truthy(
-    row.pmp ?? row.ppm ?? row.pro ?? row.prom ?? row.promo_activa ?? row.promoActiva ?? row.en_promo
+    row.promo ??
+      row.Promo ??
+      row.pmp ??
+      row.ppm ??
+      row.pro ??
+      row.prom ??
+      row.promo_activa ??
+      row.promoActiva ??
+      row.en_promo
   );
+
+  if (promoOn && precopromo > 0) return Math.max(0, precopromo);
   if (promoOn && prm > 0) return Math.max(0, prm);
   if (prm > 0 && pre <= 0) return Math.max(0, prm);
   if (pre > 0) return Math.max(0, pre);
 
-  const promoKeys = ["precio_promo", "precio_promocional", "precio_oferta", "precio_especial"];
-  const normalKeys = ["precio", "Precio", "precio_venta", "importe"];
-  for (const k of promoKeys) {
+  for (const k of ["precio_promo", "precio_promocional", "precio_oferta", "precio_especial"]) {
     const p = num(row[k]);
     if (p > 0) return Math.max(0, p);
   }
-  for (const k of normalKeys) {
+  for (const k of ["precio", "Precio", "precio_venta", "importe"]) {
     const p = num(row[k]);
     if (p > 0) return Math.max(0, p);
   }
   return 0;
 }
 
-/** Doc ope=1/98: `sal` saldo */
+/** Precio de lista (sin promo) para referencia en payload / CRC. */
+export function pickListPrice(row: Record<string, unknown>): number {
+  return Math.max(0, num(row.pre ?? row.Pre));
+}
+
+/** Precio promocional explícito si existe. */
+export function pickPromoPrice(row: Record<string, unknown>): number {
+  const n = num(row.precopromo ?? row.PrecioPromo ?? row.prm ?? row.Prm);
+  return n > 0 ? n : 0;
+}
+
 export function pickStock(row: Record<string, unknown>): number {
   const keys = ["sal", "Sal", "saldo", "Saldo", "stock", "Stock", "cantidad", "existencia", "disponible"];
   for (const k of keys) {
@@ -124,11 +193,12 @@ export function pickStock(row: Record<string, unknown>): number {
 }
 
 /**
- * Doc: `atv` activo; `sta` estado; bloqueos genéricos.
- * Si no hay señal, se considera activo salvo bloqueo explícito.
+ * Manual: `blo` bloqueado; `sta`; `atv` (ope=98).
  */
 export function pickActive(row: Record<string, unknown>): boolean {
-  if (truthy(row.bloqueado ?? row.Bloqueado ?? row.inactivo ?? row.Inactivo)) return false;
+  if (truthy(row.blo ?? row.Blo ?? row.bloqueado ?? row.Bloqueado ?? row.inactivo ?? row.Inactivo)) {
+    return false;
+  }
   const sta = str(row.sta ?? row.Sta ?? row.estado ?? row.Estado).toLowerCase();
   if (sta === "b" || sta === "i" || sta === "0" || sta === "n" || sta === "inactivo") return false;
   if ("atv" in row || "Atv" in row) return truthy(row.atv ?? row.Atv);
@@ -136,17 +206,61 @@ export function pickActive(row: Record<string, unknown>): boolean {
   return truthy(row.activo ?? row.Activo ?? row.habilitado ?? row.vigente ?? true);
 }
 
-/** CRC devuelto por Fastrax (ope=1 lista); si no hay, el caller puede generar hash local. */
 export function pickFastraxCrc(row: Record<string, unknown>): string | null {
   const c = str(row.crc ?? row.Crc ?? row.CRC);
   return c.length > 0 ? c.slice(0, 200) : null;
 }
 
 export function pickImageUrl(row: Record<string, unknown>): string {
-  return str(row.img ?? row.Img ?? row.image ?? row.imagen ?? row.url_imagen ?? "");
+  return str(
+    row.img ?? row.Img ?? row.image ?? row.imagen ?? row.url_imagen ?? row.url ?? row.URL ?? row.ufa ?? row.uvi ?? ""
+  );
 }
 
-/** Extrae filas con `sku` de respuestas JSON Fastrax (arrays o objetos con listas). */
+/** Peso (manual `pes`, típico kg). */
+export function pickWeightKg(row: Record<string, unknown>): number | null {
+  const w = num(row.pes ?? row.Pes ?? row.peso ?? row.Peso);
+  if (w <= 0) return null;
+  return Math.round(w * 10_000) / 10_000;
+}
+
+/** Dimensiones legibles: lgr × car × alt, más pfd si viene. */
+export function pickDimensionsLabel(row: Record<string, unknown>): string {
+  const lgr = str(row.lgr ?? row.Lgr);
+  const car = str(row.car ?? row.Car);
+  const alt = str(row.alt ?? row.Alt);
+  const pfd = str(row.pfd ?? row.Pfd);
+  const parts = [lgr, car, alt].filter((x) => x.length > 0);
+  let s = parts.join(" × ");
+  if (pfd) s = s ? `${s} · ${pfd}` : pfd;
+  return s.slice(0, 500);
+}
+
+/** Recorre JSON y arma mapas código→etiqueta (ope 91/92/93). */
+export function extractLookupMap(root: unknown, depth = 0): Map<string, string> {
+  const m = new Map<string, string>();
+  if (depth > 10) return m;
+  const visit = (x: unknown) => {
+    if (Array.isArray(x)) {
+      for (const el of x) visit(el);
+      return;
+    }
+    if (!isPlainObject(x)) return;
+    const code = str(
+      x.cod ?? x.Cod ?? x.id ?? x.Id ?? x.codigo ?? x.Codigo ?? x.categoria ?? x.marca ?? x.sku_cat
+    );
+    const label = str(
+      x.nom ?? x.Nom ?? x.nombre ?? x.Nombre ?? x.descripcion ?? x.Descripcion ?? x.den ?? x.Den
+    );
+    if (code && label && code !== label) m.set(code, label);
+    for (const v of Object.values(x)) {
+      if (Array.isArray(v) || isPlainObject(v)) visit(v);
+    }
+  };
+  visit(root);
+  return m;
+}
+
 export function extractProductRows(root: unknown, depth = 0): Record<string, unknown>[] {
   if (depth > 8) return [];
   if (root == null) return [];

@@ -13,10 +13,14 @@
 export const FASTRAX_OPE = {
   PRODUCTS_LIST: 1,
   PRODUCT_DETAIL: 2,
-  IMAGES_BASE64: 94,
+  PRODUCT_IMAGE_LINK: 3,
+  PRODUCTS_LIST_PAGE: 4,
+  API_VERSION: 10,
+  BALANCE_PRICE_QUERY: 11,
   CATEGORIES_A: 91,
   BRANDS: 92,
   CATEGORIES_B: 93,
+  IMAGES_BASE64: 94,
   BALANCES_PRICE_ACTIVE: 98,
   PRODUCTS_CHANGED: 99,
 } as const;
@@ -154,6 +158,8 @@ export type FastraxSyncSuccessResponse = {
   mode: string;
   sync_mode_used?: "full" | "changed";
   changed_fallback_used?: boolean;
+  /** Listado masivo: "1" o "4" según manual Fastrax. */
+  catalog_list_ope?: string;
   stats: FastraxSyncStats;
   products_seen: number;
   /** Primer error PostgREST (p. ej. check constraint sin fastrax o columnas faltantes). */

@@ -29,6 +29,7 @@ export default function AdminSettingsPage() {
           res.sync_mode_used
             ? `Modo: ${res.sync_mode_used}${res.changed_fallback_used ? " (fallback ope=99→full)" : ""}`
             : null,
+          res.catalog_list_ope ? `Listado API: ope=${res.catalog_list_ope}` : null,
           `Nuevos: ${s.inserted} · Actualizados: ${s.updated}`,
           s.unchanged ? `Sin cambios: ${s.unchanged}` : null,
           s.skipped ? `Omitidos: ${s.skipped}` : null,

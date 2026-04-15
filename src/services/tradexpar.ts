@@ -249,6 +249,12 @@ function mapProduct(row: Record<string, unknown>): Product {
     sku: String(row.sku ?? ""),
     description: String(row.description ?? ""),
     category: String(row.category ?? ""),
+    brand: row.brand != null ? String(row.brand) : "",
+    weight_kg: row.weight_kg != null && row.weight_kg !== "" ? Number(row.weight_kg) : null,
+    dimensions_label:
+      row.dimensions_label != null && String(row.dimensions_label).trim()
+        ? String(row.dimensions_label)
+        : null,
     created_at:
       row.created_at != null
         ? String(row.created_at)

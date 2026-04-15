@@ -3,17 +3,24 @@
  * Secretos: FASTRAX_API_URL, FASTRAX_COD, FASTRAX_PAS (secrets de Supabase, no VITE_).
  */
 import {
+  extractLookupMap,
   extractProductRows,
   isPlainObject,
   pickActive,
-  pickCategory,
+  pickBrandDisplay,
+  pickCategoryDisplay,
   pickDescription,
+  pickDimensionsLabel,
   pickFastraxCrc,
   pickImageUrl,
+  pickListPrice,
   pickName,
   pickPrice,
+  pickPromoPrice,
   pickSku,
   pickStock,
+  pickWeightKg,
+  type TaxonomyMaps,
   str,
 } from "./map_fastrax_row.ts";
 
@@ -162,14 +169,27 @@ function mergeBySku(
   }
 }
 
-async function fetchImageDataUrl(
-  sku: string
-): Promise<string | null> {
-  const r = await fastraxCall(94, { sku, codigo: sku, cod_art: sku, articulo: sku });
+/** ope=99: `dat` (fecha) y opcional `mod` (P|I|… según manual). */
+function buildOpe99Extra(since: string): Record<string, unknown> {
+  const e: Record<string, unknown> = {};
+  if (since) {
+    e.dat = since;
+    const alt = (Deno.env.get("FASTRAX_CHANGED_SINCE_PARAM") ?? "").trim();
+    if (alt) e[alt] = since;
+  }
+  const mod = (Deno.env.get("FASTRAX_CHANGED_MOD") ?? "").trim();
+  if (mod) e.mod = mod;
+  return e;
+}
+
+const skuExtra = (sku: string) => ({ sku, codigo: sku, cod_art: sku, articulo: sku });
+
+async function fetchImageDataUrl94(sku: string): Promise<string | null> {
+  const r = await fastraxCall(94, skuExtra(sku));
   if (!r.ok) return null;
   const rows = extractProductRows(r.parsed);
   const row = rows[0] ?? (isPlainObject(r.parsed) ? r.parsed : {});
-  const b64Keys = ["img", "Img", "imagen", "Imagen", "base64", "foto", "data", "binario", "contenido", "b64"];
+  const b64Keys = ["base64", "Base64", "img", "Img", "imagen", "Imagen", "foto", "data", "binario", "contenido", "b64"];
   for (const k of b64Keys) {
     const raw = str((row as Record<string, unknown>)[k]);
     if (raw.length > 40) {
@@ -179,6 +199,22 @@ async function fetchImageDataUrl(
       }
     }
   }
+  return null;
+}
+
+/** ope=3 imagen vinculada; si no hay URL útil, ope=94 Base64. */
+async function fetchImageForSku(sku: string): Promise<{ image: string; images: string[] } | null> {
+  const r3 = await fastraxCall(3, skuExtra(sku));
+  if (r3.ok) {
+    const rows = extractProductRows(r3.parsed);
+    const row = (rows[0] ?? (isPlainObject(r3.parsed) ? r3.parsed : {})) as Record<string, unknown>;
+    const u = pickImageUrl(row);
+    if (u && (u.startsWith("http://") || u.startsWith("https://") || u.startsWith("data:"))) {
+      return { image: u, images: [u] };
+    }
+  }
+  const dataUrl = await fetchImageDataUrl94(sku);
+  if (dataUrl) return { image: dataUrl, images: [dataUrl] };
   return null;
 }
 
@@ -412,11 +448,7 @@ Deno.serve(async (req) => {
   }
 
   if (body.probe === "changed") {
-    const extra: Record<string, unknown> = {};
-    if (sinceForProbe) {
-      const paramName = (Deno.env.get("FASTRAX_CHANGED_SINCE_PARAM") ?? "fecha").trim() || "fecha";
-      extra[paramName] = sinceForProbe;
-    }
+    const extra = buildOpe99Extra(sinceForProbe);
     const r = await fastraxCall(99, extra);
     if (!r.ok) {
       return new Response(
@@ -431,12 +463,7 @@ Deno.serve(async (req) => {
   }
 
   if (body.probe === "detail" && skuProbe) {
-    const r = await fastraxCall(2, {
-      sku: skuProbe,
-      codigo: skuProbe,
-      cod_art: skuProbe,
-      articulo: skuProbe,
-    });
+    const r = await fastraxCall(2, skuExtra(skuProbe));
     if (!r.ok) {
       return new Response(
         JSON.stringify({ ok: false, ope: 2, message: r.message }),
@@ -449,12 +476,7 @@ Deno.serve(async (req) => {
     });
   }
   if (body.probe === "images" && skuProbe) {
-    const r = await fastraxCall(94, {
-      sku: skuProbe,
-      codigo: skuProbe,
-      cod_art: skuProbe,
-      articulo: skuProbe,
-    });
+    const r = await fastraxCall(94, skuExtra(skuProbe));
     if (!r.ok) {
       return new Response(
         JSON.stringify({ ok: false, ope: 94, message: r.message }),
@@ -472,6 +494,7 @@ Deno.serve(async (req) => {
 
   let syncModeUsed: "full" | "changed" = mode;
   let changedFallbackUsed = false;
+  let catalogListOpe: string | undefined;
 
   const stats: SyncStats = {
     inserted: 0,
@@ -484,31 +507,67 @@ Deno.serve(async (req) => {
   };
 
   const merged = new Map<string, Record<string, unknown>>();
-  const mergeAux = (Deno.env.get("FASTRAX_MERGE_AUX_OPERATIONS") ?? "").toLowerCase() === "true";
+  const tax: TaxonomyMaps = { catWeb: new Map(), brands: new Map(), catSys: new Map() };
 
-  async function runFullListAndBalances(): Promise<{ ok: boolean; message?: string }> {
+  async function loadTaxonomy(): Promise<void> {
+    const mergeMap = (into: Map<string, string>, from: Map<string, string>) => {
+      for (const [k, v] of from) into.set(k, v);
+    };
+    const r91 = await fastraxCall(91, {});
+    if (r91.ok) mergeMap(tax.catWeb, extractLookupMap(r91.parsed));
+    const r92 = await fastraxCall(92, {});
+    if (r92.ok) mergeMap(tax.brands, extractLookupMap(r92.parsed));
+    const r93 = await fastraxCall(93, {});
+    if (r93.ok) mergeMap(tax.catSys, extractLookupMap(r93.parsed));
+  }
+
+  /**
+   * Listado masivo: intenta ope=4 por páginas (manual); si no devuelve filas con SKU, ope=1.
+   * Luego ope=98 para saldos/precios/activos.
+   */
+  async function runFullListAndBalances(): Promise<{ ok: boolean; message?: string; list_ope?: string }> {
+    await loadTaxonomy();
+    const prefer4 = (Deno.env.get("FASTRAX_USE_OPE4_PAGINATION") ?? "true").toLowerCase() !== "false";
+    const pageKey = (Deno.env.get("FASTRAX_OPE4_PAGE_PARAM") ?? "pag").trim() || "pag";
+    const maxPages = Math.max(1, Math.min(500, Number(Deno.env.get("FASTRAX_MAX_LIST_PAGES") ?? "100") || 100));
+    const stopBelow = Math.max(1, Math.min(10_000, Number(Deno.env.get("FASTRAX_OPE4_STOP_BELOW_ROWS") ?? "400") || 400));
+
+    if (prefer4) {
+      let total = 0;
+      for (let p = 1; p <= maxPages; p++) {
+        const r = await fastraxCall(4, { [pageKey]: p });
+        if (!r.ok) {
+          if (p === 1) break;
+          return { ok: false, message: r.message, list_ope: "4" };
+        }
+        const rows = extractProductRows(r.parsed);
+        if (rows.length === 0) break;
+        mergeBySku(merged, rows);
+        total += rows.length;
+        if (rows.length < stopBelow) {
+          const bal = await fastraxCall(98, {});
+          if (bal.ok) mergeBySku(merged, extractProductRows(bal.parsed));
+          return { ok: true, list_ope: "4" };
+        }
+      }
+      if (total > 0) {
+        const bal = await fastraxCall(98, {});
+        if (bal.ok) mergeBySku(merged, extractProductRows(bal.parsed));
+        return { ok: true, list_ope: "4" };
+      }
+    }
+
     const list = await fastraxCall(1, {});
     if (!list.ok) return { ok: false, message: list.message };
     mergeBySku(merged, extractProductRows(list.parsed));
     const bal = await fastraxCall(98, {});
     if (bal.ok) mergeBySku(merged, extractProductRows(bal.parsed));
-    if (mergeAux) {
-      const cat = await fastraxCall(91, {});
-      if (cat.ok) mergeBySku(merged, extractProductRows(cat.parsed));
-      const brands = await fastraxCall(92, {});
-      if (brands.ok) mergeBySku(merged, extractProductRows(brands.parsed));
-      const cat2 = await fastraxCall(93, {});
-      if (cat2.ok) mergeBySku(merged, extractProductRows(cat2.parsed));
-    }
-    return { ok: true };
+    return { ok: true, list_ope: "1" };
   }
 
   if (mode === "changed") {
-    const extra: Record<string, unknown> = {};
-    if (sinceParam) {
-      const paramName = (Deno.env.get("FASTRAX_CHANGED_SINCE_PARAM") ?? "fecha").trim() || "fecha";
-      extra[paramName] = sinceParam;
-    }
+    await loadTaxonomy();
+    const extra = buildOpe99Extra(sinceParam);
     const ch = await fastraxCall(99, extra);
     if (!ch.ok) {
       changedFallbackUsed = true;
@@ -526,6 +585,7 @@ Deno.serve(async (req) => {
           { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      catalogListOpe = fr.list_ope;
     } else {
       const rows = extractProductRows(ch.parsed);
       if (rows.length === 0) {
@@ -554,6 +614,7 @@ Deno.serve(async (req) => {
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    catalogListOpe = fr.list_ope;
   }
 
   const fetchImages = (Deno.env.get("FASTRAX_FETCH_IMAGES") ?? "").toLowerCase() === "true";
@@ -594,7 +655,7 @@ Deno.serve(async (req) => {
     let raw: Record<string, unknown> = { ...raw0 };
     const hasTitle = pickName(raw).length > 0;
     if (!hasTitle) {
-      const detail = await fastraxCall(2, { sku, codigo: sku, cod_art: sku, articulo: sku });
+      const detail = await fastraxCall(2, skuExtra(sku));
       if (detail.ok) {
         const dr = extractProductRows(detail.parsed)[0] ??
           (isPlainObject(detail.parsed) ? detail.parsed : {});
@@ -605,18 +666,28 @@ Deno.serve(async (req) => {
     let name2 = pickName(raw);
     if (!name2) name2 = `Producto ${sku}`;
     const desc2 = pickDescription(raw);
-    const cat2 = pickCategory(raw);
+    const categoryDisp = pickCategoryDisplay(raw, tax);
+    const brandDisp = pickBrandDisplay(raw, tax);
     const price = pickPrice(raw);
+    const listPrice = pickListPrice(raw);
+    const promoPrice = pickPromoPrice(raw);
     const stock = pickStock(raw);
     const active = pickActive(raw);
+    const wkg = pickWeightKg(raw);
+    const dimLbl = pickDimensionsLabel(raw);
 
     const crcPayload = JSON.stringify({
       sku,
       n: name2,
       p: price,
+      pl: listPrice,
+      pp: promoPrice,
       s: stock,
       a: active,
-      c: cat2,
+      cat: categoryDisp,
+      br: brandDisp,
+      w: wkg,
+      d: dimLbl,
     });
     const crcFromApi = pickFastraxCrc(raw);
     const crc = crcFromApi ?? await sha256Hex(crcPayload);
@@ -640,10 +711,10 @@ Deno.serve(async (req) => {
     let images: string[] = [];
     if (fetchImages && imageBudget > 0 && active) {
       imageBudget -= 1;
-      const dataUrl = await fetchImageDataUrl(sku);
-      if (dataUrl) {
-        image = dataUrl;
-        images = [dataUrl];
+      const imgSet = await fetchImageForSku(sku);
+      if (imgSet) {
+        image = imgSet.image;
+        images = imgSet.images;
         stats.images_fetched += 1;
       }
     }
@@ -655,7 +726,10 @@ Deno.serve(async (req) => {
       name: name2.slice(0, 500),
       sku,
       description: desc2,
-      category: cat2,
+      category: categoryDisp.slice(0, 500),
+      brand: brandDisp.slice(0, 300),
+      weight_kg: wkg,
+      dimensions_label: dimLbl || null,
       price,
       stock: external_active ? stock : 0,
       image: image || pickImageUrl(raw),
@@ -722,6 +796,7 @@ Deno.serve(async (req) => {
       changed_fallback_used: changedFallbackUsed,
       stats,
       products_seen: merged.size,
+      ...(catalogListOpe ? { catalog_list_ope: catalogListOpe } : {}),
       ...(firstDbError && stats.failed > 0 ? { db_error_sample: firstDbError } : {}),
     }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

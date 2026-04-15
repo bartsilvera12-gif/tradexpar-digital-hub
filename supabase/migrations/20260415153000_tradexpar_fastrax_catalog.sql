@@ -42,3 +42,8 @@ create index if not exists idx_products_product_source_type on tradexpar.product
 create index if not exists idx_products_external_provider on tradexpar.products (external_provider);
 create index if not exists idx_products_external_product_id on tradexpar.products (external_product_id);
 create index if not exists idx_products_sku on tradexpar.products (sku);
+
+alter table tradexpar.products
+  add column if not exists brand text not null default '',
+  add column if not exists weight_kg numeric(14, 4),
+  add column if not exists dimensions_label text;

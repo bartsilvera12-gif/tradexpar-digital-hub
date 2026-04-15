@@ -36,7 +36,7 @@ function countProductishRows(parsed) {
     return n;
   }
   if (parsed && typeof parsed === "object") {
-    const keys = ["productos", "Productos", "datos", "data", "articulos", "Articulos", "result"];
+    const keys = ["productos", "Productos", "datos", "data", "articulos", "Articulos", "result", "d", "D"];
     for (const k of keys) {
       if (k in parsed) return countProductishRows(parsed[k]);
     }
@@ -55,7 +55,8 @@ loadDotEnvFile(".env");
 const url = (process.env.FASTRAX_API_URL ?? "").trim().replace(/\/$/, "");
 const cod = (process.env.FASTRAX_COD ?? "").trim();
 const pas = (process.env.FASTRAX_PAS ?? "").trim();
-const fmt = (process.env.FASTRAX_REQUEST_FORMAT ?? "json").toLowerCase();
+const fmtEnv = (process.env.FASTRAX_REQUEST_FORMAT ?? "").trim().toLowerCase();
+const ope = (process.env.FASTRAX_SMOKE_OPE ?? "1").trim();
 
 if (!url || !cod || !pas) {
   console.error(
@@ -64,29 +65,58 @@ if (!url || !cod || !pas) {
   process.exit(2);
 }
 
-const body =
-  fmt === "form" || fmt === "urlencoded"
-    ? new URLSearchParams({ ope: "1", cod, pas }).toString()
-    : JSON.stringify({ ope: 1, cod, pas });
-
-const res = await fetch(url, {
-  method: "POST",
-  headers:
-    fmt === "form" || fmt === "urlencoded"
-      ? { "Content-Type": "application/x-www-form-urlencoded" }
-      : { "Content-Type": "application/json", Accept: "application/json" },
-  body,
-  signal: AbortSignal.timeout(90_000),
-});
-
-const text = await res.text();
-let parsed;
-try {
-  parsed = JSON.parse(text);
-} catch {
-  parsed = { _raw_len: text.length };
+async function postFastrax(format, opeNum) {
+  const body =
+    format === "form" || format === "urlencoded"
+      ? new URLSearchParams({ ope: String(opeNum), cod, pas }).toString()
+      : JSON.stringify({ ope: Number(opeNum), cod, pas });
+  const res = await fetch(url, {
+    method: "POST",
+    headers:
+      format === "form" || format === "urlencoded"
+        ? { "Content-Type": "application/x-www-form-urlencoded" }
+        : { "Content-Type": "application/json", Accept: "application/json" },
+    body,
+    signal: AbortSignal.timeout(90_000),
+  });
+  const text = await res.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = { _non_json: true, _raw_len: text.length };
+  }
+  return { res, parsed, textLen: text.length };
 }
 
-const approxRows = countProductishRows(parsed);
-console.log(JSON.stringify({ http: res.status, approxRows, format: fmt }, null, 2));
-process.exit(res.ok ? 0 : 1);
+const tryOrder =
+  fmtEnv === "form" || fmtEnv === "urlencoded"
+    ? ["form", "json"]
+    : fmtEnv === "json"
+      ? ["json", "form"]
+      : ["json", "form"];
+
+let last = { http: 0, approxRows: 0, format: "", textLen: 0 };
+for (const format of tryOrder) {
+  const { res, parsed, textLen } = await postFastrax(format, ope);
+  const approxRows = countProductishRows(parsed);
+  last = { http: res.status, approxRows, format, textLen };
+  if (res.ok && approxRows > 0) break;
+  if (res.ok) break;
+}
+
+console.log(
+  JSON.stringify(
+    {
+      http: last.http,
+      approxRows: last.approxRows,
+      format_used: last.format,
+      response_len: last.textLen,
+      ope,
+      tried: tryOrder,
+    },
+    null,
+    2
+  )
+);
+process.exit(last.http >= 200 && last.http < 300 ? 0 : 1);

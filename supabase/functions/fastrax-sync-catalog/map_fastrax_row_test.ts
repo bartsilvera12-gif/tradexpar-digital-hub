@@ -46,7 +46,7 @@ Deno.test("merge ope=1 + ope=2: nom, pre, prm, pmp, des, cat, mar", () => {
   };
   const merged = { ...base, ...detail };
   assertEquals(pickName(merged), "Producto integración");
-  assertEquals(pickDescription(merged), "Descripción larga");
+  assertEquals(pickDescription(merged).startsWith("Descripción larga"), true);
   assertEquals(pickPrice(merged), 85_000);
   assertEquals(pickStock(merged), 10);
   assertEquals(pickCategory(merged), "Herramientas — Acme");
@@ -74,6 +74,15 @@ Deno.test("precopromo explícito con flag pro", () => {
 
 Deno.test("sta=B inactivo", () => {
   assertEquals(pickActive({ sku: "z", sta: "B" }), false);
+});
+
+Deno.test("blo=1 inactivo", () => {
+  assertEquals(pickActive({ sku: "z", sta: "A", blo: 1 }), false);
+});
+
+Deno.test("ope=98 promo + precopromo", () => {
+  const row = { sku: "x", pre: 1000, precopromo: 800, promo: 1, sal: 2, atv: 1 };
+  assertEquals(pickPrice(row), 800);
 });
 
 Deno.test("respuesta anidada productos[]", () => {
