@@ -74,6 +74,8 @@ export interface CreateOrderPayload {
     address?: string;
     /** Código de ciudad PagoPar (string, p. ej. "1"). */
     city_code?: string;
+    /** Referencia de dirección (opcional): entre calles, piso, etc. */
+    address_reference?: string;
   };
   checkout_type?: "tradexpar" | "dropi";
   location_url: string;
@@ -102,6 +104,7 @@ export interface Order {
     document?: string;
     address?: string;
     city_code?: string;
+    address_reference?: string;
   };
 }
 

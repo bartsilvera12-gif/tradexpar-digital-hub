@@ -518,6 +518,9 @@ function throwSetPasswordRpcReason(o: Record<string, unknown>): never {
   if (r === "no_auth_user") {
     throw new Error("Este cliente no tiene cuenta de inicio de sesión vinculada en Auth (falta auth_user_id).");
   }
+  if (r === "oauth_password_not_allowed") {
+    throw new Error("Este cliente inició sesión con Google o Facebook: no se puede asignar contraseña desde el admin.");
+  }
   if (r === "auth_user_not_found") {
     throw new Error("No existe el usuario en Auth para ese cliente.");
   }
@@ -593,7 +596,17 @@ async function adminSetCustomerPasswordViaEdge(customerId: string, newPassword: 
     );
   }
   if (res.status === 403 || err === "forbidden") {
+    if (err === "oauth_password_not_allowed") {
+      throw new Error(
+        "Este cliente inició sesión con Google o Facebook: no se puede asignar contraseña desde el admin."
+      );
+    }
     throw new Error(msg || "Tu usuario no tiene permiso para esta acción.");
+  }
+  if (err === "oauth_password_not_allowed") {
+    throw new Error(
+      "Este cliente inició sesión con Google o Facebook: no se puede asignar contraseña desde el admin."
+    );
   }
   if (err === "no_auth_user") {
     throw new Error(
@@ -672,6 +685,7 @@ export const tradexpar = {
       p_customer_document: payload.customer.document?.trim() || null,
       p_customer_address: payload.customer.address?.trim() || null,
       p_customer_city_code: payload.customer.city_code?.trim() || null,
+      p_customer_address_reference: payload.customer.address_reference?.trim() || null,
     });
 
     if (error) throw new Error(error.message);
@@ -690,6 +704,7 @@ export const tradexpar = {
         document: cust.document ? String(cust.document) : undefined,
         address: cust.address ? String(cust.address) : undefined,
         city_code: cust.city_code ? String(cust.city_code) : undefined,
+        address_reference: cust.address_reference ? String(cust.address_reference) : undefined,
       },
       items: payload.items,
     };

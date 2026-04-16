@@ -4,9 +4,14 @@
 alter table tradexpar.orders
   add column if not exists customer_document text,
   add column if not exists customer_address text,
-  add column if not exists customer_city_code text;
+  add column if not exists customer_city_code text,
+  add column if not exists customer_address_reference text;
+
+comment on column tradexpar.orders.customer_address_reference is
+  'Referencia de dirección (opcional): entre calles, piso, timbre, etc.';
 
 -- Una sola firma: eliminar overloads previos.
+drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text);
 drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text);
 drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text);
 drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb);
@@ -24,7 +29,8 @@ create or replace function tradexpar.create_checkout_order(
   p_checkout_client_ip text default null,
   p_customer_document text default null,
   p_customer_address text default null,
-  p_customer_city_code text default null
+  p_customer_city_code text default null,
+  p_customer_address_reference text default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -67,7 +73,8 @@ begin
     total, status, checkout_type, location_url, customer_location_id,
     affiliate_ref, customer_name, customer_email, customer_phone,
     checkout_client_ip, affiliate_campaign_slug,
-    customer_document, customer_address, customer_city_code
+    customer_document, customer_address, customer_city_code,
+    customer_address_reference
   ) values (
     round(v_total, 2),
     'pending',
@@ -82,7 +89,8 @@ begin
     nullif(trim(p_affiliate_campaign_slug), ''),
     nullif(trim(p_customer_document), ''),
     nullif(trim(p_customer_address), ''),
-    nullif(trim(p_customer_city_code), '')
+    nullif(trim(p_customer_city_code), ''),
+    nullif(trim(p_customer_address_reference), '')
   ) returning id into v_order_id;
 
   idx := 0;
@@ -124,11 +132,12 @@ begin
       'phone', coalesce(nullif(trim(p_customer_phone), ''), ''),
       'document', coalesce(nullif(trim(p_customer_document), ''), ''),
       'address', coalesce(nullif(trim(p_customer_address), ''), ''),
-      'city_code', coalesce(nullif(trim(p_customer_city_code), ''), '')
+      'city_code', coalesce(nullif(trim(p_customer_city_code), ''), ''),
+      'address_reference', coalesce(nullif(trim(p_customer_address_reference), ''), '')
     ),
     'items', coalesce(p_items, '[]'::jsonb)
   );
 end;
 $$;
 
-grant execute on function tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text) to anon, authenticated;
+grant execute on function tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text) to anon, authenticated;

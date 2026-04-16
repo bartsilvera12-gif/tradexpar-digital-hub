@@ -36,6 +36,7 @@ import {
   ADMIN_TR,
 } from "@/lib/adminModuleLayout";
 import { DDI } from "@/lib/ddiLabels";
+import { customerProviderBlocksAdminPasswordReset } from "@/lib/customerPasswordPolicy";
 import { cn } from "@/lib/utils";
 import { tradexpar } from "@/services/tradexpar";
 import type { CustomerUser } from "@/types";
@@ -100,6 +101,14 @@ export default function AdminUsersPage() {
   };
 
   const openPasswordDialog = (u: CustomerUser) => {
+    if (customerProviderBlocksAdminPasswordReset(u.provider)) {
+      toast({
+        title: "No disponible",
+        description: "Los clientes con cuenta Google o Facebook no usan contraseña de la tienda.",
+        variant: "destructive",
+      });
+      return;
+    }
     setPasswordTarget(u);
     setNewPassword("");
     setConfirmPassword("");
@@ -107,6 +116,15 @@ export default function AdminUsersPage() {
 
   const saveNewPassword = async () => {
     if (!passwordTarget) return;
+    if (customerProviderBlocksAdminPasswordReset(passwordTarget.provider)) {
+      toast({
+        title: "No disponible",
+        description: "Los clientes con cuenta Google o Facebook no usan contraseña de la tienda.",
+        variant: "destructive",
+      });
+      setPasswordTarget(null);
+      return;
+    }
     const p = newPassword;
     const c = confirmPassword;
     if (p.length < 6) {
@@ -277,7 +295,12 @@ export default function AdminUsersPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          title="Nueva contraseña"
+                          title={
+                            customerProviderBlocksAdminPasswordReset(u.provider)
+                              ? "Cuenta Google/Facebook: no aplica contraseña de la tienda"
+                              : "Nueva contraseña"
+                          }
+                          disabled={customerProviderBlocksAdminPasswordReset(u.provider)}
                           onClick={() => openPasswordDialog(u)}
                         >
                           <KeyRound className="h-4 w-4" />

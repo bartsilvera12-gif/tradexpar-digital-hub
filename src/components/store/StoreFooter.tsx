@@ -16,19 +16,24 @@ export function StoreFooter() {
     <>
       {/* Trust bar */}
       <div className="bg-card border-y">
-        <div className="container mx-auto px-4 py-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-xl overflow-hidden border border-border bg-border">
             {trustItems.map((item) => (
-              <div key={item.label} className="flex items-center justify-center gap-3 px-4">
-                <item.icon className="h-6 w-6 text-primary shrink-0" />
-                <span className="text-xs font-bold tracking-wider text-foreground uppercase">{item.label}</span>
+              <div
+                key={item.label}
+                className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-4 py-3 bg-card text-center min-w-0"
+              >
+                <item.icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+                <span className="text-[10px] sm:text-xs font-bold tracking-wide sm:tracking-wider text-foreground uppercase leading-tight">
+                  {item.label}
+                </span>
               </div>
             ))}
           </div>
         </div>
       </div>
     <footer className="bg-secondary text-secondary-foreground">
-      <div className="container mx-auto px-4 pt-14 pb-8">
+      <div className="container mx-auto px-3 sm:px-4 pt-10 sm:pt-14 pb-[max(2rem,env(safe-area-inset-bottom))] sm:pb-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
           {/* Brand */}
           <div className="md:col-span-2">
@@ -82,7 +87,11 @@ export function StoreFooter() {
             Desarrollado por Neura
           </p>
           <div className="flex items-center">
-            <img src={paymentMethods} alt="Métodos de pago: Visa, Mastercard, PayPal, American Express, Visa Electron, Maestro" className="h-6" />
+            <img
+              src={paymentMethods}
+              alt="Métodos de pago: Visa, Mastercard, PayPal, American Express, Visa Electron, Maestro"
+              className="h-6 sm:h-8 max-w-full w-auto object-contain object-right"
+            />
           </div>
         </div>
       </div>

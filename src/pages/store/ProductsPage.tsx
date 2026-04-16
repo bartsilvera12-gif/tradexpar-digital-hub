@@ -54,8 +54,8 @@ export default function ProductsPage() {
       </div>
 
       {/* Search + filter toggle */}
-      <div className="flex gap-3 mb-6">
-        <div className="relative flex-1 max-w-lg">
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1 w-full sm:max-w-lg min-w-0">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
@@ -66,8 +66,9 @@ export default function ProductsPage() {
           />
         </div>
         <button
+          type="button"
           onClick={() => setShowFilters(!showFilters)}
-          className={`px-4 py-2.5 rounded-xl border text-sm font-medium flex items-center gap-2 transition-all ${
+          className={`w-full sm:w-auto shrink-0 justify-center min-h-11 px-4 py-2.5 rounded-xl border text-sm font-medium inline-flex items-center gap-2 transition-all touch-manipulation ${
             showFilters || hasActiveFilters
               ? "bg-primary text-primary-foreground border-primary"
               : "bg-card text-muted-foreground hover:border-primary/30"

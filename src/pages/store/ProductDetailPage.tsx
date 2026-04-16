@@ -90,8 +90,8 @@ export default function ProductDetailPage() {
   const displayUnitPrice = aff.lineUnitPrice(product);
 
   return (
-    <div className="container mx-auto px-4 py-10">
-      <Link to="/products" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-8">
+    <div className="container mx-auto px-3 sm:px-4 py-8 sm:py-10 min-w-0">
+      <Link to="/products" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-6 sm:mb-8 touch-manipulation">
         <ArrowLeft className="h-4 w-4" /> Volver al catálogo
       </Link>
 
@@ -102,7 +102,7 @@ export default function ProductDetailPage() {
       >
         {/* Image Gallery */}
         <div className="space-y-3">
-          <div className="relative flex gap-4">
+          <div className="relative flex gap-4 min-w-0">
             {/* Main image container */}
             <div
               ref={imgContainerRef}
@@ -211,12 +211,12 @@ export default function ProductDetailPage() {
               Nuevo
             </span>
           )}
-          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">{product.name}</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-4 break-words">{product.name}</h1>
           <p className="text-muted-foreground mb-6 leading-relaxed">{product.description}</p>
 
-          <div className="flex items-center gap-3 mb-2 text-sm text-muted-foreground">
-            <span>SKU: {product.sku}</span>
-            <span>•</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-sm text-muted-foreground">
+            <span className="break-all">SKU: {product.sku}</span>
+            <span className="hidden sm:inline" aria-hidden>•</span>
             <span className={product.stock > 0 ? "text-green-600" : "text-destructive"}>{getStockLabel(product)}</span>
           </div>
 
@@ -240,7 +240,7 @@ export default function ProductDetailPage() {
                 </p>
               </div>
             )}
-            <p className="text-4xl font-bold text-foreground tabular-nums">₲{displayUnitPrice.toLocaleString("es-PY")}</p>
+            <p className="text-3xl sm:text-4xl font-bold text-foreground tabular-nums break-all sm:break-normal">₲{displayUnitPrice.toLocaleString("es-PY")}</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:gap-4">

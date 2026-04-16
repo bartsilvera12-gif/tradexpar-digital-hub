@@ -44,13 +44,17 @@ async function isSuperAdmin(
   return Array.isArray(rows) && rows.length > 0 && rows[0]?.is_super_admin === true;
 }
 
-async function getCustomerAuthUserId(
+async function getCustomerAuthRow(
   customerId: string,
   projectUrl: string,
   serviceKey: string
-): Promise<{ authUserId: string | null; lookupError: string | null }> {
+): Promise<{
+  authUserId: string | null;
+  provider: string | null;
+  lookupError: string | null;
+}> {
   const u = new URL(`${projectUrl}/rest/v1/customers`);
-  u.searchParams.set("select", "auth_user_id");
+  u.searchParams.set("select", "auth_user_id,provider");
   u.searchParams.set("id", `eq.${customerId}`);
   const res = await fetch(u.toString(), {
     headers: {
@@ -68,12 +72,15 @@ async function getCustomerAuthUserId(
     } catch {
       /* ignore */
     }
-    return { authUserId: null, lookupError: msg };
+    return { authUserId: null, provider: null, lookupError: msg };
   }
-  const rows = (await res.json()) as { auth_user_id?: string | null }[];
-  const aid = Array.isArray(rows) && rows[0] ? rows[0].auth_user_id : null;
+  const rows = (await res.json()) as { auth_user_id?: string | null; provider?: string | null }[];
+  const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+  const aid = row?.auth_user_id;
+  const prov = row?.provider;
   return {
     authUserId: typeof aid === "string" && aid.length > 0 ? aid : null,
+    provider: typeof prov === "string" && prov.length > 0 ? prov : null,
     lookupError: null,
   };
 }
@@ -187,7 +194,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { authUserId, lookupError } = await getCustomerAuthUserId(customerId, projectUrl, service);
+  const { authUserId, provider, lookupError } = await getCustomerAuthRow(customerId, projectUrl, service);
   if (lookupError) {
     return new Response(JSON.stringify({ error: "lookup_failed", message: lookupError }), {
       status: 500,
@@ -197,6 +204,14 @@ Deno.serve(async (req) => {
   if (!authUserId) {
     return new Response(JSON.stringify({ error: "no_auth_user" }), {
       status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const prov = (provider ?? "").trim().toLowerCase();
+  if (prov === "google" || prov === "facebook") {
+    return new Response(JSON.stringify({ error: "oauth_password_not_allowed" }), {
+      status: 403,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

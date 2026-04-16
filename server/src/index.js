@@ -356,6 +356,7 @@ function buildPagoparCompradorFromOrder(order) {
   const documento = rawDoc.slice(0, 20) || telefono.slice(-7) || "0000000";
   const ciudad = String(order.customer_city_code || PAGOPAR_COMPRADOR_CIUDAD).trim() || "1";
   const direccion = (order.customer_address || "").toString().slice(0, 200);
+  const direccion_referencia = (order.customer_address_reference || "").toString().slice(0, 200);
   return {
     ruc: "",
     email,
@@ -367,7 +368,7 @@ function buildPagoparCompradorFromOrder(order) {
     coordenadas: "",
     razon_social: "",
     tipo_documento: "CI",
-    direccion_referencia: "",
+    direccion_referencia,
   };
 }
 
@@ -702,7 +703,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const sb = supabaseAdmin();
 
     const selectCols =
-      "id, total, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, status";
+      "id, total, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, customer_address_reference, status";
     if (SUPABASE_LOG_DEBUG) {
       const enc = encodeURIComponent;
       console.info("[create-payment][supabase-debug] lectura orders (equivalente curl Accept-Profile / Content-Profile)", {

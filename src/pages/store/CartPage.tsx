@@ -78,40 +78,44 @@ export default function CartPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-4 p-4 bg-card rounded-2xl border shadow-card"
+              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 bg-card rounded-2xl border shadow-card"
             >
-              {(item.product.images?.[0] || item.product.image) ? (
-                <img src={item.product.images?.[0] || item.product.image} alt={item.product.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
-              ) : (
-                <div className="w-20 h-20 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
-                  <span className="text-[10px] text-muted-foreground text-center">[imagen producto]</span>
+              <div className="flex gap-3 flex-1 min-w-0">
+                {(item.product.images?.[0] || item.product.image) ? (
+                  <img src={item.product.images?.[0] || item.product.image} alt={item.product.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
+                ) : (
+                  <div className="w-20 h-20 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
+                    <span className="text-[10px] text-muted-foreground text-center">[imagen producto]</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-foreground line-clamp-2 sm:truncate">{item.product.name}</h3>
+                  <p className="text-sm text-muted-foreground">₲{lineUnitPrice(item.product).toLocaleString("es-PY")}</p>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-foreground truncate">{item.product.name}</h3>
-                <p className="text-sm text-muted-foreground">₲{lineUnitPrice(item.product).toLocaleString("es-PY")}</p>
               </div>
-              <div className="flex items-center border rounded-lg overflow-hidden">
-                <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted/50">
-                  <Minus className="h-3 w-3" />
-                </button>
-                <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                <button onClick={() => updateQuantity(item.product.id, Math.min(item.product.stock ?? Infinity, item.quantity + 1))} disabled={item.product.stock !== undefined && item.quantity >= item.product.stock} className="w-8 h-8 flex items-center justify-center hover:bg-muted/50 disabled:opacity-40">
-                  <Plus className="h-3 w-3" />
+              <div className="flex items-center justify-between gap-3 sm:justify-end sm:shrink-0">
+                <div className="flex items-center border rounded-lg overflow-hidden touch-manipulation">
+                  <button type="button" onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 flex items-center justify-center hover:bg-muted/50 active:bg-muted/70">
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="w-10 sm:w-8 text-center text-sm font-medium tabular-nums">{item.quantity}</span>
+                  <button type="button" onClick={() => updateQuantity(item.product.id, Math.min(item.product.stock ?? Infinity, item.quantity + 1))} disabled={item.product.stock !== undefined && item.quantity >= item.product.stock} className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 flex items-center justify-center hover:bg-muted/50 active:bg-muted/70 disabled:opacity-40">
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </div>
+                <p className="font-semibold text-foreground text-right tabular-nums sm:w-28 shrink-0">
+                  ₲{lineSubtotal(item.product, item.quantity).toLocaleString("es-PY")}
+                </p>
+                <button type="button" onClick={() => removeItem(item.product.id)} className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 flex items-center justify-center text-muted-foreground hover:text-destructive active:text-destructive transition-colors touch-manipulation shrink-0" aria-label="Quitar del carrito">
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              <p className="font-semibold text-foreground w-24 text-right">
-                ₲{lineSubtotal(item.product, item.quantity).toLocaleString("es-PY")}
-              </p>
-              <button onClick={() => removeItem(item.product.id)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
-                <Trash2 className="h-4 w-4" />
-              </button>
             </motion.div>
           ))}
         </div>
 
         {/* Summary */}
-        <div className="bg-card rounded-2xl border shadow-card p-6 h-fit sticky top-24 space-y-4">
+        <div className="bg-card rounded-2xl border shadow-card p-5 sm:p-6 h-fit lg:sticky lg:top-24 space-y-4">
           <h2 className="text-lg font-semibold text-foreground mb-6">Resumen</h2>
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-sm">
@@ -149,7 +153,7 @@ export default function CartPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
             onClick={() => setShowWhatsApp(false)}
           >
             <motion.div
@@ -157,7 +161,7 @@ export default function CartPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-card rounded-2xl border shadow-xl w-full max-w-md mx-4 p-6"
+              className="bg-card rounded-t-2xl sm:rounded-2xl border shadow-xl w-full max-w-md max-h-[min(92dvh,36rem)] overflow-y-auto mx-0 sm:mx-4 p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">

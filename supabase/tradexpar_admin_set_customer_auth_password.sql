@@ -18,6 +18,7 @@ set search_path = tradexpar, public
 as $$
 declare
   v_auth uuid;
+  v_prov text;
   v_pwd text;
   v_cnt int;
 begin
@@ -30,12 +31,16 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'password_too_short');
   end if;
 
-  select c.auth_user_id into v_auth
+  select c.auth_user_id, lower(trim(coalesce(c.provider, ''))) into v_auth, v_prov
   from tradexpar.customers c
   where c.id = p_customer_id;
 
   if v_auth is null then
     return jsonb_build_object('ok', false, 'reason', 'no_auth_user');
+  end if;
+
+  if v_prov in ('google', 'facebook') then
+    return jsonb_build_object('ok', false, 'reason', 'oauth_password_not_allowed');
   end if;
 
   begin

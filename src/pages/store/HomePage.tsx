@@ -35,35 +35,35 @@ export default function HomePage() {
   return (
     <>
       {/* Hero — untouched */}
-      <section className="relative overflow-hidden">
+      <section className="relative overflow-hidden isolate">
         <img
           src="https://res.cloudinary.com/drupicep5/image/upload/v1774384987/6b7b8009-8b0c-4d66-8b6e-7c4393582258.png"
           alt="Tradexpar Hero"
-          className="w-full h-auto block"
+          className="w-full h-auto max-w-full block"
           fetchPriority="high"
           decoding="async"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 z-10 container mx-auto px-4 pb-10 lg:pb-16">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/25 sm:from-black/80 sm:via-black/30 sm:to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 z-10 container mx-auto px-3 sm:px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pb-10 lg:pb-16">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             className="max-w-xl"
           >
-            <h1 className="text-3xl lg:text-5xl font-bold text-primary-foreground leading-tight mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground leading-tight mb-3 sm:mb-4">
               Distribuidora digital<br />
               <span className="text-gradient">de alto rendimiento</span>
             </h1>
-            <p className="text-base text-primary-foreground/70 mb-6 max-w-md">
+            <p className="text-sm sm:text-base text-primary-foreground/70 mb-5 sm:mb-6 max-w-md">
               Accede a productos digitales premium con la confianza y tecnología de Tradexpar.
             </p>
             <Link
               to="/products"
-              className="inline-flex items-center justify-center gap-2 min-h-12 px-7 py-3 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 active:opacity-95 transition-opacity shadow-brand touch-manipulation"
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 min-h-12 px-7 py-3 gradient-celeste text-primary-foreground font-semibold rounded-2xl hover:opacity-90 active:opacity-95 transition-opacity shadow-brand touch-manipulation"
             >
               Explorar catálogo
-              <ArrowRight className="h-5 w-5" />
+              <ArrowRight className="h-5 w-5 shrink-0" />
             </Link>
           </motion.div>
         </div>
@@ -72,14 +72,16 @@ export default function HomePage() {
       {/* Banner promocional */}
       <section className="w-full">
         <img
-          src="https://res.cloudinary.com/dfxz2hxgr/image/upload/v1774643340/4fb44af5-a76d-4173-9ada-c5639e798edd.png"
+          src="https://res.cloudinary.com/drupicep5/image/upload/v1776343515/tradexpar_enhanced_v2_i5vlxm.png"
           alt="Promoción Tradexpar"
-          className="w-full h-auto block"
+          className="w-full h-auto max-w-full block"
+          loading="lazy"
+          decoding="async"
         />
       </section>
 
       {/* Products */}
-      <section className="container mx-auto px-4 py-14 space-y-16">
+      <section className="container mx-auto px-3 sm:px-4 py-10 sm:py-14 space-y-12 sm:space-y-16">
         {loading && <Loader text="Cargando productos..." />}
         {error && <ErrorState message={error} onRetry={fetchProducts} />}
         {!loading && !error && products.length === 0 && (
@@ -122,7 +124,7 @@ export default function HomePage() {
         <div className="absolute inset-0 gradient-hero" />
         <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, hsl(195 89% 47%) 0%, transparent 50%), radial-gradient(circle at 80% 20%, hsl(195 89% 60%) 0%, transparent 40%)' }} />
         
-        <div className="container mx-auto px-4 py-24 relative z-10">
+        <div className="container mx-auto px-3 sm:px-4 py-16 sm:py-24 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -132,10 +134,10 @@ export default function HomePage() {
             <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-widest uppercase gradient-celeste text-primary-foreground mb-5">
               Nuestra promesa
             </span>
-            <h2 className="text-3xl lg:text-5xl font-bold text-primary-foreground mb-4">
+            <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-primary-foreground mb-4">
               ¿Por qué <span className="text-gradient">Tradexpar</span>?
             </h2>
-            <p className="text-primary-foreground/50 max-w-lg mx-auto text-lg">
+            <p className="text-primary-foreground/50 max-w-lg mx-auto text-base sm:text-lg px-1">
               Confianza, tecnología y soporte que respaldan cada compra
             </p>
           </motion.div>
@@ -173,7 +175,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="text-center mb-14"
           >
-            <h2 className="text-3xl lg:text-4xl font-extrabold text-foreground uppercase tracking-tight mb-3">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground uppercase tracking-tight mb-3">
               Nuestro Proceso
             </h2>
             <p className="text-muted-foreground max-w-lg mx-auto">
@@ -230,9 +232,9 @@ function ProductSection({
 }) {
   return (
     <div>
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">{title}</h2>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-6 min-w-0">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words">{title}</h2>
           {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         </div>
         <Link

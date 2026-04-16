@@ -64,10 +64,15 @@
   }
   html {
     -webkit-tap-highlight-color: transparent;
+    overflow-x: clip;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: clip;
+  }
+  #root {
+    min-height: 100dvh;
+    min-height: 100svh;
   }
 }
 

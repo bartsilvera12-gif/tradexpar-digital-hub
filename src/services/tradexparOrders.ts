@@ -51,6 +51,7 @@ export async function createCheckoutOrder(payload: CreateOrderPayload): Promise<
     p_customer_document: payload.customer.document?.trim() || null,
     p_customer_address: payload.customer.address?.trim() || null,
     p_customer_city_code: payload.customer.city_code?.trim() || null,
+    p_customer_address_reference: payload.customer.address_reference?.trim() || null,
   });
 
   if (error) throw error;
@@ -70,6 +71,7 @@ export async function createCheckoutOrder(payload: CreateOrderPayload): Promise<
       document: cust.document ? String(cust.document) : undefined,
       address: cust.address ? String(cust.address) : undefined,
       city_code: cust.city_code ? String(cust.city_code) : undefined,
+      address_reference: cust.address_reference ? String(cust.address_reference) : undefined,
     },
     items: payload.items,
   };

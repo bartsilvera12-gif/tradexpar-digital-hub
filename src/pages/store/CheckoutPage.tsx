@@ -31,10 +31,11 @@ type CheckoutForm = {
   document: string;
   phone: string;
   address: string;
+  /** Entre calles, piso, timbre, etc. (opcional). */
+  addressReference: string;
   /** id UUID de `paraguay_cities` o `legacy-{code}` si falla la carga desde la base. */
   cityId: string;
   locationUrl: string;
-  locationLabel: string;
 };
 
 function legacyParaguayCityOptions(): ParaguayCity[] {
@@ -60,9 +61,9 @@ export default function CheckoutPage() {
     document: "",
     phone: "",
     address: "",
+    addressReference: "",
     cityId: "",
     locationUrl: "",
-    locationLabel: "",
   });
   const [cities, setCities] = useState<ParaguayCity[]>([]);
   const [citiesFromDb, setCitiesFromDb] = useState(true);
@@ -188,14 +189,7 @@ export default function CheckoutPage() {
         form.locationUrl.trim() ||
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address.trim()}, ${cityLabel}, Paraguay`)}`;
 
-      let customerLocationId = selectedLocationId || undefined;
-      if (user && !customerLocationId && form.locationLabel.trim()) {
-        const created = await tradexpar.createCustomerLocation(user.id, {
-          label: form.locationLabel.trim(),
-          location_url: location_url.trim(),
-        });
-        customerLocationId = created.id;
-      }
+      const customerLocationId = selectedLocationId || undefined;
 
       const order = await tradexpar.createOrder({
         items: items.map((i) => ({
@@ -211,6 +205,7 @@ export default function CheckoutPage() {
           document: form.document.trim(),
           address: form.address.trim(),
           city_code: cityCode,
+          address_reference: form.addressReference.trim() || undefined,
         },
         location_url,
         customer_location_id: customerLocationId,
@@ -269,21 +264,6 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Email <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  autoComplete="email"
-                  className={fieldCls}
-                />
-                <p className="text-xs text-muted-foreground mt-1.5">Podés crear una cuenta después de comprar.</p>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -313,35 +293,78 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Número CI / RUC <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={form.document}
-                    onChange={(e) => setForm({ ...form, document: e.target.value })}
-                    autoComplete="off"
-                    className={fieldCls}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Teléfono (09xx123456) <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="0981123456"
-                    autoComplete="tel"
-                    inputMode="tel"
-                    className={fieldCls}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Email <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  autoComplete="email"
+                  className={fieldCls}
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">Podés crear una cuenta después de comprar.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Teléfono <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="0981123456"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  className={fieldCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Documento (CI / RUC) <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.document}
+                  onChange={(e) => setForm({ ...form, document: e.target.value })}
+                  autoComplete="off"
+                  className={fieldCls}
+                />
+              </div>
+
+              <div className="w-full sm:max-w-[50%]">
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Ciudad <span className="text-destructive">*</span>
+                </label>
+                <Select
+                  value={form.cityId || "__none"}
+                  onValueChange={(v) => setForm({ ...form, cityId: v === "__none" ? "" : v })}
+                >
+                  <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
+                    <SelectValue placeholder="Seleccionar ciudad" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(22rem,50vh)]">
+                    <SelectItem value="__none">Seleccionar ciudad</SelectItem>
+                    {citiesByDepartment.map(([dept, list]) => (
+                      <SelectGroup key={dept}>
+                        <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                          {dept}
+                        </SelectLabel>
+                        {list.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -358,33 +381,18 @@ export default function CheckoutPage() {
                 />
               </div>
 
-              <div className="w-full sm:max-w-[50%]">
+              <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Ciudad <span className="text-destructive">*</span>
+                  Referencia de dirección <span className="text-muted-foreground font-normal">(opcional)</span>
                 </label>
-                <Select
-                  value={form.cityId || "__none"}
-                  onValueChange={(v) => setForm({ ...form, cityId: v === "__none" ? "" : v })}
-                >
-                  <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
-                    <SelectValue placeholder="Seleccionar Ciudad" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="__none">Seleccionar Ciudad</SelectItem>
-                    {citiesByDepartment.map(([dept, list]) => (
-                      <SelectGroup key={dept}>
-                        <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
-                          {dept}
-                        </SelectLabel>
-                        {list.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <input
+                  type="text"
+                  value={form.addressReference}
+                  onChange={(e) => setForm({ ...form, addressReference: e.target.value })}
+                  placeholder="Ej.: entre calles X e Y, 2º piso, timbre 2B"
+                  autoComplete="address-line2"
+                  className={fieldCls}
+                />
               </div>
 
               {user && locations.length > 0 && (
@@ -435,21 +443,6 @@ export default function CheckoutPage() {
                   Si lo dejás vacío, armamos el enlace con tu dirección y ciudad.
                 </p>
               </div>
-
-              {user && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Guardar ubicación como <span className="text-muted-foreground font-normal">(opcional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.locationLabel}
-                    onChange={(e) => setForm({ ...form, locationLabel: e.target.value })}
-                    placeholder="Casa, Oficina, Depósito…"
-                    className={fieldCls}
-                  />
-                </div>
-              )}
             </div>
           </div>
 

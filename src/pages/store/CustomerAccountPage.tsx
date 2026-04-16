@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
@@ -6,9 +7,21 @@ import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getSupabaseAuth } from "@/lib/supabaseClient";
 import { isOAuthCallbackUrl, isOAuthReturnPending, tradexpar } from "@/services/tradexpar";
 
 import type { CustomerUser } from "@/types";
+import { allowsPasswordFromCustomerProvider } from "@/lib/customerPasswordPolicy";
+
+/** Si no hay `provider` en fila customers, inferir desde identidades de Auth (OAuth sin identity `email`). */
+function allowsPasswordFromAuthIdentities(user: User | null): boolean {
+  const ids = user?.identities ?? [];
+  if (ids.length === 0) return true;
+  const hasEmail = ids.some((i) => i.provider === "email");
+  if (hasEmail) return true;
+  const oauthOnly = ids.some((i) => i.provider === "google" || i.provider === "facebook");
+  return !oauthOnly;
+}
 
 const CUSTOMER_STORAGE_KEY = "tradexpar_customer_user";
 
@@ -89,6 +102,26 @@ function AccountContent({
   const [pw2, setPw2] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
   const [tick, setTick] = useState(0);
+  const [allowsPasswordSection, setAllowsPasswordSection] = useState<boolean | null>(() =>
+    allowsPasswordFromCustomerProvider(user.provider)
+  );
+
+  useEffect(() => {
+    if (allowsPasswordSection !== null) return;
+    let cancelled = false;
+    void getSupabaseAuth()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setAllowsPasswordSection(allowsPasswordFromAuthIdentities(data.user));
+      })
+      .catch(() => {
+        if (!cancelled) setAllowsPasswordSection(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [allowsPasswordSection, user.id]);
 
   const loadPwStatus = useCallback(() => {
     setPwLoading(true);
@@ -109,8 +142,12 @@ function AccountContent({
 
   useEffect(() => {
     if (authHydrating) return;
+    if (allowsPasswordSection !== true) {
+      if (allowsPasswordSection === false) setPwLoading(false);
+      return;
+    }
     void loadPwStatus();
-  }, [loadPwStatus, user.id, authHydrating]);
+  }, [loadPwStatus, user.id, authHydrating, allowsPasswordSection]);
 
   const inCooldown =
     pwStatus?.can_change === false &&
@@ -163,86 +200,88 @@ function AccountContent({
         <p className="text-sm text-muted-foreground mt-3">Email</p>
         <p className="font-semibold text-foreground">{user.email}</p>
 
-        <div className="border-t border-border pt-6 mt-6 space-y-4">
-          <h2 className="text-lg font-semibold text-foreground">Contraseña</h2>
-          {pwLoading ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
-          ) : pwStatus?.reason === "rpc_missing" ? (
-            <p className="text-sm text-muted-foreground">
-              El cambio de contraseña con cooldown no está disponible hasta que se ejecute en la base el archivo{" "}
-              <code className="text-xs rounded bg-muted px-1">supabase/tradexpar_customer_own_password.sql</code>.
-            </p>
-          ) : pwStatus?.reason === "no_customer" ? (
-            <p className="text-sm text-muted-foreground">
-              No encontramos tu perfil de tienda vinculado a esta sesión.
-            </p>
-          ) : pwStatus?.reason === "not_authenticated" ? (
-            <p className="text-sm text-muted-foreground">
-              La sesión de acceso no llegó al servidor. Cerrá sesión y volvé a iniciar sesión; si usás otra pestaña del
-              panel admin, probá en una ventana privada solo para la tienda.
-            </p>
-          ) : pwStatus?.reason === "load_error" ? (
-            <p className="text-sm text-muted-foreground">
-              Hubo un error de red o del servidor al consultar el estado. Reintentá en unos segundos o recargá la
-              página.
-            </p>
-          ) : pwStatus?.reason === "unknown_response" ? (
-            <p className="text-sm text-muted-foreground">
-              La respuesta del servidor no es la esperada. Recargá la página o contactá soporte si sigue igual.
-            </p>
-          ) : inCooldown && pwStatus?.next_change_after ? (
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                Por seguridad, solo podés cambiar la contraseña{" "}
-                <span className="font-medium text-foreground">una vez cada 24 horas</span>.
+        {allowsPasswordSection === true && (
+          <div className="border-t border-border pt-6 mt-6 space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Contraseña</h2>
+            {pwLoading ? (
+              <p className="text-sm text-muted-foreground">Cargando…</p>
+            ) : pwStatus?.reason === "rpc_missing" ? (
+              <p className="text-sm text-muted-foreground">
+                El cambio de contraseña con cooldown no está disponible hasta que se ejecute en la base el archivo{" "}
+                <code className="text-xs rounded bg-muted px-1">supabase/tradexpar_customer_own_password.sql</code>.
               </p>
-              <p>
-                Próximo cambio posible:{" "}
-                <span className="font-medium text-foreground">
-                  {new Date(pwStatus.next_change_after).toLocaleString("es-PY")}
-                </span>
+            ) : pwStatus?.reason === "no_customer" ? (
+              <p className="text-sm text-muted-foreground">
+                No encontramos tu perfil de tienda vinculado a esta sesión.
               </p>
-              <p className="text-xs">
-                Tiempo restante:{" "}
-                <span className="font-mono text-foreground tabular-nums">
-                  {formatCooldownRemaining(pwStatus.next_change_after) || "…"}
-                </span>
+            ) : pwStatus?.reason === "not_authenticated" ? (
+              <p className="text-sm text-muted-foreground">
+                La sesión de acceso no llegó al servidor. Cerrá sesión y volvé a iniciar sesión; si usás otra pestaña del
+                panel admin, probá en una ventana privada solo para la tienda.
               </p>
-            </div>
-          ) : pwStatus?.can_change ? (
-            <div className="space-y-3 max-w-md">
-              <p className="text-xs text-muted-foreground">
-                Elegí una contraseña segura. Después de guardar, tendrás que esperar 24 horas para volver a
-                cambiarla.
+            ) : pwStatus?.reason === "load_error" ? (
+              <p className="text-sm text-muted-foreground">
+                Hubo un error de red o del servidor al consultar el estado. Reintentá en unos segundos o recargá la
+                página.
               </p>
-              <div className="space-y-2">
-                <Label htmlFor="acct-pw1">Nueva contraseña</Label>
-                <Input
-                  id="acct-pw1"
-                  type="password"
-                  autoComplete="new-password"
-                  value={pw1}
-                  onChange={(e) => setPw1(e.target.value)}
-                />
+            ) : pwStatus?.reason === "unknown_response" ? (
+              <p className="text-sm text-muted-foreground">
+                La respuesta del servidor no es la esperada. Recargá la página o contactá soporte si sigue igual.
+              </p>
+            ) : inCooldown && pwStatus?.next_change_after ? (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Por seguridad, solo podés cambiar la contraseña{" "}
+                  <span className="font-medium text-foreground">una vez cada 24 horas</span>.
+                </p>
+                <p>
+                  Próximo cambio posible:{" "}
+                  <span className="font-medium text-foreground">
+                    {new Date(pwStatus.next_change_after).toLocaleString("es-PY")}
+                  </span>
+                </p>
+                <p className="text-xs">
+                  Tiempo restante:{" "}
+                  <span className="font-mono text-foreground tabular-nums">
+                    {formatCooldownRemaining(pwStatus.next_change_after) || "…"}
+                  </span>
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="acct-pw2">Repetir contraseña</Label>
-                <Input
-                  id="acct-pw2"
-                  type="password"
-                  autoComplete="new-password"
-                  value={pw2}
-                  onChange={(e) => setPw2(e.target.value)}
-                />
+            ) : pwStatus?.can_change ? (
+              <div className="space-y-3 max-w-md">
+                <p className="text-xs text-muted-foreground">
+                  Elegí una contraseña segura. Después de guardar, tendrás que esperar 24 horas para volver a
+                  cambiarla.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="acct-pw1">Nueva contraseña</Label>
+                  <Input
+                    id="acct-pw1"
+                    type="password"
+                    autoComplete="new-password"
+                    value={pw1}
+                    onChange={(e) => setPw1(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="acct-pw2">Repetir contraseña</Label>
+                  <Input
+                    id="acct-pw2"
+                    type="password"
+                    autoComplete="new-password"
+                    value={pw2}
+                    onChange={(e) => setPw2(e.target.value)}
+                  />
+                </div>
+                <Button type="button" onClick={() => void savePassword()} disabled={pwSaving}>
+                  {pwSaving ? "Guardando…" : "Actualizar contraseña"}
+                </Button>
               </div>
-              <Button type="button" onClick={() => void savePassword()} disabled={pwSaving}>
-                {pwSaving ? "Guardando…" : "Actualizar contraseña"}
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No se pudo cargar el estado del cambio de contraseña.</p>
-          )}
-        </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No se pudo cargar el estado del cambio de contraseña.</p>
+            )}
+          </div>
+        )}
 
         <button
           type="button"
