@@ -77,7 +77,7 @@ export interface CreateOrderPayload {
     /** Referencia de dirección (opcional): entre calles, piso, etc. */
     address_reference?: string;
   };
-  checkout_type?: "tradexpar" | "dropi";
+  checkout_type?: "tradexpar" | "dropi" | "mixed";
   location_url: string;
   customer_location_id?: string;
   affiliate_ref?: string;

@@ -2,7 +2,6 @@ import { Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const DURATION_SUCCESS_MS = 2000;
-const DURATION_CONFLICT_MS = 2800;
 
 /** Toast alineado a la marca (card + gradiente celeste como el resto del sitio). */
 export function toastCartAdded(productName: string, qty: number) {
@@ -26,15 +25,5 @@ export function toastCartAdded(productName: string, qty: number) {
         </span>
       </span>
     ),
-  });
-}
-
-/** No se puede mezclar Tradexpar y Dropi en el mismo carrito. */
-export function toastCartSourceConflict() {
-  toast({
-    duration: DURATION_CONFLICT_MS,
-    variant: "destructive",
-    title: "No puedes mezclar orígenes",
-    description: "Vacía el carrito o termina ese pedido antes de agregar productos de otro catálogo (Tradexpar / Dropi).",
   });
 }

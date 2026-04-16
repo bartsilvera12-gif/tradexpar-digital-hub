@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import type { Product, CartItem } from "@/types";
-import { getEffectivePrice, normalizeProductSource } from "@/lib/productHelpers";
-import { toastCartSourceConflict } from "@/lib/cartToast";
+import { getEffectivePrice } from "@/lib/productHelpers";
 
 interface CartContextType {
   items: CartItem[];
-  /** Devuelve `true` si se agregó o actualizó cantidad; `false` si se rechazó por mezclar orígenes. */
+  /** Devuelve `true` si se agregó o actualizó cantidad. */
   addItem: (product: Product, quantity?: number) => boolean;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -79,7 +78,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addItem = useCallback((product: Product, quantity = 1): boolean => {
-    let rejected = false;
     setItems((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
@@ -89,22 +87,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         cartStorageSet(JSON.stringify(next));
         return next;
       }
-      if (prev.length > 0) {
-        const cartSource = normalizeProductSource(prev[0].product);
-        const newSource = normalizeProductSource(product);
-        if (cartSource !== newSource) {
-          rejected = true;
-          return prev;
-        }
-      }
       const next = [...prev, { product, quantity }];
       cartStorageSet(JSON.stringify(next));
       return next;
     });
-    if (rejected) {
-      toastCartSourceConflict();
-      return false;
-    }
     return true;
   }, []);
 

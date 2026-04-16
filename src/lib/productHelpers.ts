@@ -8,15 +8,16 @@ export function normalizeProductSource(product: Product): "tradexpar" | "dropi" 
 }
 
 /**
- * Tipo de pedido según el carrito: solo Tradexpar o solo Dropi.
- * Si el carrito mezcla orígenes, devuelve null (pedido no válido).
+ * Tipo de pedido según el carrito: un solo origen o `mixed` si hay Tradexpar y Dropi juntos.
  */
-export function deriveCheckoutTypeFromItems(items: CartItem[]): "tradexpar" | "dropi" | null {
+export function deriveCheckoutTypeFromItems(
+  items: CartItem[]
+): "tradexpar" | "dropi" | "mixed" | null {
   if (items.length === 0) return null;
   const sources = items.map((i) => normalizeProductSource(i.product));
-  const first = sources[0];
-  if (!sources.every((s) => s === first)) return null;
-  return first;
+  const unique = new Set(sources);
+  if (unique.size === 1) return sources[0]!;
+  return "mixed";
 }
 
 function isDiscountWindowActive(product: Product, now = new Date()): boolean {

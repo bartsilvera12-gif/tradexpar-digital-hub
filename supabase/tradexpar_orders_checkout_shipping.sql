@@ -48,7 +48,7 @@ declare
   v_ip inet;
 begin
   v_ct := coalesce(nullif(trim(p_checkout_type), ''), 'tradexpar');
-  if v_ct not in ('tradexpar', 'dropi') then
+  if v_ct not in ('tradexpar', 'dropi', 'mixed') then
     v_ct := 'tradexpar';
   end if;
 

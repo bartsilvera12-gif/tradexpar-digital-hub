@@ -150,11 +150,6 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      if (checkoutType === null) {
-        throw new Error(
-          "No puedes combinar productos Tradexpar y Dropi en el mismo pedido. Quita ítems de un origen o vacía el carrito."
-        );
-      }
       if (!form.email.trim()) {
         throw new Error("El email es obligatorio.");
       }
@@ -209,7 +204,7 @@ export default function CheckoutPage() {
         },
         location_url,
         customer_location_id: customerLocationId,
-        checkout_type: checkoutType,
+        checkout_type: checkoutType ?? "tradexpar",
         affiliate_ref: getActiveAffiliateRef() || undefined,
       });
 
@@ -461,12 +456,6 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {checkoutType === null && (
-                <p className="text-sm text-destructive">
-                  Este carrito mezcla productos Tradexpar y Dropi. Deja solo un tipo de origen para continuar.
-                </p>
-              )}
-
               <p className="text-sm text-muted-foreground">
                 {items.reduce((n, i) => n + i.quantity, 0)} producto
                 {items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"} en el carrito
@@ -497,7 +486,7 @@ export default function CheckoutPage() {
             )}
             <button
               type="submit"
-              disabled={loading || checkoutType === null}
+              disabled={loading || items.length === 0}
               className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
             >
               {loading ? (
