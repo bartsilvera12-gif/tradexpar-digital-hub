@@ -9,15 +9,31 @@ const headers: HeadersInit = {
 };
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const url = `${API_BASE_URL}${path}`;
+  const res = await fetch(url, {
     ...options,
     headers: { ...headers, ...options?.headers },
   });
+  const text = await res.text().catch(() => "");
   if (!res.ok) {
-    const error = await res.text().catch(() => "Unknown error");
-    throw new Error(`API Error ${res.status}: ${error}`);
+    throw new Error(`API Error ${res.status}: ${text.slice(0, 500)}`);
   }
-  return res.json();
+  const trimmed = text.trim();
+  if (trimmed.startsWith("<")) {
+    throw new Error(
+      "La API de pagos respondió con una página HTML (no JSON). Suele pasar si VITE_API_BASE_URL apunta al sitio estático o si en el VPS las rutas /api/… no se reenvían al servidor Node y el hosting devuelve index.html."
+    );
+  }
+  if (!trimmed) {
+    throw new Error("La API de pagos devolvió un cuerpo vacío.");
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      `Respuesta no es JSON válido (${res.status}). Revisá la URL del servidor de pagos y el header x-api-key.`
+    );
+  }
 }
 
 import type { PaymentResponse, PaymentStatus } from "@/types";

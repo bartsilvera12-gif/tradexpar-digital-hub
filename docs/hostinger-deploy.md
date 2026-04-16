@@ -7,11 +7,16 @@ En tu PC, antes de `npm run build`, creá `.env.production` en la raíz del proy
 ```env
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_ANON_KEY=tu_clave_anonima
+
+# Pagos / PagoPar (API Node en `server/`). Sin esto, el checkout llama /api/... al mismo host del
+# sitio estático y suele recibir index.html → error "Unexpected token '<' ... is not valid JSON".
+VITE_API_BASE_URL=https://donde-corre-tu-api-de-pagos
+VITE_API_KEY=mismo_valor_que_API_PUBLIC_KEY_en_el_server
 ```
 
 Vite inyecta solo variables que empiezan con `VITE_`. Podés copiar el formato de `.env.example`.
 
-Si no usás `.env.production`, el build usará los valores por defecto del código (solo para desarrollo / entornos ya configurados).
+Si no usás `.env.production`, el build usará el `.env` local o los defaults del código; **no dejes `VITE_API_BASE_URL` vacío en producción** si usás crear pago desde la tienda.
 
 ## 2. Build
 
