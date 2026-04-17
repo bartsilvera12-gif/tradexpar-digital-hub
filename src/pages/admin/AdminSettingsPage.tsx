@@ -94,6 +94,13 @@ export default function AdminSettingsPage() {
                   }
                   className={ADMIN_FORM_CONTROL_READONLY}
                 />
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  {import.meta.env.VITE_API_BASE_URL
+                    ? "URL del servidor Node de pagos inyectada en este build."
+                    : import.meta.env.DEV
+                      ? "Vacío: en desarrollo las llamadas van a /api/… y Vite las reenvía al Node (proxy → PAYMENTS_API_PROXY_TARGET, por defecto 127.0.0.1:8787)."
+                      : "Vacío en producción: el checkout con PagoPar fallará hasta definir VITE_API_BASE_URL y volver a ejecutar npm run build."}
+                </p>
               </div>
               <div className={ADMIN_FORM_FIELD}>
                 <Label className={ADMIN_FORM_LABEL}>API Key</Label>
