@@ -35,6 +35,7 @@ export type DropiSyncTestResult = {
   ok: boolean;
   sync_run_id?: string;
   stats: DropiSyncStats;
+  meta?: { modo?: string; ids?: string[] };
 };
 
 export type DropiImageStats = {
@@ -94,12 +95,17 @@ async function dropiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-/** Importa hasta 10 productos de prueba desde Dropi. */
-export async function syncDropiTest(): Promise<DropiSyncTestResult> {
+/**
+ * Sin `ids`: listado bridge con `limit` (default 10).
+ * Con `ids`: GET /product/{id} por cada id.
+ */
+export async function syncDropiTest(ids?: (string | number)[]): Promise<DropiSyncTestResult> {
+  const payload =
+    ids && ids.length > 0 ? { ids } : {};
   return dropiFetchJson<DropiSyncTestResult>("/api/admin/dropi/sync-test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify(payload),
   });
 }
 

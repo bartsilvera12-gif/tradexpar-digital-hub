@@ -29,7 +29,7 @@ import {
 } from "@/lib/adminModuleLayout";
 import { formatGuaraniesInteger, parseGuaraniesInput } from "@/lib/paraguayNumberFormat";
 import { tradexpar } from "@/services/tradexpar";
-import { syncDropiImages, syncDropiTest } from "@/services/dropiCatalog";
+import { syncDropiTest } from "@/services/dropiCatalog";
 import { syncFastraxProducts } from "@/services/fastraxCatalog";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
@@ -91,8 +91,8 @@ export default function AdminProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Product>>(emptyForm);
   const [fastraxSyncing, setFastraxSyncing] = useState(false);
-  const [dropiSyncing, setDropiSyncing] = useState(false);
-  const [dropiImgLoading, setDropiImgLoading] = useState(false);
+  const [dropiImportId, setDropiImportId] = useState("");
+  const [dropiImportLoading, setDropiImportLoading] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "tradexpar" | "dropi" | "fastrax">("all");
 
   const fetchProducts = () => {
@@ -179,11 +179,21 @@ export default function AdminProductsPage() {
     }
   };
 
-  const handleDropiSync = async () => {
-    if (dropiSyncing) return;
-    setDropiSyncing(true);
+  const handleDropiImportById = async () => {
+    if (dropiImportLoading) return;
+    const trimmed = dropiImportId.trim();
+    if (!trimmed) {
+      toast({
+        variant: "destructive",
+        title: "Indicá un ID",
+        description: "Ingresá el ID numérico del producto en Dropi (bridge).",
+      });
+      return;
+    }
+    const idPayload = /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
+    setDropiImportLoading(true);
     try {
-      const res = await syncDropiTest();
+      const res = await syncDropiTest([idPayload]);
       const s = res.stats;
       const lines = [
         `Leídos ${s.total_read}`,
@@ -194,51 +204,24 @@ export default function AdminProductsPage() {
         s.failed ? `Fallidos: ${s.failed}` : null,
         s.errors_sample?.length ? `Ej.: ${s.errors_sample[0]}` : null,
       ].filter(Boolean);
-      const bad = res.stats.failed && res.stats.created + res.stats.updated === 0;
+      const bad = Boolean(s.failed && s.created + s.updated + s.unchanged === 0);
       toast({
-        title: bad ? "Dropi: revisá credenciales o API" : "Dropi sincronizado (prueba)",
+        title: bad ? "Dropi: no se importó el producto" : "Producto Dropi importado",
         ...(bad ? { variant: "destructive" as const } : {}),
         description: lines.join(" · "),
       });
-      refreshProductsQuiet();
+      if (!bad) {
+        refreshProductsQuiet();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast({
         variant: "destructive",
-        title: "No se pudo sincronizar Dropi",
+        title: "No se pudo importar desde Dropi",
         description: msg,
       });
     } finally {
-      setDropiSyncing(false);
-    }
-  };
-
-  const handleDropiImages = async () => {
-    if (dropiImgLoading) return;
-    setDropiImgLoading(true);
-    try {
-      const res = await syncDropiImages({ retryFailed: true, batchSize: 45 });
-      const st = res.stats;
-      toast({
-        title: "Imágenes Dropi",
-        description: [
-          `Descargadas: ${st.downloaded}`,
-          st.failed ? `Fallidas: ${st.failed}` : null,
-          st.errors_sample?.length ? `Ej.: ${st.errors_sample[0]}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      });
-      refreshProductsQuiet();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast({
-        variant: "destructive",
-        title: "No se pudieron reprocesar imágenes Dropi",
-        description: msg,
-      });
-    } finally {
-      setDropiImgLoading(false);
+      setDropiImportLoading(false);
     }
   };
 
@@ -326,38 +309,6 @@ export default function AdminProductsPage() {
       </Button>
       <Button
         type="button"
-        variant="outline"
-        size="default"
-        onClick={() => void handleDropiSync()}
-        disabled={dropiSyncing}
-        className="gap-2 min-h-10 whitespace-nowrap border-violet-300/60"
-        aria-label="Sincronizar productos Dropi (prueba 10 ítems)"
-      >
-        {dropiSyncing ? (
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
-        ) : (
-          <RefreshCw className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
-        )}
-        Sincronizar Dropi
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="default"
-        onClick={() => void handleDropiImages()}
-        disabled={dropiImgLoading}
-        className="gap-2 min-h-10 whitespace-nowrap border-violet-300/60"
-        aria-label="Reprocesar imágenes en cola Dropi"
-      >
-        {dropiImgLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
-        ) : (
-          <RefreshCw className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
-        )}
-        Reprocesar imágenes Dropi
-      </Button>
-      <Button
-        type="button"
         onClick={startCreate}
         className="gap-2 gradient-celeste text-primary-foreground shadow-sm min-h-10 whitespace-nowrap"
         aria-label="Crear producto nuevo"
@@ -375,6 +326,44 @@ export default function AdminProductsPage() {
       actions={headerActions}
     >
       <div className="space-y-3 w-full">
+        <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+          <p className="text-sm font-semibold text-foreground">Importar producto Dropi por ID</p>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:items-end max-w-lg">
+            <div className="flex-1 min-w-[140px] space-y-1.5">
+              <Label htmlFor="dropi-import-id" className="sr-only">
+                ID producto Dropi
+              </Label>
+              <Input
+                id="dropi-import-id"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="Ej: 14906"
+                value={dropiImportId}
+                onChange={(e) => setDropiImportId(e.target.value)}
+                disabled={dropiImportLoading}
+                className={ADMIN_FORM_CONTROL}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-10 shrink-0 inline-flex items-center"
+              disabled={dropiImportLoading}
+              onClick={() => void handleDropiImportById()}
+              aria-busy={dropiImportLoading}
+            >
+              {dropiImportLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0 mr-2" aria-hidden />
+                  Importando…
+                </>
+              ) : (
+                "Importar"
+              )}
+            </Button>
+          </div>
+        </div>
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2.5 w-full">
           Buscar en catálogo
         </p>

@@ -13,7 +13,18 @@ export function registerDropiRoutes(app) {
   app.post("/api/admin/dropi/sync-test", requireAdmin, async (req, res) => {
     try {
       const sb = supabaseService();
-      const result = await runDropiProductSync(sb, { limit: 10 });
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const idsRaw = body.ids;
+      const ids = Array.isArray(idsRaw) ? idsRaw : undefined;
+      const limitRaw = body.limit;
+      const limitNum = limitRaw != null ? Number(limitRaw) : NaN;
+      const limit = Number.isFinite(limitNum) && limitNum > 0 ? Math.min(500, Math.floor(limitNum)) : 10;
+
+      const result =
+        ids && ids.length > 0
+          ? await runDropiProductSync(sb, { ids })
+          : await runDropiProductSync(sb, { limit });
+
       return res.json({ ok: true, ...result });
     } catch (e) {
       console.error("[dropi/sync-test]", e);
