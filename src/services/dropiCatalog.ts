@@ -64,6 +64,9 @@ async function dropiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
       Accept: "application/json",
       ...(init?.headers ?? {}),
       Authorization: `Bearer ${token}`,
+      ...(init?.method === "POST" || init?.method === "PUT" || init?.method === "PATCH"
+        ? { "Content-Type": "application/json" }
+        : {}),
     },
   });
   const text = await res.text().catch(() => "");
@@ -80,7 +83,13 @@ async function dropiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
       (typeof o.error === "string" && o.error) ||
       text.slice(0, 400) ||
       res.statusText;
-    throw new Error(msg || "Error Dropi API");
+    const hint =
+      res.status === 500 &&
+      typeof o.message === "string" &&
+      o.message.includes("SUPABASE_ANON_KEY")
+        ? " En el proceso Node (`server/`): definí SUPABASE_ANON_KEY o usá `.env` en la raíz del repo con VITE_SUPABASE_ANON_KEY."
+        : "";
+    throw new Error((msg || "Error Dropi API") + hint);
   }
   return data as T;
 }
@@ -89,6 +98,7 @@ async function dropiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 export async function syncDropiTest(): Promise<DropiSyncTestResult> {
   return dropiFetchJson<DropiSyncTestResult>("/api/admin/dropi/sync-test", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
   });
 }

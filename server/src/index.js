@@ -1,6 +1,30 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
+
+/** `server/.env`, raíz `.env` / `.env.local` y alias VITE_* → mismo Supabase que el frontend en local. */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const serverDir = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(serverDir, "..");
+dotenv.config({ path: path.join(repoRoot, ".env") });
+dotenv.config({ path: path.join(repoRoot, ".env.local"), override: true });
+dotenv.config({ path: path.join(serverDir, ".env"), override: true });
+
+function syncSupabaseEnvFromViteFallbacks() {
+  const trim = (k) => {
+    const v = process.env[k];
+    return v != null ? String(v).trim() : "";
+  };
+  if (!trim("SUPABASE_URL") && trim("VITE_SUPABASE_URL")) {
+    process.env.SUPABASE_URL = trim("VITE_SUPABASE_URL");
+  }
+  if (!trim("SUPABASE_ANON_KEY") && trim("VITE_SUPABASE_ANON_KEY")) {
+    process.env.SUPABASE_ANON_KEY = trim("VITE_SUPABASE_ANON_KEY");
+  }
+}
+syncSupabaseEnvFromViteFallbacks();
 import { createClient } from "@supabase/supabase-js";
 import {
   checkoutUrlFromHash,
