@@ -1,6 +1,7 @@
 /**
- * Dropi vía bridge HTTP (WordPress/Hostinger).
- * Sin llamadas directas a api.dropi.* desde este proceso (evita Access denied desde VPS).
+ * Dropi vía bridge WordPress REST (`tradexpar-dropi/v1`).
+ * GET {DROPI_BRIDGE_URL}/products · GET {DROPI_BRIDGE_URL}/product/{id}
+ * Header: x-bridge-key (sin llamadas directas a api.dropi.* desde el VPS).
  * No Fastrax.
  */
 
@@ -13,12 +14,16 @@ function envTrim(key, fallback = "") {
 }
 
 function normalizeBridgeBase(raw) {
-  let u = (raw || "").trim().replace(/\/+$/, "");
-  return u;
+  return (raw || "").trim().replace(/\/+$/, "");
 }
 
-function bridgeDebugEnabled() {
+function bridgeVerboseLogs() {
   return String(process.env.DROPI_BRIDGE_DEBUG ?? "").trim() === "1";
+}
+
+function truncateSummary(text, max = 1200) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
 function truncateBodySummary(obj, max = 2500) {
@@ -30,7 +35,18 @@ function truncateBodySummary(obj, max = 2500) {
   }
 }
 
-/** URL base del bridge (sin barra final), ej. https://midominio.com/wp-json/mi-namespace/v1 */
+/**
+ * Respuesta estilo plugin Dropi / bridge: `{ isSuccess, status, objects: [...] }`.
+ * Prioridad: longitud de `objects` si es array; si no, filas extraíbles por el mapper.
+ */
+function countBridgeProducts(parsed) {
+  if (!parsed || typeof parsed !== "object") return 0;
+  const o = parsed.objects;
+  if (Array.isArray(o)) return o.length;
+  return extractDropiProductRows(parsed).length;
+}
+
+/** URL base del bridge (sin barra final). Ej.: https://tienda.tradexpar.com.py/wp-json/tradexpar-dropi/v1 */
 export function resolveBridgeBaseUrl() {
   return normalizeBridgeBase(envTrim("DROPI_BRIDGE_URL"));
 }
@@ -59,12 +75,16 @@ function bridgeHeaders(key) {
   };
 }
 
-function logBridge(operation, payload) {
-  console.info(`[dropi/bridge] ${operation}`, payload);
+function summarizeHttpError(parsed, rawText, httpStatus) {
+  if (parsed && typeof parsed === "object") {
+    const msg = parsed.message ?? parsed.error ?? parsed.msg;
+    if (msg != null) return truncateSummary(String(msg), 1500);
+  }
+  return truncateSummary(rawText || `HTTP ${httpStatus}`, 1500);
 }
 
 /**
- * Listado de productos vía bridge: GET {DROPI_BRIDGE_URL}/products
+ * Listado: GET {DROPI_BRIDGE_URL}/products
  */
 export async function fetchDropiProductList() {
   const { base, key } = assertBridgeEnv();
@@ -83,27 +103,29 @@ export async function fetchDropiProductList() {
     parsed = { _parse_error: true, _raw: text.slice(0, 2000) };
   }
 
-  const rows = extractDropiProductRows(parsed);
-  const productCount = rows.length;
+  const objetos = countBridgeProducts(parsed);
+  const bridgeStatus =
+    parsed && typeof parsed === "object" && parsed.status !== undefined ? parsed.status : undefined;
+  const bridgeOk =
+    parsed && typeof parsed === "object" && parsed.isSuccess !== undefined ? parsed.isSuccess : undefined;
 
-  logBridge("fetchDropiProductList", {
+  console.info("[dropi/bridge] fetchDropiProductList", {
     url,
-    method: "GET",
-    status: res.status,
-    ok: res.ok,
-    productosRecibidos: productCount,
-    ...(bridgeDebugEnabled()
-      ? { respuestaResumida: truncateBodySummary(parsed) }
-      : {}),
+    httpStatus: res.status,
+    isSuccess: bridgeOk,
+    statusCampo: bridgeStatus,
+    objetosRecibidos: objetos,
+    ...(bridgeVerboseLogs() ? { respuestaResumida: truncateBodySummary(parsed) } : {}),
   });
 
   if (!res.ok) {
-    const errSummary =
-      (parsed && typeof parsed === "object" && (parsed.message || parsed.error || parsed.msg)) ||
-      text.slice(0, 1200) ||
-      `HTTP ${res.status}`;
-    const msg = typeof errSummary === "string" ? errSummary : JSON.stringify(errSummary);
-    throw new Error(msg);
+    const errResumido = summarizeHttpError(parsed, text, res.status);
+    console.warn("[dropi/bridge] fetchDropiProductList error", {
+      url,
+      httpStatus: res.status,
+      errorResumido: errResumido,
+    });
+    throw new Error(errResumido);
   }
 
   if (parsed && typeof parsed === "object" && parsed.isSuccess === false) {
@@ -111,14 +133,20 @@ export async function fetchDropiProductList() {
     if (parsed.message != null) parts.push(`message: ${String(parsed.message)}`);
     if (parsed.status != null) parts.push(`status: ${String(parsed.status)}`);
     if (parsed.ip != null) parts.push(`ip: ${String(parsed.ip)}`);
-    throw new Error(parts.join(" | ") || "Bridge / Dropi isSuccess=false");
+    const msg = parts.join(" | ") || "Bridge isSuccess=false";
+    console.warn("[dropi/bridge] fetchDropiProductList error", {
+      url,
+      httpStatus: res.status,
+      errorResumido: truncateSummary(msg),
+    });
+    throw new Error(msg);
   }
 
   return parsed;
 }
 
 /**
- * Detalle de producto vía bridge: GET {DROPI_BRIDGE_URL}/product/{id}
+ * Detalle: GET {DROPI_BRIDGE_URL}/product/{id}
  * @param {string | number} externalId
  */
 export async function fetchDropiProductDetail(externalId) {
@@ -136,25 +164,41 @@ export async function fetchDropiProductDetail(externalId) {
   try {
     parsed = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`Bridge detalle: respuesta no JSON (${res.status})`);
+    const err = `Bridge detalle: respuesta no JSON (${res.status})`;
+    console.warn("[dropi/bridge] fetchDropiProductDetail error", {
+      url,
+      httpStatus: res.status,
+      errorResumido: err,
+    });
+    throw new Error(err);
   }
 
-  logBridge("fetchDropiProductDetail", {
+  const detailObjs =
+    parsed && typeof parsed === "object" && Array.isArray(parsed.objects)
+      ? parsed.objects.length
+      : parsed && typeof parsed === "object"
+        ? 1
+        : 0;
+
+  console.info("[dropi/bridge] fetchDropiProductDetail", {
     url,
-    method: "GET",
-    status: res.status,
-    ok: res.ok,
-    ...(bridgeDebugEnabled()
-      ? { respuestaResumida: truncateBodySummary(parsed) }
-      : {}),
+    httpStatus: res.status,
+    isSuccess:
+      parsed && typeof parsed === "object" && parsed.isSuccess !== undefined ? parsed.isSuccess : undefined,
+    statusCampo:
+      parsed && typeof parsed === "object" && parsed.status !== undefined ? parsed.status : undefined,
+    objetosRecibidos: detailObjs,
+    ...(bridgeVerboseLogs() ? { respuestaResumida: truncateBodySummary(parsed) } : {}),
   });
 
   if (!res.ok) {
-    const msg =
-      (parsed && typeof parsed === "object" && (parsed.message || parsed.error)) ||
-      text.slice(0, 500) ||
-      `HTTP ${res.status}`;
-    throw new Error(typeof msg === "string" ? msg : String(msg));
+    const errResumido = summarizeHttpError(parsed, text, res.status);
+    console.warn("[dropi/bridge] fetchDropiProductDetail error", {
+      url,
+      httpStatus: res.status,
+      errorResumido: errResumido,
+    });
+    throw new Error(errResumido);
   }
 
   if (parsed && typeof parsed === "object" && parsed.isSuccess === false) {
@@ -162,7 +206,13 @@ export async function fetchDropiProductDetail(externalId) {
     if (parsed.message != null) bits.push(`message: ${parsed.message}`);
     if (parsed.status != null) bits.push(`status: ${String(parsed.status)}`);
     if (parsed.ip != null) bits.push(`ip: ${String(parsed.ip)}`);
-    throw new Error(bits.join(" | ") || "Bridge isSuccess=false");
+    const msg = bits.join(" | ") || "Bridge isSuccess=false";
+    console.warn("[dropi/bridge] fetchDropiProductDetail error", {
+      url,
+      httpStatus: res.status,
+      errorResumido: truncateSummary(msg),
+    });
+    throw new Error(msg);
   }
 
   return parsed;
