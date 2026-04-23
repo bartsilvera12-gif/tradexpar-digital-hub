@@ -19,6 +19,72 @@ function pickString(obj, keys, fallback = "") {
   return fallback;
 }
 
+/** @returns {string} */
+function envTrim(key) {
+  if (typeof process === "undefined" || !process.env) return "";
+  const v = process.env[key];
+  return v != null ? String(v).trim() : "";
+}
+
+/**
+ * Convierte path o URL de imagen del bridge a URL absoluta (https).
+ * - Ya absoluta → sin cambios.
+ * - Campo tipo Dropi `url` (relativo) → `DROPI_BRIDGE_IMG_URL` + path (estilo IMG_URL + url).
+ * - `urlS3` relativo → `DROPI_BRIDGE_CDN_URL` + path (CloudFront/CDN); si no hay CDN, fallback a IMG base.
+ * @param {string} raw
+ * @param {"s3" | "img"} kind
+ * @returns {string | null}
+ */
+function toAbsoluteImageUrl(raw, kind) {
+  const s = str(raw);
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  const path = s.startsWith("/") ? s : `/${s}`;
+  const imgBase = envTrim("DROPI_BRIDGE_IMG_URL").replace(/\/+$/, "");
+  const cdnBase = envTrim("DROPI_BRIDGE_CDN_URL").replace(/\/+$/, "");
+  if (kind === "s3") {
+    if (cdnBase) return `${cdnBase}${path}`;
+    if (imgBase) return `${imgBase}${path}`;
+    return null;
+  }
+  if (imgBase) return `${imgBase}${path}`;
+  return null;
+}
+
+/**
+ * Intenta obtener URL https desde un fragmento (string u objeto con url/urlS3).
+ */
+function pushResolvedFromFragment(frag, kindFallback, seen, out) {
+  if (frag == null) return;
+  if (typeof frag === "string") {
+    const abs = toAbsoluteImageUrl(frag, kindFallback);
+    if (abs && !seen.has(abs)) {
+      seen.add(abs);
+      out.push(abs);
+    }
+    return;
+  }
+  if (typeof frag === "object") {
+    const o = frag;
+    const s3 = o.urlS3 ?? o.urls3 ?? o.s3_url ?? o.UrlS3;
+    const u = o.url ?? o.URL ?? o.link ?? o.src;
+    if (s3) {
+      const abs = toAbsoluteImageUrl(String(s3), "s3");
+      if (abs && !seen.has(abs)) {
+        seen.add(abs);
+        out.push(abs);
+      }
+    }
+    if (u) {
+      const abs = toAbsoluteImageUrl(String(u), "img");
+      if (abs && !seen.has(abs)) {
+        seen.add(abs);
+        out.push(abs);
+      }
+    }
+  }
+}
+
 /**
  * Aplana respuestas tipo WooCommerce / Dropi.
  * @param {unknown} parsed
@@ -44,41 +110,83 @@ export function extractDropiProductRows(parsed) {
   return [];
 }
 
+/**
+ * Galería desde payload bridge / Dropi: `photos`, `url`, `urlS3`, `images`, etc.
+ * Orden estable: principal (url/urlS3) → photos[] → resto.
+ */
 function collectImageUrls(raw) {
-  const urls = new Set();
-  const add = (u) => {
-    const s = str(u);
-    if (s.startsWith("http://") || s.startsWith("https://")) urls.add(s);
+  const seen = new Set();
+  const out = [];
+
+  const addString = (s, kind) => {
+    const abs = toAbsoluteImageUrl(str(s), kind);
+    if (abs && /^https?:\/\//i.test(abs) && !seen.has(abs)) {
+      seen.add(abs);
+      out.push(abs);
+    }
   };
 
+  const addHttp = (s) => {
+    const t = str(s);
+    if ((t.startsWith("http://") || t.startsWith("https://")) && !seen.has(t)) {
+      seen.add(t);
+      out.push(t);
+    }
+  };
+
+  // Bridge / plugin: raíz urlS3 (CDN) y url (IMG_URL + path)
+  const rootS3 = raw?.urlS3 ?? raw?.urls3;
+  if (rootS3 != null) addString(rootS3, "s3");
+  const rootUrl = raw?.url;
+  if (typeof rootUrl === "string" && rootUrl.trim() !== "") addString(rootUrl, "img");
+
+  // Galería `photos` (objetos o strings)
+  const photos = raw?.photos ?? raw?.Photos;
+  if (Array.isArray(photos)) {
+    for (const p of photos) {
+      if (typeof p === "string" || typeof p === "number") {
+        addString(String(p), "img");
+      } else {
+        pushResolvedFromFragment(p, "img", seen, out);
+      }
+    }
+  }
+
   const featured = raw?.featured_image ?? raw?.featuredImage ?? raw?.image;
-  if (typeof featured === "string") add(featured);
-  if (featured && typeof featured === "object") {
-    add(featured.src);
-    add(featured.url);
-    add(featured.source_url);
+  if (typeof featured === "string") addString(featured, "img");
+  else if (featured && typeof featured === "object") {
+    pushResolvedFromFragment(featured, "img", seen, out);
+    addHttp(featured.src);
+    addHttp(featured.url);
+    addHttp(featured.source_url);
   }
 
   const main = raw?.main_image ?? raw?.mainImage;
-  if (typeof main === "string") add(main);
-  if (main && typeof main === "object") {
-    add(main.src);
-    add(main.url);
+  if (typeof main === "string") addString(main, "img");
+  else if (main && typeof main === "object") {
+    pushResolvedFromFragment(main, "img", seen, out);
+    addHttp(main.src);
+    addHttp(main.url);
   }
 
   const imgs = raw?.images ?? raw?.Images;
   if (Array.isArray(imgs)) {
     for (const it of imgs) {
-      if (typeof it === "string") add(it);
+      if (typeof it === "string") addString(it, "img");
       else if (it && typeof it === "object") {
-        add(it.src);
-        add(it.url);
-        add(it.source_url);
-        add(it.guid);
+        pushResolvedFromFragment(it, "img", seen, out);
+        addHttp(it.src);
+        addHttp(it.url);
+        addHttp(it.source_url);
+        addHttp(it.guid);
       }
     }
   }
-  return [...urls];
+
+  const thumb = raw?.thumbnail ?? raw?.thumb ?? raw?.thumbnail_url;
+  if (thumb != null) addString(String(thumb), "img");
+
+  return out;
 }
 
 function pickCategory(raw) {
