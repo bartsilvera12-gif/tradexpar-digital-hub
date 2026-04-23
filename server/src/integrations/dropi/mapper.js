@@ -205,12 +205,27 @@ function pickCategory(raw) {
 
 /**
  * @param {Record<string, unknown>} raw
+ * @param {string | number} [detailRequestedId] Importación GET /product/{id}: fallback si el JSON no trae id explícito.
  * @returns {import('./types.js').DropiNormalizedProduct | null}
  */
-export function mapDropiProduct(raw) {
+export function mapDropiProduct(raw, detailRequestedId) {
   if (!raw || typeof raw !== "object") return null;
 
-  const externalId = pickString(raw, ["id", "ID", "product_id", "productId", "Id", "codigo", "external_id"]);
+  let externalId = pickString(raw, [
+    "id",
+    "ID",
+    "product_id",
+    "productId",
+    "Id",
+    "codigo",
+    "external_id",
+    "dropi_id",
+    "dropi_product_id",
+  ]);
+  if (!externalId && detailRequestedId != null) {
+    const t = String(detailRequestedId).trim();
+    if (t) externalId = t;
+  }
   if (!externalId) return null;
 
   let sku = pickString(raw, ["sku", "SKU", "reference", "referencia", "code"]);

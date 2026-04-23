@@ -41,21 +41,99 @@ function normalizeIncomingIds(ids) {
 }
 
 /**
- * Una fila producto desde respuesta GET /product/{id} (objeto raíz o objects[0]).
+ * Una fila producto desde respuesta GET /product/{id}.
+ * El bridge puede devolver objects[], data{}, data.product, product, etc.
  */
 function rawProductFromBridgeDetail(parsed, requestedId) {
-  const rows = extractDropiProductRows(parsed);
-  let raw = rows.length > 0 ? rows[0] : null;
+  const idStr = String(requestedId);
+
+  const rowsFromArrays = extractDropiProductRows(parsed);
+  let raw = rowsFromArrays.length > 0 ? rowsFromArrays[0] : null;
+
   if (!raw && parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    raw = parsed;
+    const o = /** @type {Record<string, unknown>} */ (parsed);
+
+    const pickNestedProduct = (container) => {
+      if (!container || typeof container !== "object" || Array.isArray(container)) return null;
+      const c = /** @type {Record<string, unknown>} */ (container);
+      for (const key of ["product", "Product", "item", "record"]) {
+        const v = c[key];
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+          return /** @type {Record<string, unknown>} */ (v);
+        }
+      }
+      return null;
+    };
+
+    raw = pickNestedProduct(o);
+
+    if (!raw && o.data != null && typeof o.data === "object" && !Array.isArray(o.data)) {
+      const d = /** @type {Record<string, unknown>} */ (o.data);
+      raw = pickNestedProduct(d) ?? null;
+      if (
+        !raw &&
+        ["id", "ID", "product_id", "name", "nombre", "sku"].some(
+          (k) => d[k] != null && String(d[k]).trim() !== ""
+        )
+      ) {
+        raw = d;
+      }
+    }
+
+    if (!raw) {
+      for (const key of ["product", "result"]) {
+        const v = o[key];
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+          raw = /** @type {Record<string, unknown>} */ (v);
+          break;
+        }
+      }
+    }
+
+    if (!raw) {
+      raw = /** @type {Record<string, unknown>} */ (o);
+    }
   }
+
   if (!raw || typeof raw !== "object") {
     throw new Error(`Sin datos de producto en la respuesta del bridge (id ${requestedId})`);
   }
-  const idStr = String(requestedId);
+
   if (raw.id == null && raw.ID == null) {
-    return { ...raw, id: idStr };
+    raw = { ...raw, id: idStr };
   }
+
+  const parsedRoot = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  const objectsEmpty =
+    parsedRoot != null &&
+    Array.isArray(parsedRoot.objects) &&
+    /** @type {unknown[]} */ (parsedRoot.objects).length === 0;
+  const hasProductShape = [
+    "id",
+    "ID",
+    "product_id",
+    "name",
+    "nombre",
+    "sku",
+    "SKU",
+    "price",
+    "sale_price",
+    "descripcion",
+    "photos",
+    "url",
+    "urlS3",
+  ].some((k) => {
+    const v = raw[k];
+    if (v == null) return false;
+    if (Array.isArray(v)) return v.length > 0;
+    return String(v).trim() !== "";
+  });
+  if (objectsEmpty && !hasProductShape) {
+    throw new Error(
+      `El bridge devolvió objects vacío sin datos de producto para id ${requestedId}. Comprobá que el ítem exista en Dropi.`
+    );
+  }
+
   return raw;
 }
 
@@ -153,10 +231,11 @@ function buildProductRow(raw, mapped) {
 
 /**
  * Upsert un raw Dropi ya mapeable por `mapDropiProduct`.
+ * @param {string} [detailRequestedId] Solo modo importación por id (fallback de id externo en el mapper).
  */
-async function upsertDropiProductRow(sb, raw, syncRunId, stats) {
+async function upsertDropiProductRow(sb, raw, syncRunId, stats, detailRequestedId) {
   try {
-    const mapped = mapDropiProduct(raw);
+    const mapped = mapDropiProduct(raw, detailRequestedId);
     if (!mapped) {
       stats.failed++;
       pushSample(stats.errors_sample, "Producto sin id externo mapeable");
@@ -281,7 +360,7 @@ async function runDropiProductSyncByIds(sb, ids) {
       try {
         const parsed = await fetchDropiProductDetail(id);
         const raw = rawProductFromBridgeDetail(parsed, id);
-        await upsertDropiProductRow(sb, raw, syncRunId, stats);
+        await upsertDropiProductRow(sb, raw, syncRunId, stats, id);
       } catch (e) {
         stats.failed++;
         pushSample(stats.errors_sample, `[id ${id}] ${e instanceof Error ? e.message : String(e)}`);
