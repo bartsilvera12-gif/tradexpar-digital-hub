@@ -144,7 +144,20 @@ export async function runDropiProductSync(sb, options = {}) {
   const syncRunId = runRow.id;
 
   try {
-    const parsed = await fetchDropiProductList({ limit, page: 1 });
+    const parsed = await fetchDropiProductList();
+    if (String(process.env.DROPI_LIST_DEBUG ?? "").trim() === "1") {
+      const objs = parsed && typeof parsed === "object" ? parsed.objects : undefined;
+      let tipoObjects = "undefined";
+      if (objs === null) tipoObjects = "null";
+      else if (Array.isArray(objs)) tipoObjects = "array";
+      else if (objs !== undefined) tipoObjects = typeof objs;
+      console.info("[dropi/sync-products] respuesta listado", {
+        cantidadObjetos: Array.isArray(objs) ? objs.length : "(no array)",
+        tipoParsedObjects: tipoObjects,
+        clavesJsonSuperior:
+          parsed && typeof parsed === "object" ? Object.keys(parsed).slice(0, 30) : [],
+      });
+    }
     const rows = extractDropiProductRows(parsed);
     const slice = rows.slice(0, limit);
     stats.total_read = slice.length;
