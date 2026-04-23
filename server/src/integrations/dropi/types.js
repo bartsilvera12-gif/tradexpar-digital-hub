@@ -1,0 +1,28 @@
+/**
+ * @typedef {object} DropiNormalizedProduct
+ * @property {string} externalId
+ * @property {string} sku
+ * @property {string} name
+ * @property {string} description
+ * @property {string} category
+ * @property {number} price
+ * @property {number} stock
+ * @property {string} brand
+ * @property {string[]} imageUrls
+ * @property {number | null} weightKg
+ * @property {string | null} dimensionsLabel
+ * @property {string} syncCrc
+ */
+
+/**
+ * @typedef {object} DropiSyncStats
+ * @property {number} total_read
+ * @property {number} created
+ * @property {number} updated
+ * @property {number} duplicates_skipped
+ * @property {number} failed
+ * @property {number} images_queued
+ * @property {string[]} errors_sample
+ */
+
+export {};

@@ -29,6 +29,7 @@ import {
 } from "@/lib/adminModuleLayout";
 import { formatGuaraniesInteger, parseGuaraniesInput } from "@/lib/paraguayNumberFormat";
 import { tradexpar } from "@/services/tradexpar";
+import { syncDropiImages, syncDropiTest } from "@/services/dropiCatalog";
 import { syncFastraxProducts } from "@/services/fastraxCatalog";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
@@ -90,6 +91,9 @@ export default function AdminProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Product>>(emptyForm);
   const [fastraxSyncing, setFastraxSyncing] = useState(false);
+  const [dropiSyncing, setDropiSyncing] = useState(false);
+  const [dropiImgLoading, setDropiImgLoading] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "tradexpar" | "dropi" | "fastrax">("all");
 
   const fetchProducts = () => {
     setLoading(true);
@@ -113,6 +117,12 @@ export default function AdminProductsPage() {
 
   const searchNorm = search.toLowerCase().trim();
   const filtered = products.filter((p) => {
+    if (sourceFilter !== "all") {
+      const t = p.product_source_type ?? "tradexpar";
+      if (sourceFilter === "tradexpar" && t !== "tradexpar") return false;
+      if (sourceFilter === "dropi" && t !== "dropi") return false;
+      if (sourceFilter === "fastrax" && t !== "fastrax") return false;
+    }
     if (!searchNorm) return true;
     const name = (p.name ?? "").toLowerCase();
     const sku = (p.sku ?? "").toLowerCase();
@@ -166,6 +176,69 @@ export default function AdminProductsPage() {
       });
     } finally {
       setFastraxSyncing(false);
+    }
+  };
+
+  const handleDropiSync = async () => {
+    if (dropiSyncing) return;
+    setDropiSyncing(true);
+    try {
+      const res = await syncDropiTest();
+      const s = res.stats;
+      const lines = [
+        `Leídos ${s.total_read}`,
+        `Nuevos ${s.created}, actualizados ${s.updated}`,
+        s.unchanged ? `Sin cambios (CRC): ${s.unchanged}` : null,
+        s.duplicates_skipped ? `Duplicados evitados (SKU ocupado): ${s.duplicates_skipped}` : null,
+        s.images_queued ? `Imágenes en cola: ${s.images_queued}` : null,
+        s.failed ? `Fallidos: ${s.failed}` : null,
+        s.errors_sample?.length ? `Ej.: ${s.errors_sample[0]}` : null,
+      ].filter(Boolean);
+      const bad = res.stats.failed && res.stats.created + res.stats.updated === 0;
+      toast({
+        title: bad ? "Dropi: revisá credenciales o API" : "Dropi sincronizado (prueba)",
+        ...(bad ? { variant: "destructive" as const } : {}),
+        description: lines.join(" · "),
+      });
+      refreshProductsQuiet();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({
+        variant: "destructive",
+        title: "No se pudo sincronizar Dropi",
+        description: msg,
+      });
+    } finally {
+      setDropiSyncing(false);
+    }
+  };
+
+  const handleDropiImages = async () => {
+    if (dropiImgLoading) return;
+    setDropiImgLoading(true);
+    try {
+      const res = await syncDropiImages({ retryFailed: true, batchSize: 45 });
+      const st = res.stats;
+      toast({
+        title: "Imágenes Dropi",
+        description: [
+          `Descargadas: ${st.downloaded}`,
+          st.failed ? `Fallidas: ${st.failed}` : null,
+          st.errors_sample?.length ? `Ej.: ${st.errors_sample[0]}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      });
+      refreshProductsQuiet();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({
+        variant: "destructive",
+        title: "No se pudieron reprocesar imágenes Dropi",
+        description: msg,
+      });
+    } finally {
+      setDropiImgLoading(false);
     }
   };
 
@@ -253,6 +326,38 @@ export default function AdminProductsPage() {
       </Button>
       <Button
         type="button"
+        variant="outline"
+        size="default"
+        onClick={() => void handleDropiSync()}
+        disabled={dropiSyncing}
+        className="gap-2 min-h-10 whitespace-nowrap border-violet-300/60"
+        aria-label="Sincronizar productos Dropi (prueba 10 ítems)"
+      >
+        {dropiSyncing ? (
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+        ) : (
+          <RefreshCw className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+        )}
+        Sincronizar Dropi
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="default"
+        onClick={() => void handleDropiImages()}
+        disabled={dropiImgLoading}
+        className="gap-2 min-h-10 whitespace-nowrap border-violet-300/60"
+        aria-label="Reprocesar imágenes en cola Dropi"
+      >
+        {dropiImgLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+        ) : (
+          <RefreshCw className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+        )}
+        Reprocesar imágenes Dropi
+      </Button>
+      <Button
+        type="button"
         onClick={startCreate}
         className="gap-2 gradient-celeste text-primary-foreground shadow-sm min-h-10 whitespace-nowrap"
         aria-label="Crear producto nuevo"
@@ -273,15 +378,33 @@ export default function AdminProductsPage() {
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-2.5 w-full">
           Buscar en catálogo
         </p>
-        <div className="relative flex-1 min-w-0 w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Nombre o SKU…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(ADMIN_FORM_CONTROL, "pl-10 w-full")}
-          />
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end w-full">
+          <div className="relative flex-1 min-w-0 w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Nombre o SKU…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={cn(ADMIN_FORM_CONTROL, "pl-10 w-full")}
+            />
+          </div>
+          <div className={ADMIN_FORM_FIELD}>
+            <Label htmlFor="prod-source-filter" className={ADMIN_FORM_LABEL}>
+              Origen
+            </Label>
+            <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as typeof sourceFilter)}>
+              <SelectTrigger id="prod-source-filter" className={cn(ADMIN_FORM_CONTROL, "w-full sm:w-[200px]")}>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los orígenes</SelectItem>
+                <SelectItem value="tradexpar">Tradexpar / manual</SelectItem>
+                <SelectItem value="dropi">Dropi</SelectItem>
+                <SelectItem value="fastrax">Fastrax</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
