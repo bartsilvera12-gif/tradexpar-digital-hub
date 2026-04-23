@@ -490,6 +490,34 @@ async function assertAdminProfile(userId: string) {
   }
 }
 
+/** Mensajes claros cuando `/auth/v1/token` devuelve 400 (credenciales, confirmación, etc.). */
+function mapAdminAuthSignInError(err: { message?: string }): string {
+  const raw = typeof err.message === "string" ? err.message.trim() : "";
+  const m = raw.toLowerCase();
+
+  if (
+    m.includes("invalid login credentials") ||
+    m.includes("invalid email or password") ||
+    (m.includes("invalid") && m.includes("credential"))
+  ) {
+    return (
+      "Email o contraseña incorrectos, o no existe un usuario con acceso por correo y contraseña en Auth. " +
+      "En self-hosted (Neura): revisá en el panel Supabase → Authentication → Users que el usuario exista; " +
+      "si olvidaste la clave, usá «Forgot password» o generá una nueva desde el panel."
+    );
+  }
+  if (m.includes("email not confirmed")) {
+    return (
+      "Tenés que confirmar el correo antes de entrar: revisá la bandeja (y spam) o pedí un nuevo correo de confirmación desde Auth."
+    );
+  }
+  if (m.includes("too many requests") || m.includes("rate limit")) {
+    return "Demasiados intentos de inicio de sesión. Esperá unos minutos y volvé a intentar.";
+  }
+
+  return raw || "No se pudo iniciar sesión.";
+}
+
 async function fetchCustomerByAuthId(authUserId: string): Promise<Record<string, unknown> | null> {
   const { data, error } = await tx()
     .from("customers")
@@ -803,14 +831,18 @@ export const tradexpar = {
         (data.user.user_metadata?.name as string) ||
         email.split("@")[0] ||
         "Usuario";
-      const { error: insErr } = await tx().from("customers").insert({
-        auth_user_id: uid,
-        name,
-        email,
-        provider: "manual",
-      });
+      const { data: inserted, error: insErr } = await tx()
+        .from("customers")
+        .insert({
+          auth_user_id: uid,
+          name,
+          email,
+          provider: "manual",
+        })
+        .select("id,name,email,created_at")
+        .single();
       if (insErr) throw new Error(insErr.message);
-      row = await fetchCustomerByAuthId(uid);
+      row = (inserted as Record<string, unknown>) ?? null;
     }
     if (!row) throw new Error("No se pudo cargar el perfil de cliente.");
     return { user: rowToCustomerUser(row) };
@@ -978,7 +1010,7 @@ export const tradexpar = {
               email: payload.email.trim(),
               password: payload.password,
             });
-            if (error) throw new Error(error.message);
+            if (error) throw new Error(mapAdminAuthSignInError(error));
             const uid = data.user?.id;
             if (!uid) throw new Error("Sesión inválida");
             /** Igual que customerLogin: no encadenar getSession/refresh aquí (puede bloquearse con el lock de GoTrue). */
@@ -1226,6 +1258,8 @@ export const tradexpar = {
  * `runAuthExclusive`, la segunda espera a la primera y la primera espera la segunda → login colgado.
  * Las operaciones de Auth siguen serializadas por el cliente de Supabase (lock nativo + cola interna).
  */
+let storeCustomerAuthLibraryInited = false;
+
 async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   if (!isSupabaseConfigured()) return null;
   if (isAdminLoginPath() || isAdminPanelSignInBusy()) {
@@ -1236,7 +1270,13 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   const oauthReturn = isOAuthCallbackUrl() || isOAuthReturnPending();
   /** Si la SPA navegó a /admin/login mientras corría el hydrate, no bloquear GoTrue. */
   if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
-  await auth.initialize();
+  if (oauthReturn) {
+    await auth.initialize();
+    storeCustomerAuthLibraryInited = true;
+  } else if (!storeCustomerAuthLibraryInited) {
+    await auth.initialize();
+    storeCustomerAuthLibraryInited = true;
+  }
   if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
   let session = (await auth.getSession()).data.session;
   /** Tras redirect OAuth (PKCE puede tardar), la sesión puede aparecer tarde. */
@@ -1251,8 +1291,8 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   }
   if (!session?.user) return null;
   if (session.access_token) setDataClientAccessToken(session.access_token);
-  const { data: gu } = await auth.getUser();
-  const u = gu.user ?? session.user;
+  /** `getUser()` va al servidor cada vez y suma RTT; para sincronizar `customers` alcanza `session.user` (mismo JWT). */
+  const u = session.user;
   const uid = u.id;
   let row = await fetchCustomerByAuthId(uid);
   if (row) return rowToCustomerUser(row);
