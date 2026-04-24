@@ -7,6 +7,7 @@
  * @property {string} category
  * @property {number} price
  * @property {number} stock
+ * @property {'stock' | 'warehouse_product' | 'warehouse_product_variation' | 'fallback'} stockSource
  * @property {string} brand
  * @property {string[]} imageUrls
  * @property {number | null} weightKg

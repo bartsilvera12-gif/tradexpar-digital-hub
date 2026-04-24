@@ -470,6 +470,9 @@ export default function AdminProductsPage() {
                     <td className={`${ADMIN_TD} text-right`}>
                       <span className={`font-medium ${(p.stock ?? 0) > 0 ? "text-green-600" : "text-destructive"}`}>
                         {getStockLabel(p)}
+                        <span className="ms-1.5 text-xs font-normal text-muted-foreground tabular-nums">
+                          ({(p.stock ?? 0).toLocaleString("es-PY")})
+                        </span>
                       </span>
                     </td>
                     <td className={`${ADMIN_TD} text-right`}>

@@ -242,6 +242,13 @@ async function upsertDropiProductRow(sb, raw, syncRunId, stats, detailRequestedI
       return;
     }
 
+    console.info("[dropi/stock]", {
+      dropi_product_id: mapped.externalId,
+      sku: mapped.sku,
+      stock: mapped.stock,
+      source: mapped.stockSource,
+    });
+
     await sb.from("dropi_source_products_raw").insert({
       sync_run_id: syncRunId,
       external_product_id: mapped.externalId,

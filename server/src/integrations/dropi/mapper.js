@@ -11,6 +11,98 @@ function num(v, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+const hasOwn =
+  typeof Object.hasOwn === "function"
+    ? Object.hasOwn
+    : (o, p) => Object.prototype.hasOwnProperty.call(o, p);
+
+/** Claves (producto raíz) donde un número o string numérico = stock explícito. */
+const EXPLICIT_STOCK_KEYS = [
+  "stock",
+  "stock_quantity",
+  "quantity",
+  "qty",
+  "public_stock",
+  "available_stock",
+];
+
+/**
+ * Suma stocks en arrays `warehouse_product` / `warehouse_product_variation` (y anidado).
+ * @param {unknown} arr
+ * @returns {number | null} null = no aplica; número (≥0) = total.
+ */
+function sumDropiWarehouseStocksArray(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  let t = 0;
+  for (const row of arr) {
+    if (row == null) continue;
+    if (typeof row === "object") {
+      if (Array.isArray(row.warehouse_product) && row.warehouse_product.length) {
+        const sub = sumDropiWarehouseStocksArray(row.warehouse_product);
+        if (sub != null) t += sub;
+        continue;
+      }
+      if (Array.isArray(row.warehouse_product_variation) && row.warehouse_product_variation.length) {
+        const sub2 = sumDropiWarehouseStocksArray(row.warehouse_product_variation);
+        if (sub2 != null) t += sub2;
+        continue;
+      }
+    }
+    const n = num(row?.stock ?? row?.quantity ?? row?.qty ?? row?.cantidad ?? row?.available, NaN);
+    if (Number.isFinite(n)) t += Math.max(0, Math.round(n));
+  }
+  return t;
+}
+
+/**
+ * Ingreso de inventario (Dropi / bridge) alineado al plugin WP: stock directo, si no, suma por depósitos, si no, variación.
+ * @param {Record<string, unknown>} raw
+ * @returns {{ stock: number, stockSource: 'stock' | 'warehouse_product' | 'warehouse_product_variation' | 'fallback' }}
+ */
+export function computeDropiStockAndSource(raw) {
+  for (const k of EXPLICIT_STOCK_KEYS) {
+    if (!hasOwn(raw, k)) continue;
+    const v = raw[k];
+    if (v == null) continue;
+    if (Array.isArray(v) || (typeof v === "object" && v !== null)) continue;
+    const n = num(v, NaN);
+    if (Number.isFinite(n)) {
+      return {
+        stock: Math.max(0, Math.round(n)),
+        stockSource: "stock",
+      };
+    }
+  }
+
+  if (raw.warehouse_product != null) {
+    const a = raw.warehouse_product;
+    if (Array.isArray(a) && a.length) {
+      const t = sumDropiWarehouseStocksArray(a);
+      if (t != null) {
+        return {
+          stock: Math.max(0, t),
+          stockSource: "warehouse_product",
+        };
+      }
+    }
+  }
+
+  if (raw.warehouse_product_variation != null) {
+    const a = raw.warehouse_product_variation;
+    if (Array.isArray(a) && a.length) {
+      const t = sumDropiWarehouseStocksArray(a);
+      if (t != null) {
+        return {
+          stock: Math.max(0, t),
+          stockSource: "warehouse_product_variation",
+        };
+      }
+    }
+  }
+
+  return { stock: 0, stockSource: "fallback" };
+}
+
 function pickString(obj, keys, fallback = "") {
   if (!obj || typeof obj !== "object") return fallback;
   for (const k of keys) {
@@ -252,15 +344,7 @@ export function mapDropiProduct(raw, detailRequestedId) {
       0
     );
 
-  const stock = Math.max(
-    0,
-    Math.round(
-      num(
-        raw.stock ?? raw.quantity ?? raw.qty ?? raw.inventory ?? raw.inventories ?? raw.stock_quantity,
-        0
-      )
-    )
-  );
+  const { stock, stockSource } = computeDropiStockAndSource(raw);
 
   const brand = pickString(raw, ["brand", "marca", "Brand"]);
 
@@ -295,6 +379,7 @@ export function mapDropiProduct(raw, detailRequestedId) {
     category: category.slice(0, 300),
     price,
     stock,
+    stockSource,
     brand: brand.slice(0, 200),
     imageUrls,
     weightKg: weightKgOut,
