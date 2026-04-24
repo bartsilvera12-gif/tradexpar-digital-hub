@@ -59,7 +59,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId) {
   const { data: orderRow, error: orderErr } = await sb
     .from("orders")
     .select(
-      "id, total, status, checkout_type, payment_status, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, customer_address_reference"
+      "id, checkout_type, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, customer_address_reference"
     )
     .eq("id", oid)
     .maybeSingle();
