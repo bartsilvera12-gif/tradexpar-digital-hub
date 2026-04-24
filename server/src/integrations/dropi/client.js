@@ -217,3 +217,65 @@ export async function fetchDropiProductDetail(externalId) {
 
   return parsed;
 }
+
+/**
+ * POST JSON al bridge (crear pedido en Dropi, etc.). Misma base y `x-bridge-key` que GET.
+ * @param {string} [pathSegment] Ruta bajo el base (default `order` → `{base}/order`). Sin slash inicial.
+ * @param {Record<string, unknown>} bodyObj
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function postDropiBridgeJson(pathSegment, bodyObj) {
+  const { base, key } = assertBridgeEnv();
+  const seg = String(pathSegment || "order")
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  const url = `${base}/${seg}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...bridgeHeaders(key),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(bodyObj && typeof bodyObj === "object" ? bodyObj : {}),
+  });
+
+  const text = await res.text();
+  let parsed;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    parsed = { _parse_error: true, _raw: text.slice(0, 2000) };
+  }
+
+  const bridgeOk =
+    parsed && typeof parsed === "object" && parsed.isSuccess !== undefined ? parsed.isSuccess : undefined;
+  console.info("[dropi/bridge] postDropiBridgeJson", {
+    url,
+    pathSegment: seg,
+    httpStatus: res.status,
+    isSuccess: bridgeOk,
+    ...(String(process.env.DROPI_BRIDGE_DEBUG ?? "").trim() === "1"
+      ? { respuestaResumida: truncateBodySummary(parsed) }
+      : {}),
+  });
+
+  if (!res.ok) {
+    const errResumido = summarizeHttpError(parsed, text, res.status);
+    console.warn("[dropi/bridge] postDropiBridgeJson error", { url, httpStatus: res.status, errorResumido: errResumido });
+    throw new Error(errResumido);
+  }
+
+  if (parsed && typeof parsed === "object" && parsed.isSuccess === false) {
+    const bits = [];
+    if (parsed.message != null) bits.push(`message: ${parsed.message}`);
+    if (parsed.status != null) bits.push(`status: ${String(parsed.status)}`);
+    if (parsed.ip != null) bits.push(`ip: ${String(parsed.ip)}`);
+    const msg = bits.join(" | ") || "Bridge isSuccess=false";
+    console.warn("[dropi/bridge] postDropiBridgeJson error", { url, httpStatus: res.status, errorResumido: truncateSummary(msg) });
+    throw new Error(msg);
+  }
+
+  return /** @type {Record<string, unknown>} */ (parsed && typeof parsed === "object" ? parsed : {});
+}

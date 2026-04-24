@@ -39,6 +39,7 @@ import {
   verifyWebhookToken,
 } from "./pagopar.js";
 import { registerDropiRoutes } from "./integrations/dropi/routes.js";
+import { createDropiOrderForInternalOrder } from "./integrations/dropi/createOrderForInternal.js";
 
 /**
  * Base del proyecto PostgREST (sin `/rest/v1`). Si pegás la URL del curl completo, se quita el sufijo.
@@ -1124,6 +1125,20 @@ app.post("/api/pagopar/webhook", async (req, res) => {
     if (error) throw error;
     if (!updated) {
       console.warn("[webhook] Ningún pedido con pagopar_hash=", hashPedido);
+    } else if (pagado && payment_status === "paid" && updated.id) {
+      // Dropi: solo tras pago confirmado; fallos se guardan en dropi_order_map (no revierte PagoPar).
+      setImmediate(() => {
+        void (async () => {
+          try {
+            const r = await createDropiOrderForInternalOrder(supabaseAdmin(), updated.id);
+            if (r && r.ok === false && r.error) {
+              console.warn("[webhook][dropi-order] no creado en Dropi", { order_id: updated.id, error: r.error });
+            }
+          } catch (e) {
+            console.error("[webhook][dropi-order] excepción", e instanceof Error ? e.message : e);
+          }
+        })();
+      });
     }
 
     return res.status(200).json({ ok: true, order_id: updated?.id ?? null, payment_status });
