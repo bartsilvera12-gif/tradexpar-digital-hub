@@ -23,21 +23,21 @@ export const ADMIN_TR = "hover:bg-muted/25 transition-colors align-middle bg-car
 
 export const ADMIN_TD = "py-3 px-3 sm:px-4";
 
-/** Contenedor tipo “modal” o bloque principal de formulario (degradado suave). */
+/** Contenedor tipo “modal” o bloque principal de formulario (fondo liso). */
 export const ADMIN_FORM_MODAL =
-  "w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-muted/25 p-6 shadow-card space-y-4";
+  "w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-border/80 bg-card p-6 shadow-card space-y-4";
 
 /** Paneles de contenido (configuración, widgets en dashboard). */
 export const ADMIN_PANEL =
-  "rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-muted/20 p-5 sm:p-6 shadow-card";
+  "rounded-2xl border border-border/80 bg-card p-5 sm:p-6 shadow-card";
 
 /** Secciones de formulario en página (reglas, materiales, etc.). */
 export const ADMIN_FORM_SECTION =
-  "rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-muted/20 p-5 sm:p-6 space-y-4 shadow-card";
+  "rounded-2xl border border-border/80 bg-card p-5 sm:p-6 space-y-4 shadow-card";
 
 /** Sub-bloque destacado (p. ej. descuento promocional). */
 export const ADMIN_FORM_HIGHLIGHT =
-  "relative overflow-hidden rounded-xl border border-border/80 bg-gradient-to-br from-primary/[0.07] via-muted/30 to-background p-4 sm:p-5 space-y-3 shadow-sm";
+  "rounded-xl border border-border/80 bg-card p-4 sm:p-5 space-y-3 shadow-sm";
 
 /** Etiqueta sobre campo. */
 export const ADMIN_FORM_LABEL = "text-sm font-semibold text-foreground";
@@ -46,13 +46,13 @@ export const ADMIN_FORM_LABEL = "text-sm font-semibold text-foreground";
 export const ADMIN_FORM_FIELD = "space-y-1.5";
 
 /**
- * Input / textarea / select trigger: fondo gris muy suave, borde casi invisible, foco con anillo primario.
+ * Input / textarea / select trigger: fondo blanco liso, foco con anillo primario.
  */
 export const ADMIN_FORM_CONTROL =
-  "flex h-10 w-full rounded-xl border-0 bg-muted/50 px-3.5 py-2 text-sm text-foreground shadow-[inset_0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-inset ring-border/35 transition-[box-shadow,background-color,ring-color] placeholder:text-muted-foreground/75 focus-visible:outline-none focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/25";
+  "flex h-10 w-full rounded-xl border border-border/50 bg-white px-3.5 py-2 text-sm text-foreground shadow-sm transition-[box-shadow,background-color,border-color] placeholder:text-muted-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-border/50 dark:bg-card dark:focus-visible:ring-primary/30";
 
 export const ADMIN_FORM_TEXTAREA =
-  "flex min-h-[88px] w-full resize-y rounded-xl border-0 bg-muted/50 px-3.5 py-2.5 text-sm text-foreground shadow-[inset_0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-inset ring-border/35 transition-[box-shadow,background-color,ring-color] placeholder:text-muted-foreground/75 focus-visible:outline-none focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/25";
+  "flex min-h-[88px] w-full resize-y rounded-xl border border-border/50 bg-white px-3.5 py-2.5 text-sm text-foreground shadow-sm transition-[box-shadow,background-color,border-color] placeholder:text-muted-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-border/50 dark:bg-card dark:focus-visible:ring-primary/30";
 
 /** Campos solo lectura (API, tokens). */
 export const ADMIN_FORM_CONTROL_READONLY =
@@ -60,4 +60,4 @@ export const ADMIN_FORM_CONTROL_READONLY =
 
 /** Contenedor de diálogos con formulario. */
 export const ADMIN_DIALOG_FORM =
-  "sm:max-w-md rounded-2xl border-border/80 bg-gradient-to-br from-card via-card to-muted/25 p-6 shadow-card gap-0";
+  "sm:max-w-md rounded-2xl border-border/80 bg-card p-6 shadow-card gap-0";

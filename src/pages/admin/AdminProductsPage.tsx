@@ -310,7 +310,7 @@ export default function AdminProductsPage() {
       <Button
         type="button"
         onClick={startCreate}
-        className="gap-2 gradient-celeste text-primary-foreground shadow-sm min-h-10 whitespace-nowrap"
+        className="gap-2 min-h-10 whitespace-nowrap"
         aria-label="Crear producto nuevo"
       >
         <Plus className="h-4 w-4" />
@@ -326,7 +326,7 @@ export default function AdminProductsPage() {
       actions={headerActions}
     >
       <div className="space-y-3 w-full">
-        <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
           <p className="text-sm font-semibold text-foreground">Importar producto Dropi por ID</p>
           <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:items-end max-w-lg">
             <div className="flex-1 min-w-[140px] space-y-1.5">
@@ -706,17 +706,13 @@ export default function AdminProductsPage() {
             </div>
 
             <div className={ADMIN_FORM_HIGHLIGHT}>
-              <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_100%_0%,hsl(195_89%_47%_/_0.08),transparent_60%)]"
-                aria-hidden
-              />
-              <div className="relative">
+              <div>
                 <p className="text-sm font-semibold text-foreground">Descuento promocional</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Por porcentaje sobre el precio, o monto fijo en guaraníes. Las fechas delimitan cuándo aplica.
                 </p>
               </div>
-              <div className="relative grid md:grid-cols-2 gap-3">
+              <div className="grid md:grid-cols-2 gap-3">
                 <div className={ADMIN_FORM_FIELD}>
                   <Label className={ADMIN_FORM_LABEL}>Tipo de descuento</Label>
                   <Select
@@ -822,7 +818,7 @@ export default function AdminProductsPage() {
               <Button type="button" variant="outline" onClick={() => setOpenForm(false)}>
                 Cancelar
               </Button>
-              <Button type="button" className="gradient-celeste text-primary-foreground shadow-sm" onClick={() => void handleSave()}>
+              <Button type="button" onClick={() => void handleSave()}>
                 Guardar
               </Button>
             </div>
