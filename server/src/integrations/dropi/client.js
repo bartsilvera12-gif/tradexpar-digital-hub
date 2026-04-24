@@ -267,14 +267,29 @@ export async function postDropiBridgeJson(pathSegment, bodyObj) {
     throw new Error(errResumido);
   }
 
-  if (parsed && typeof parsed === "object" && parsed.isSuccess === false) {
-    const bits = [];
-    if (parsed.message != null) bits.push(`message: ${parsed.message}`);
-    if (parsed.status != null) bits.push(`status: ${String(parsed.status)}`);
-    if (parsed.ip != null) bits.push(`ip: ${String(parsed.ip)}`);
-    const msg = bits.join(" | ") || "Bridge isSuccess=false";
-    console.warn("[dropi/bridge] postDropiBridgeJson error", { url, httpStatus: res.status, errorResumido: truncateSummary(msg) });
-    throw new Error(msg);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const p = /** @type {Record<string, unknown>} */ (parsed);
+    const explicitYes =
+      p.success === true || p.ok === true || p.isSuccess === true;
+    if (explicitYes) {
+      return p;
+    }
+    const hasSuccessKey = Object.prototype.hasOwnProperty.call(p, "success");
+    const hasOkKey = Object.prototype.hasOwnProperty.call(p, "ok");
+    const isExplicitFailure =
+      p.isSuccess === false ||
+      (hasSuccessKey && p.success === false) ||
+      (hasOkKey && p.ok === false);
+    if (isExplicitFailure) {
+      const bits = [];
+      if (p.message != null) bits.push(`message: ${p.message}`);
+      if (p.status != null) bits.push(`status: ${String(p.status)}`);
+      if (p.ip != null) bits.push(`ip: ${String(p.ip)}`);
+      if (p.error != null) bits.push(`error: ${String(p.error)}`);
+      const msg = bits.join(" | ") || "Bridge: respuesta de error en POST";
+      console.warn("[dropi/bridge] postDropiBridgeJson error", { url, httpStatus: res.status, errorResumido: truncateSummary(msg) });
+      throw new Error(msg);
+    }
   }
 
   return /** @type {Record<string, unknown>} */ (parsed && typeof parsed === "object" ? parsed : {});

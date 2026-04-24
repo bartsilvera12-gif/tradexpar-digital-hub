@@ -277,10 +277,12 @@ export function registerDropiRoutes(app) {
             ? String(r.error)
             : null;
 
-      const success = Boolean(mapAfter?.dropi_order_id) && mapAfter?.status === "succeeded";
+      const fromMap = Boolean(mapAfter?.dropi_order_id) && mapAfter?.status === "succeeded";
+      const fromResult = r && r.ok === true && (r.dropi_order_id != null && String(r.dropi_order_id).trim() !== "");
+      const success = fromMap || fromResult;
 
       if (success) {
-        console.info("[dropi/orders/test] success", { orderId, dropi_order_id: mapAfter?.dropi_order_id });
+        console.info("[dropi/orders/test] success", { orderId, dropi_order_id: mapAfter?.dropi_order_id ?? r?.dropi_order_id });
       } else if (mapAfter || r) {
         console.warn("[dropi/orders/test] failed", { orderId, map_status: mapAfter?.status, error: errOut, reason: r?.reason });
       }
@@ -289,7 +291,7 @@ export function registerDropiRoutes(app) {
         success,
         skipped: r.skipped === true,
         reason: r?.reason,
-        status: mapAfter?.status ?? null,
+        status: mapAfter?.status ?? (fromResult ? "succeeded" : null),
         dropi_order_id: mapAfter?.dropi_order_id ?? r?.dropi_order_id ?? null,
         dropi_order_url: mapAfter?.dropi_order_url ?? r?.dropi_order_url ?? null,
         error: success ? null : errOut,

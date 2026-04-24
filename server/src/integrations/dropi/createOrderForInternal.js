@@ -16,24 +16,47 @@ function utcNowIso() {
 }
 
 /**
+ * Bridge puede enviar { success, dropi_order_id, dropi_order_url } en raíz, u objetos anidados (PHP/Dropi antiguo).
  * @param {Record<string, unknown>} parsed
  * @returns {{ id: string | null, url: string | null }}
  */
 function pickDropiOrderIdAndUrl(parsed) {
-  if (!parsed || typeof parsed !== "object") return { id: null, url: null };
-  const objs = Array.isArray(parsed.objects) ? parsed.objects : null;
-  const o = objs && objs[0] && typeof objs[0] === "object"
-    ? objs[0]
-    : parsed.data && typeof parsed.data === "object" && !Array.isArray(parsed.data)
-      ? parsed.data
-      : parsed.order && typeof parsed.order === "object"
-        ? parsed.order
-        : parsed;
-  if (!o || typeof o !== "object" || Array.isArray(o)) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return { id: null, url: null };
   }
-  const id = o.id ?? o.order_id ?? o.ID ?? o.dropi_order_id ?? o.external_id;
-  const url = o.url ?? o.order_url ?? o.panel_url ?? o.external_url;
+  const root = /** @type {Record<string, unknown>} */ (parsed);
+  const idRoot = root.dropi_order_id;
+  if (idRoot != null && String(idRoot).trim() !== "") {
+    const u =
+      root.dropi_order_url ?? root.url ?? root.order_url ?? root.panel_url ?? root.external_url;
+    return {
+      id: String(idRoot).trim(),
+      url: u != null && String(u).trim() !== "" ? String(u).trim() : null,
+    };
+  }
+
+  const objs = Array.isArray(root.objects) ? root.objects : null;
+  const o = objs && objs[0] && typeof objs[0] === "object" && !Array.isArray(objs[0])
+    ? objs[0]
+    : root.data && typeof root.data === "object" && !Array.isArray(root.data)
+      ? root.data
+      : root.order && typeof root.order === "object"
+        ? root.order
+        : null;
+  /** Misma prioridad que APIs Dropi antiguas: si no vino nido, usar la raíz. */
+  const body = o != null && !Array.isArray(o) && typeof o === "object" ? o : root;
+  if (Array.isArray(body) || typeof body !== "object") {
+    return { id: null, url: null };
+  }
+  const orec = /** @type {Record<string, unknown>} */ (body);
+  const id =
+    orec.id ?? orec.order_id ?? orec.ID ?? orec.dropi_order_id ?? orec.external_id;
+  const url =
+    orec.dropi_order_url ??
+    orec.url ??
+    orec.order_url ??
+    orec.panel_url ??
+    orec.external_url;
   return {
     id: id != null && String(id).trim() ? String(id).trim() : null,
     url: url != null && String(url).trim() ? String(url).trim() : null,
