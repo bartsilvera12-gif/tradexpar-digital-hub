@@ -326,9 +326,11 @@ export function mapDropiProduct(raw, detailRequestedId) {
   const name =
     pickString(raw, ["name", "nombre", "title", "descripcion_corta"]) || `Producto Dropi ${externalId}`;
 
-  const description =
-    pickString(raw, ["description", "descripcion", "content", "short_description"]) ||
-    "(Sin descripción — importado desde Dropi)";
+  const description = pickString(
+    raw,
+    ["description", "descripcion", "content", "short_description"],
+    ""
+  );
 
   const category = pickCategory(raw) || "Dropi";
 
