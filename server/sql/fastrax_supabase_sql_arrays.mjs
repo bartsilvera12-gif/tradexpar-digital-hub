@@ -1,6 +1,8 @@
 /**
- * NO ejecutar desde código. Copiá cada array en Supabase SQL Editor (un string por sentencia).
- * Ajustá el schema `tradexpar` si usás otro.
+ * Arreglos JS para copiar string por string si querés, o importar desde tests.
+ *
+ * En Supabase SQL Editor NO pegues este archivo: el editor solo acepta SQL puro.
+ * Usá: `apply_fastrax_order_map_manual.sql` (mismo repo, carpeta server/sql).
  */
 
 const SQL_1_CREATE_TABLES = [
