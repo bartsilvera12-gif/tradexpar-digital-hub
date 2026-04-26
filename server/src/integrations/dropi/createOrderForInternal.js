@@ -79,6 +79,50 @@ function resolveProductUnitCost(product) {
   return null;
 }
 
+/** @param {unknown} v */
+function isNoCostPricingSourceOk(v) {
+  const s = String(v ?? "").trim();
+  return s === "suggested_price" || s === "sale_price";
+}
+
+/**
+ * Misma noción que en import Dropi: unit_price ?? sale_price ?? price (0 cuenta como definido vía coalesce).
+ * @param {Record<string, unknown>} line
+ * @param {Record<string, unknown>} product
+ * @returns {number | null} null = todos vacíos, sin número; número = ya redondeado
+ */
+function pickSellingCoalescedForBridge(line, product) {
+  const a = line.unit_price;
+  const b = product.sale_price;
+  const c = product.price;
+  const v =
+    a != null && a !== ""
+      ? a
+      : b != null && b !== ""
+        ? b
+        : c != null && c !== ""
+          ? c
+          : null;
+  if (v == null) return null;
+  const n = Math.max(0, Math.round(Number(v)));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Bloquea solo sin costo, sin `suggested_price`/`sale_price` en import, y sin unit/sale/price estricto > 0.
+ * @param {Record<string, unknown>} line
+ * @param {Record<string, unknown>} product
+ */
+function lineFulfillsDropiMarginPolicy(line, product) {
+  if (resolveProductUnitCost(product) != null) return true;
+  if (isNoCostPricingSourceOk(product.pricing_source)) return true;
+  const u = numberForMax(line.unit_price) > 0;
+  if (u) return true;
+  if (numberForMax(product.sale_price) > 0) return true;
+  if (numberForMax(product.price) > 0) return true;
+  return false;
+}
+
 /** @param {Record<string, unknown> | null | undefined} r */
 function mapStatus(r) {
   if (!r || typeof r !== "object") return null;
@@ -250,7 +294,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   const { data: prows, error: perr } = await sb
     .from("products")
     .select(
-      "id, name, sku, product_source_type, external_provider, external_product_id, price, sale_price, cost, dropi_cost_price, external_payload"
+      "id, name, sku, product_source_type, external_provider, external_product_id, price, sale_price, cost, dropi_cost_price, pricing_source, external_payload"
     )
     .in("id", productIds);
   if (perr) {
@@ -302,35 +346,26 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   }
   console.info("[dropi/order-create] dropi items found", { order_id: oid, n: dropiForBridge.length });
 
-  const costByProductId = new Map();
   for (const { line, product } of dropiForBridge) {
     const pl = /** @type {Record<string, unknown>} */ (line);
     const p = /** @type {Record<string, unknown>} */ (product);
     const pid = pl.product_id != null ? String(pl.product_id) : "";
-    const resolved = resolveProductUnitCost(p);
-    if (resolved == null) {
-      const errText = "Un producto con external_provider=dropi no tiene cost ni dropi_cost_price en el catálogo; no se envió el pedido a Dropi";
-      const mapErrC = await upsertMap(sb, {
-        order_id: oid,
-        status: "failed",
-        dropi_status: "failed",
-        last_error: errText,
-        error: errText,
-        updated_at: utcNowIso(),
-      });
-      if (mapErrC) {
-        return { ok: false, skipped: false, order_id: oid, context: "missing_cost_map_upsert", ...shapeError(mapErrC) };
-      }
-      console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText, product_id: pid });
-      return { ok: false, skipped: false, order_id: oid, ...shapeError(errText) };
-    }
-    console.info("[dropi/order-create] cost_resolved", {
-      product_id: pid,
-      cost: resolved.cost,
-      dropi_cost_price: p.dropi_cost_price,
-      fallback_used: resolved.fallback_used,
+    if (lineFulfillsDropiMarginPolicy(pl, p)) continue;
+    const errText =
+      "Un producto Dropi no reúne: coste/dropi_cost_price, o import con pricing_source en suggested_price|sale_price, o precio en línea/sale/price; no se envió el pedido a Dropi";
+    const mapErrC = await upsertMap(sb, {
+      order_id: oid,
+      status: "failed",
+      dropi_status: "failed",
+      last_error: errText,
+      error: errText,
+      updated_at: utcNowIso(),
     });
-    costByProductId.set(pid, resolved);
+    if (mapErrC) {
+      return { ok: false, skipped: false, order_id: oid, context: "missing_pricing_map_upsert", ...shapeError(mapErrC) };
+    }
+    console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText, product_id: pid });
+    return { ok: false, skipped: false, order_id: oid, ...shapeError(errText) };
   }
 
   if (!dropiConfigured() || !resolveBridgeBaseUrl()) {
@@ -369,33 +404,74 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       const pl = /** @type {Record<string, unknown>} */ (line);
       const p = /** @type {Record<string, unknown>} */ (product);
       const idStr = pl.product_id != null ? String(pl.product_id) : "";
-      const costRow = costByProductId.get(idStr);
-      const dropiCost = costRow != null ? costRow.cost : 0;
-      const { finalDropiPrice, originalUnitPrice } = resolveDropiSellingPriceGuaranies(
-        pl,
-        p,
-        dropiCost,
-        minProfit
-      );
-      console.info("[dropi/order-create] price_resolved", {
-        cost: dropiCost,
-        original_unit_price: originalUnitPrice,
-        min_profit: minProfit,
-        final_dropi_price: finalDropiPrice,
-      });
+      const costRow = resolveProductUnitCost(p);
       const qty = Math.max(1, Number(pl.quantity) || 1);
-      const sub = Math.round(finalDropiPrice * qty * 100) / 100;
+      const ps = p.pricing_source != null ? String(p.pricing_source).trim() : "";
+
+      if (costRow != null) {
+        const { finalDropiPrice, originalUnitPrice } = resolveDropiSellingPriceGuaranies(
+          pl,
+          p,
+          costRow.cost,
+          minProfit
+        );
+        console.info("[dropi/order-create] cost_resolved", {
+          product_id: idStr,
+          cost: costRow.cost,
+          dropi_cost_price: p.dropi_cost_price,
+          fallback_used: costRow.fallback_used,
+        });
+        console.info("[dropi/order-create] price_resolved", {
+          cost: costRow.cost,
+          original_unit_price: originalUnitPrice,
+          min_profit: minProfit,
+          final_dropi_price: finalDropiPrice,
+        });
+        const sub = Math.round(finalDropiPrice * qty * 100) / 100;
+        return {
+          line_index: pl.line_index,
+          product_id: pl.product_id != null ? String(pl.product_id) : "",
+          product_name: pl.product_name != null ? String(pl.product_name) : "",
+          quantity: qty,
+          price: finalDropiPrice,
+          sale_price: finalDropiPrice,
+          suggested_price: finalDropiPrice,
+          unit_price: finalDropiPrice,
+          cost: costRow.cost,
+          pricing_source: ps || "cost",
+          line_subtotal: sub,
+          sku: p.sku != null ? String(p.sku) : "",
+          dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
+        };
+      }
+
+      const originalUnit = lineSaleUnitPriceGuaranies(pl);
+      const selling = pickSellingCoalescedForBridge(pl, p) ?? 0;
+      const finalNoCost = Math.round(selling);
+      const sub2 = Math.round(finalNoCost * qty * 100) / 100;
+      console.info("[dropi/order-create] margin_check_skipped_no_cost", {
+        product_id: idStr,
+        pricing_source: ps || null,
+        selling: finalNoCost,
+      });
+      console.info("[dropi/order-create] price_resolved", {
+        cost: null,
+        original_unit_price: originalUnit,
+        min_profit: 0,
+        final_dropi_price: finalNoCost,
+      });
       return {
         line_index: pl.line_index,
         product_id: pl.product_id != null ? String(pl.product_id) : "",
         product_name: pl.product_name != null ? String(pl.product_name) : "",
         quantity: qty,
-        price: finalDropiPrice,
-        sale_price: finalDropiPrice,
-        suggested_price: finalDropiPrice,
-        unit_price: finalDropiPrice,
-        cost: costRow != null ? costRow.cost : null,
-        line_subtotal: sub,
+        price: finalNoCost,
+        sale_price: finalNoCost,
+        suggested_price: finalNoCost,
+        unit_price: finalNoCost,
+        cost: null,
+        pricing_source: ps || null,
+        line_subtotal: sub2,
         sku: p.sku != null ? String(p.sku) : "",
         dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
       };
