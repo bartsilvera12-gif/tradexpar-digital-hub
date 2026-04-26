@@ -1,5 +1,6 @@
 /**
- * Fastrax Market (POST JSON). Credenciales: FASTRAX_API_URL, FASTRAX_COD, FASTRAX_PASS.
+ * Fastrax Market (POST application/x-www-form-urlencoded, estilo PHP).
+ * Credenciales: FASTRAX_API_URL, FASTRAX_COD, FASTRAX_PASS.
  * Tras HTTP 2xx se aplica comprobación de negocio (estatus/cestatus) vía `fastraxResponse.js`.
  */
 
@@ -38,18 +39,31 @@ export function getFastraxCreds() {
   return { url, cod, pas };
 }
 
+const FORM_HEADERS = {
+  "Content-Type": "application/x-www-form-urlencoded",
+  Accept: "application/json,text/plain,*/*",
+};
+
 /**
  * @param {number} ope
  * @param {Record<string, unknown>} extra
+ * @returns {URLSearchParams}
  */
-function buildJsonBody(ope, extra) {
+function buildFormParams(ope, extra) {
   const { cod, pas } = getFastraxCreds();
-  return JSON.stringify({
+  const params = {
     ope,
     cod: String(cod),
     pas: String(pas),
-    ...extra,
-  });
+    ...(extra && typeof extra === "object" ? extra : {}),
+  };
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      body.append(key, String(value));
+    }
+  }
+  return body;
 }
 
 /**
@@ -73,9 +87,8 @@ function fastraxPostHttps(baseUrl, body, timeoutMs, tls) {
       path: `${u.pathname}${u.search}`,
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "Content-Length": Buffer.byteLength(body),
+        ...FORM_HEADERS,
+        "Content-Length": Buffer.byteLength(body, "utf8"),
       },
       rejectUnauthorized: tls.rejectUnauthorized,
     };
@@ -133,7 +146,8 @@ export async function fastraxPost(ope, extra = {}) {
   if (!baseUrl) {
     return { ok: false, status: 0, message: "FASTRAX_API_URL vacía", parsed: null };
   }
-  const body = buildJsonBody(ope, extra);
+  const form = buildFormParams(ope, extra);
+  const bodyStr = form.toString();
   const timeoutMs = Math.min(
     180_000,
     Math.max(5_000, Number(process.env.FASTRAX_REQUEST_TIMEOUT_MS || 90_000) || 90_000)
@@ -141,7 +155,7 @@ export async function fastraxPost(ope, extra = {}) {
   logFastraxOpe(ope);
   let r;
   if (sslInsecure()) {
-    r = await fastraxPostHttps(baseUrl, body, timeoutMs, { rejectUnauthorized: false });
+    r = await fastraxPostHttps(baseUrl, bodyStr, timeoutMs, { rejectUnauthorized: false });
   } else {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -149,8 +163,8 @@ export async function fastraxPost(ope, extra = {}) {
     try {
       res = await fetch(baseUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body,
+        headers: { ...FORM_HEADERS },
+        body: bodyStr,
         signal: controller.signal,
       });
     } catch (e) {
@@ -192,8 +206,11 @@ export async function getVersion() {
 }
 
 export async function listProductsPage(page = 1) {
-  const key = (envTrim("FASTRAX_OPE4_PAGE_PARAM") || "pag").trim() || "pag";
-  return fastraxPost(4, { [key]: page });
+  const pagKey = (envTrim("FASTRAX_OPE4_PAGE_PARAM") || "pag").trim() || "pag";
+  const tamKey = (envTrim("FASTRAX_OPE4_SIZE_PARAM") || "tam").trim() || "tam";
+  const tam = Math.max(1, Math.min(500, Number(envTrim("FASTRAX_OPE4_PAGE_SIZE") || 50) || 50));
+  const p = Math.max(1, Math.floor(Number(page) || 1));
+  return fastraxPost(4, { [tamKey]: tam, [pagKey]: p });
 }
 
 export async function getProductDetails(sku) {
