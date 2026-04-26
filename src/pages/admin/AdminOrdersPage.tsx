@@ -124,8 +124,33 @@ function formatDropiMapSyncAt(row: Record<string, unknown> | null | undefined): 
   return d.toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" });
 }
 
+/** Card «Tracking Dropi» si el pedido es o incluye origen Dropi. */
+function shouldShowDropiTrackingCard(o: Order) {
+  const hasLine = o.items?.some((it) => isDropiLine(it)) ?? false;
+  const kind = o.order_kind ?? deriveOrderKind(o.items);
+  const ct = String(o.checkout_type ?? "").toLowerCase();
+  if (hasLine) return true;
+  if (kind === "dropi" || kind === "mixed") return true;
+  if (ct === "dropi" || ct === "mixed") return true;
+  return false;
+}
+
+function mapErrorDetail(m: Record<string, unknown> | null | undefined): string {
+  if (!m) return "";
+  const e = m.error ?? m.last_error;
+  if (e == null) return "";
+  return String(e).trim();
+}
+
+function isWalletInsufficient(map: Record<string, unknown> | null | undefined, errDetail: string) {
+  const st = String(map?.dropi_status ?? "").toLowerCase();
+  if (st !== "failed") return false;
+  return /wallet/i.test(errDetail);
+}
+
 function OrderDropiCard({ o }: { o: Order }) {
-  const hasDropi = o.items?.some((it) => isDropiLine(it)) ?? false;
+  if (!shouldShowDropiTrackingCard(o)) return null;
+
   const [st, setSt] = useState<{
     has_map: boolean;
     map: Record<string, unknown> | null;
@@ -137,10 +162,6 @@ function OrderDropiCard({ o }: { o: Order }) {
   const [actErr, setActErr] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    if (!hasDropi) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setLoadErr(null);
     void (async () => {
@@ -155,32 +176,17 @@ function OrderDropiCard({ o }: { o: Order }) {
         setLoading(false);
       }
     })();
-  }, [o.id, hasDropi]);
+  }, [o.id]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!hasDropi) {
-    return (
-      <div
-        className="rounded-lg border border-border/70 bg-muted/20 p-3 mb-4 text-sm text-muted-foreground"
-        data-testid="order-dropi-block"
-      >
-        <div className="flex items-center gap-2 text-xs font-semibold text-foreground/90 mb-1">
-          <Package className="h-3.5 w-3.5" />
-          Dropi
-        </div>
-        <p className="text-xs">Este pedido no contiene productos Dropi</p>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4" data-testid="order-dropi-block">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-4" data-testid="order-dropi-block">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Cargando estado Dropi…
+        Cargando tracking Dropi…
       </div>
     );
   }
@@ -188,10 +194,10 @@ function OrderDropiCard({ o }: { o: Order }) {
   if (loadErr) {
     return (
       <div
-        className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 mb-4 text-xs text-amber-900 dark:text-amber-100"
+        className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 mt-4 text-xs text-amber-900 dark:text-amber-100"
         data-testid="order-dropi-block"
       >
-        <p className="font-medium mb-1">Dropi</p>
+        <p className="font-medium mb-1">Tracking Dropi</p>
         <p>{loadErr}</p>
         <Button type="button" size="sm" variant="outline" className="mt-2 h-7 text-[10px]" onClick={() => void load()}>
           Reintentar
@@ -200,135 +206,144 @@ function OrderDropiCard({ o }: { o: Order }) {
     );
   }
 
-  if (!st?.has_map) {
-    return (
-      <div
-        className="rounded-lg border border-orange-500/35 bg-orange-500/8 p-3 mb-4 space-y-2"
-        data-testid="order-dropi-block"
-      >
-        <p className="text-xs font-semibold text-foreground">Dropi</p>
-        <p className="text-[10px] text-muted-foreground">
-          Aún no se creó el pedido en Dropi. Podés forzarlo si el pago y el mapa de productos lo permiten.
-        </p>
-        {actErr && <p className="text-[10px] text-rose-600 dark:text-rose-300">{actErr}</p>}
-        <Button
-          type="button"
-          size="sm"
-          className="h-8 text-xs"
-          disabled={creating}
-          onClick={() => {
-            setActErr(null);
-            setCreating(true);
-            void (async () => {
-              try {
-                const r = await api.postAdminOrderDropiCreate(o.id);
-                if (r && typeof r === "object" && (r as Record<string, unknown>).ok === false) {
-                  const msg =
-                    (typeof (r as Record<string, unknown>).error === "string" && (r as Record<string, unknown>).error) ||
-                    (typeof (r as Record<string, unknown>).message === "string" && (r as Record<string, unknown>).message) ||
-                    "No se pudo crear en Dropi";
-                  throw new Error(String(msg));
-                }
-                await load();
-              } catch (e) {
-                setActErr(e instanceof Error ? e.message : String(e));
-              } finally {
-                setCreating(false);
-              }
-            })();
-          }}
-        >
-          {creating ? "Creando…" : "Crear pedido Dropi"}
-        </Button>
-      </div>
-    );
-  }
+  const map = st?.map ?? null;
+  const hasMap = Boolean(st?.has_map);
+  const dropiIdRaw = map && map.dropi_order_id != null && String(map.dropi_order_id).trim() !== "" ? String(map.dropi_order_id).trim() : null;
+  const hasDropiId = Boolean(dropiIdRaw);
+  const errDetail = mapErrorDetail(map);
+  const dSt = !hasMap
+    ? "Sin crear"
+    : map && String(map.dropi_status_label ?? "").trim()
+      ? String(map.dropi_status_label)
+      : map && map.dropi_status != null && String(map.dropi_status).trim()
+        ? String(map.dropi_status)
+        : "—";
+  const dUrl = map && String(map.dropi_order_url ?? "").trim() ? String(map.dropi_order_url).trim() : null;
+  const walletFlag = isWalletInsufficient(map, errDetail);
 
-  const row = st.map ?? null;
-  const dId = row && row.dropi_order_id != null ? String(row.dropi_order_id) : "—";
-  const dSt = row && (row.dropi_status_label != null && String(row.dropi_status_label).trim())
-    ? String(row.dropi_status_label)
-    : row && row.dropi_status != null
-      ? String(row.dropi_status)
-      : "—";
-  const dUrl = row && row.dropi_order_url != null && String(row.dropi_order_url).trim()
-    ? String(row.dropi_order_url).trim()
-    : o.external_order_url?.trim() || null;
+  const onCreate = () => {
+    setActErr(null);
+    setCreating(true);
+    void (async () => {
+      try {
+        const r = (await api.postAdminOrderDropiCreate(o.id)) as Record<string, unknown>;
+        if (r && typeof r === "object" && (r as Record<string, unknown>).ok === false) {
+          const msg =
+            (typeof (r as Record<string, unknown>).error === "string" && (r as Record<string, unknown>).error) ||
+            (typeof (r as Record<string, unknown>).message === "string" && (r as Record<string, unknown>).message) ||
+            "No se pudo crear en Dropi";
+          throw new Error(String(msg));
+        }
+        await load();
+      } catch (e) {
+        setActErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setCreating(false);
+      }
+    })();
+  };
+
+  const onSync = () => {
+    setActErr(null);
+    setSyncing(true);
+    void (async () => {
+      try {
+        const r = (await api.postAdminOrderDropiSyncStatus(o.id)) as Record<string, unknown>;
+        if (r.ok === false) {
+          const re = (r.reason as string) || "";
+          if (re === "dropi_status_endpoint_pending") {
+            throw new Error("El bridge aún no expone consulta de estado (DROPI_BRIDGE_GET_ORDER_PATH).");
+          }
+          if (re === "missing_dropi_order_id") {
+            throw new Error("No hay id de pedido en Dropi para sincronizar.");
+          }
+          throw new Error((typeof r.error === "string" && r.error) || "Sincronización no disponible");
+        }
+        await load();
+      } catch (e) {
+        setActErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSyncing(false);
+      }
+    })();
+  };
 
   return (
     <div
-      className="rounded-lg border border-border/80 bg-card p-3 sm:p-3.5 mb-4 space-y-2"
+      className="rounded-lg border border-border/80 bg-card p-3 sm:p-3.5 mt-4 space-y-2"
       data-testid="order-dropi-block"
     >
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-xs font-semibold text-foreground">Dropi</p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center flex-wrap gap-2">
+          <Package className="h-3.5 w-3.5 text-orange-600 dark:text-orange-300 shrink-0" />
+          <p className="text-xs font-semibold text-foreground">Tracking Dropi</p>
+          {walletFlag && (
+            <Badge
+              variant="outline"
+              className="text-[9px] border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100"
+            >
+              Saldo insuficiente en wallet Dropi
+            </Badge>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {dUrl && (
             <Button variant="outline" size="sm" className="h-7 text-[10px] gap-0.5" asChild>
-              <a href={dUrl} target="_blank" rel="noopener noreferrer" title="Abrir en Dropi / panel">
+              <a href={dUrl} target="_blank" rel="noopener noreferrer" title="Abrir en panel Dropi">
                 <ExternalLink className="h-3 w-3" />
-                Link Dropi
+                Abrir en Dropi
               </a>
             </Button>
           )}
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="h-7 text-[10px] gap-0.5"
-            disabled={syncing}
-            onClick={() => {
-              setActErr(null);
-              setSyncing(true);
-              void (async () => {
-                try {
-                  const r = (await api.postAdminOrderDropiSyncStatus(o.id)) as Record<string, unknown>;
-                  if (r.ok === false) {
-                    const re = (r.reason as string) || "";
-                    if (re === "dropi_status_endpoint_pending") {
-                      throw new Error("El bridge aún no expone consulta de estado (DROPI_BRIDGE_GET_ORDER_PATH).");
-                    }
-                    if (re === "missing_dropi_order_id") {
-                      throw new Error("No hay id de pedido en Dropi para sincronizar.");
-                    }
-                    throw new Error((typeof r.error === "string" && r.error) || "Sincronización no disponible");
-                  }
-                  await load();
-                } catch (e) {
-                  setActErr(e instanceof Error ? e.message : String(e));
-                } finally {
-                  setSyncing(false);
-                }
-              })();
-            }}
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Sincronizando…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-3 w-3" />
-                Sincronizar estado
-              </>
-            )}
-          </Button>
+          {hasDropiId && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[10px] gap-0.5"
+              disabled={syncing}
+              onClick={onSync}
+            >
+              {syncing ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Sincronizando…
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-3 w-3" />
+                  Sincronizar estado
+                </>
+              )}
+            </Button>
+          )}
+          {!hasDropiId && (
+            <Button type="button" size="sm" className="h-7 text-[10px]" disabled={creating} onClick={onCreate}>
+              {creating ? "Creando…" : "Crear pedido Dropi"}
+            </Button>
+          )}
         </div>
       </div>
       {actErr && <p className="text-[10px] text-rose-600 dark:text-rose-300">{actErr}</p>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] sm:text-xs text-muted-foreground">
-        <div>
-          <span className="block font-medium text-foreground/80">Order ID (Dropi)</span>
-          <span className="font-mono text-foreground break-all">{dId}</span>
-        </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] sm:text-xs text-muted-foreground pt-1 border-t border-border/50">
         <div>
           <span className="block font-medium text-foreground/80">Estado Dropi</span>
           <span className="text-foreground">{dSt}</span>
         </div>
+        <div>
+          <span className="block font-medium text-foreground/80">Dropi Order ID</span>
+          <span className="font-mono text-foreground break-all">{hasDropiId ? dropiIdRaw : "—"}</span>
+        </div>
+        {errDetail && (
+          <div className="sm:col-span-2">
+            <span className="block font-medium text-foreground/80">Detalle</span>
+            <span className="text-foreground/90 break-words">{errDetail}</span>
+          </div>
+        )}
         <div className="sm:col-span-2">
           <span className="block font-medium text-foreground/80">Última sincronización</span>
-          <span>{formatDropiMapSyncAt(row)}</span>
+          <span>{formatDropiMapSyncAt(map)}</span>
         </div>
       </div>
     </div>
@@ -615,16 +630,15 @@ export default function AdminOrdersPage() {
     if (o.items.length === 0) {
       return (
         <>
-          <OrderDropiCard o={o} />
           {sectionTitle}
           <p className="py-4 text-center text-sm text-muted-foreground">Sin líneas en este pedido.</p>
+          <OrderDropiCard o={o} />
         </>
       );
     }
 
     return (
       <>
-        <OrderDropiCard o={o} />
         {sectionTitle}
         <div className="grid gap-2 lg:hidden">
           {lineGroups.map((g) => {
@@ -813,6 +827,7 @@ export default function AdminOrdersPage() {
           </div>
         </div>
         {footerActions}
+        <OrderDropiCard o={o} />
       </>
     );
   };
