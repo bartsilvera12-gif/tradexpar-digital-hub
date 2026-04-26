@@ -169,6 +169,68 @@ function computeListPriceFromDropiCost(dropiCost) {
   };
 }
 
+/**
+ * Número finito > 0, o null (p. ej. precios sugeridos/venta como base).
+ * @param {unknown} v
+ * @returns {number | null}
+ */
+function numOrNullPos(v) {
+  if (v == null || v === "" || (typeof v === "string" && v.trim() === "")) return null;
+  if (Array.isArray(v) || (typeof v === "object" && v !== null)) return null;
+  const n = Number(v);
+  if (Number.isFinite(n) && n > 0) return n;
+  return null;
+}
+
+/**
+ * @param {Record<string, unknown>} raw
+ * @param {number} priceFromPayload
+ * @param {number | null} dropiCost
+ * @returns {{ finalPrice: number, marginPercent: number, marginFixed: number, pricingSource: 'cost' | 'suggested_price' | 'sale_price' }}
+ */
+function resolveDropiCatalogPricing(raw, priceFromPayload, dropiCost) {
+  const mPct = DROPI_IMPORT_MARGIN_PERCENT;
+  const mFix = DROPI_IMPORT_MARGIN_FIXED;
+  if (dropiCost != null && Number.isFinite(Number(dropiCost)) && Number(dropiCost) >= 0) {
+    const p = computeListPriceFromDropiCost(dropiCost);
+    return {
+      finalPrice: p.finalPrice,
+      marginPercent: mPct,
+      marginFixed: mFix,
+      pricingSource: "cost",
+    };
+  }
+  const suggested = numOrNullPos(raw.suggested_price ?? /** @type {unknown} */ (raw.suggested_selling_price));
+  if (suggested != null) {
+    return {
+      finalPrice: Math.ceil((suggested * 1.5) / 1000) * 1000,
+      marginPercent: mPct,
+      marginFixed: mFix,
+      pricingSource: "suggested_price",
+    };
+  }
+  const fromSale = numOrNullPos(raw.sale_price ?? /** @type {unknown} */ (raw.price_sale));
+  const fromList = numOrNullPos(
+    raw.price ?? raw.public_price ?? /** @type {unknown} */ (raw.precio) ?? /** @type {unknown} */ (raw.Price)
+  );
+  const saleBase = fromSale ?? fromList;
+  if (saleBase != null) {
+    return {
+      finalPrice: Math.ceil((saleBase * 1.5) / 1000) * 1000,
+      marginPercent: mPct,
+      marginFixed: mFix,
+      pricingSource: "sale_price",
+    };
+  }
+  const n = num(priceFromPayload, 0);
+  return {
+    finalPrice: n > 0 ? Math.ceil((n * 1.5) / 1000) * 1000 : 0,
+    marginPercent: mPct,
+    marginFixed: mFix,
+    pricingSource: "sale_price",
+  };
+}
+
 /** Claves (producto raíz) donde un número o string numérico = stock explícito. */
 const EXPLICIT_STOCK_KEYS = [
   "stock",
@@ -500,17 +562,12 @@ export function mapDropiProduct(raw, detailRequestedId) {
     );
 
   const dropiCost = pickDropiCostFromRaw(raw);
-  const pricing =
-    dropiCost != null
-      ? computeListPriceFromDropiCost(dropiCost)
-      : {
-          finalPrice: priceFromPayload,
-          pricePercent: 0,
-          priceFixed: 0,
-          marginPercent: DROPI_IMPORT_MARGIN_PERCENT,
-          marginFixed: DROPI_IMPORT_MARGIN_FIXED,
-        };
-  const price = dropiCost != null ? pricing.finalPrice : priceFromPayload;
+  const { finalPrice, marginPercent, marginFixed, pricingSource } = resolveDropiCatalogPricing(
+    raw,
+    priceFromPayload,
+    dropiCost
+  );
+  const price = finalPrice;
   const salePrice = price;
 
   const { stock, stockSource } = computeDropiStockAndSource(raw);
@@ -535,6 +592,7 @@ export function mapDropiProduct(raw, detailRequestedId) {
     category,
     price: Math.round(price * 100) / 100,
     dropiCost: dropiCost != null ? Math.round(Number(dropiCost) * 100) / 100 : null,
+    pricingSource,
     costBased: dropiCost != null,
     stock,
     brand,
@@ -551,8 +609,9 @@ export function mapDropiProduct(raw, detailRequestedId) {
     price,
     salePrice,
     dropiCostPrice: dropiCost,
-    marginPercent: pricing.marginPercent,
-    marginFixed: pricing.marginFixed,
+    marginPercent,
+    marginFixed,
+    pricingSource,
     stock,
     stockSource,
     brand: brand.slice(0, 200),

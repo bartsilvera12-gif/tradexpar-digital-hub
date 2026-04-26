@@ -10,6 +10,7 @@
  * @property {number | null} dropiCostPrice
  * @property {number} marginPercent
  * @property {number} marginFixed
+ * @property {'cost' | 'suggested_price' | 'sale_price'} pricingSource
  * @property {number} stock
  * @property {'stock' | 'warehouse_product' | 'warehouse_product_variation' | 'fallback'} stockSource
  * @property {string} brand

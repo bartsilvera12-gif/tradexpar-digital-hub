@@ -219,6 +219,7 @@ function buildProductRow(raw, mapped) {
     dropi_cost_price: dCost,
     margin_percent: mapped.marginPercent ?? 0.5,
     margin_fixed: mapped.marginFixed ?? 25000,
+    pricing_source: mapped.pricingSource ?? "sale_price",
     image: primary,
     images: imgs.length ? imgs : null,
     product_source_type: "dropi",
