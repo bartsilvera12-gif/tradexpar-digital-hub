@@ -4,6 +4,7 @@
  */
 
 import { postDropiBridgeJson, dropiConfigured, resolveBridgeBaseUrl } from "./client.js";
+import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
 
 function envTrim(key) {
   const v = process.env[key];
@@ -121,7 +122,9 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   console.info("[dropi/order-create] start", { order_id: oid, context });
 
   const { data: mapExisting, error: mapLoadErr } = await sb.from("dropi_order_map").select("*").eq("order_id", oid).maybeSingle();
-  if (mapLoadErr) throw mapLoadErr;
+  if (mapLoadErr) {
+    return { ok: false, order_id: oid, skipped: false, ...shapeError(mapLoadErr) };
+  }
 
   const mStatus = mapStatus(mapExisting);
   const mDropiId = mapExisting && typeof mapExisting === "object"
@@ -150,7 +153,9 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     .eq("id", oid)
     .maybeSingle();
 
-  if (orderErr) throw orderErr;
+  if (orderErr) {
+    return { ok: false, order_id: oid, skipped: false, reason: "orders_query", ...shapeError(orderErr) };
+  }
   console.info("[dropi/order-create] order loaded", { order_id: oid, found: Boolean(orderRow?.id) });
   if (!orderRow?.id) {
     return { ok: false, skipped: true, reason: "order_not_found" };
@@ -162,7 +167,9 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     .eq("order_id", oid)
     .order("line_index", { ascending: true });
 
-  if (itemsErr) throw itemsErr;
+  if (itemsErr) {
+    return { ok: false, order_id: oid, skipped: false, reason: "order_items_query", ...shapeError(itemsErr) };
+  }
   const items = /** @type {Record<string, unknown>[]} */ (Array.isArray(itemRows) ? itemRows : []);
   const productIds = [...new Set(items.map((i) => i && i.product_id).filter(Boolean).map(String))];
   if (productIds.length === 0) {
@@ -173,7 +180,9 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     .from("products")
     .select("id, sku, product_source_type, external_provider, external_product_id")
     .in("id", productIds);
-  if (perr) throw perr;
+  if (perr) {
+    return { ok: false, order_id: oid, skipped: false, reason: "products_query", ...shapeError(perr) };
+  }
   const pmap = new Map();
   for (const p of prows ?? []) {
     const r = /** @type {Record<string, unknown>} */ (p);
@@ -199,19 +208,19 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   if (anyDropiMissingExt) {
     const errText = "Un producto con external_provider=dropi no tiene external_product_id; no se envió el pedido a Dropi";
-    await upsertMap(
-      sb,
-      {
-        order_id: oid,
-        status: "failed",
-        dropi_status: "failed",
-        last_error: errText,
-        error: errText,
-        updated_at: utcNowIso(),
-      }
-    );
+    const mapErr1 = await upsertMap(sb, {
+      order_id: oid,
+      status: "failed",
+      dropi_status: "failed",
+      last_error: errText,
+      error: errText,
+      updated_at: utcNowIso(),
+    });
+    if (mapErr1) {
+      return { ok: false, skipped: false, order_id: oid, context: "missing_ext_map_upsert", ...shapeError(mapErr1) };
+    }
     console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
-    return { ok: false, skipped: false, order_id: oid, error: errText };
+    return { ok: false, skipped: false, order_id: oid, ...shapeError(errText) };
   }
 
   if (dropiForBridge.length === 0) {
@@ -222,7 +231,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   if (!dropiConfigured() || !resolveBridgeBaseUrl()) {
     const errText = "Dropi: bridge no configurado (DROPI_BRIDGE_URL / DROPI_BRIDGE_KEY)";
-    await upsertMap(sb, {
+    const me = await upsertMap(sb, {
       order_id: oid,
       status: "failed",
       dropi_status: "failed",
@@ -230,8 +239,11 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       error: errText,
       updated_at: utcNowIso(),
     });
+    if (me) {
+      return { ok: false, skipped: false, order_id: oid, context: "bridge_env_map_upsert", ...shapeError(me) };
+    }
     console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
-    return { ok: false, skipped: false, order_id: oid, error: errText };
+    return { ok: false, skipped: false, order_id: oid, ...shapeError(errText) };
   }
 
   const pathSeg = envTrim("DROPI_BRIDGE_ORDER_PATH") || "order";
@@ -264,7 +276,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   };
 
   const ts0 = utcNowIso();
-  await upsertMap(sb, {
+  const pErr = await upsertMap(sb, {
     order_id: oid,
     status: "pending",
     dropi_status: "pending",
@@ -273,14 +285,18 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     error: null,
     updated_at: ts0,
   });
+  if (pErr) {
+    return { ok: false, order_id: oid, skipped: false, context: "pending_map_upsert", ...shapeError(pErr) };
+  }
   console.info("[dropi/order-create] bridge request", { order_id: oid, path: pathSeg, lines: dropiForBridge.length });
 
   let bridgeRes;
   try {
     bridgeRes = await postDropiBridgeJson(pathSeg, payload);
   } catch (e) {
-    const errText = (e instanceof Error ? e.message : String(e)).slice(0, 2000);
-    await upsertMap(sb, {
+    const sh = shapeError(e);
+    const errText = pickErrorMessageString(e).slice(0, 2000);
+    const mu = await upsertMap(sb, {
       order_id: oid,
       status: "failed",
       dropi_status: "failed",
@@ -290,14 +306,17 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       response: null,
       updated_at: utcNowIso(),
     });
-    console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
-    return { ok: false, order_id: oid, error: errText };
+    if (mu) {
+      return { ok: false, order_id: oid, context: "bridge_ex_map_upsert", ...shapeError(mu) };
+    }
+    console.error("[dropi/order-create] bridge error", { order_id: oid, error_message: sh.error_message, error_code: sh.error_code, raw: e });
+    return { ok: false, order_id: oid, ...sh };
   }
 
   const meta = pickDropiOrderMeta(/** @type {Record<string, unknown>} */ (bridgeRes));
   if (!meta.id) {
     const errText = "Bridge: respuesta sin id de pedido Dropi (revisá DROPI_BRIDGE_ORDER_PATH y el plugin)";
-    await upsertMap(sb, {
+    const mFail = await upsertMap(sb, {
       order_id: oid,
       status: "failed",
       dropi_status: "failed",
@@ -307,13 +326,16 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       response: /** @type {Record<string, unknown>} */ (bridgeRes),
       updated_at: utcNowIso(),
     });
+    if (mFail) {
+      return { ok: false, order_id: oid, context: "no_dropi_id_map_upsert", ...shapeError(mFail) };
+    }
     console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
-    return { ok: false, order_id: oid, error: errText };
+    return { ok: false, order_id: oid, ...shapeError(errText) };
   }
 
   const syncTs = utcNowIso();
   const ds = meta.dropiStatus || "succeeded";
-  await upsertMap(sb, {
+  const okMap = await upsertMap(sb, {
     order_id: oid,
     status: "succeeded",
     dropi_status: ds,
@@ -328,6 +350,9 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     last_sync_at: syncTs,
     updated_at: syncTs,
   });
+  if (okMap) {
+    return { ok: false, order_id: oid, context: "success_map_upsert", ...shapeError(okMap) };
+  }
   const { data: afterWrite } = await sb.from("dropi_order_map").select("id, order_id").eq("order_id", oid).maybeSingle();
   console.info("[dropi/order-create] map saved", {
     order_id: oid,
@@ -373,11 +398,12 @@ function mapIdFromRow(row) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {Record<string, unknown>} row
+ * @returns {Promise<unknown | null>} Error de PostgREST si falla (full + intento legado)
  */
 async function upsertMap(sb, row) {
   const payload = { ...row, updated_at: row.updated_at || utcNowIso() };
   const { error: e1 } = await sb.from("dropi_order_map").upsert(payload, { onConflict: "order_id" });
-  if (!e1) return;
+  if (!e1) return null;
   const legacy = {
     order_id: row.order_id,
     status: row.status ?? (typeof row.dropi_status === "string" ? row.dropi_status : "pending"),
@@ -387,5 +413,6 @@ async function upsertMap(sb, row) {
     updated_at: row.updated_at || utcNowIso(),
   };
   const { error: e2 } = await sb.from("dropi_order_map").upsert(legacy, { onConflict: "order_id" });
-  if (e2) throw e1;
+  if (e2) return e1;
+  return null;
 }

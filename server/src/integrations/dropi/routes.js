@@ -2,6 +2,7 @@ import { createRequireAdminMiddleware } from "../../adminAuth.js";
 import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
 import { dropiConfigured } from "./client.js";
 import { createDropiOrderForInternalOrder } from "./createOrderForInternal.js";
+import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
 import { orderCanFulfillDropiTest } from "./orderDropiGates.js";
 import { supabaseService } from "./db.js";
 import { runDropiProductSync } from "./sync-products.js";
@@ -46,6 +47,68 @@ function canReasonMessage(reason) {
     return "El pedido no tiene productos con external_provider=dropi y external_product_id; no se puede enviar a Dropi.";
   }
   return "No se puede sincronizar este pedido con Dropi.";
+}
+
+/**
+ * @param {string} label
+ * @param {string} orderId
+ * @param {unknown} e
+ */
+function logRouteCatch(label, orderId, e) {
+  const o = e && typeof e === "object" && e !== null ? /** @type {Record<string, unknown>} */ (e) : null;
+  console.error(label, {
+    orderId,
+    error: e,
+    message: o && o.message != null ? o.message : (e instanceof Error ? e.message : undefined),
+    code: o && o.code,
+    details: o && o.details,
+    hint: o && o.hint,
+    stack: e instanceof Error ? e.stack : undefined,
+  });
+}
+
+/**
+ * @param {string} orderId
+ * @param {unknown} e
+ */
+function jsonErrorBody(orderId, e) {
+  const sh = shapeError(e);
+  return {
+    ok: false,
+    order_id: orderId,
+    error: pickErrorMessageString(e) || sh.error,
+    error_message: sh.error_message,
+    error_code: sh.error_code,
+    error_details: sh.error_details,
+    raw_error: sh.raw_error,
+  };
+}
+
+/**
+ * Cuerpo JSON cuando `createDropiOrderForInternalOrder` devolvió ok: false.
+ * @param {string} orderId
+ * @param {Record<string, unknown>} r
+ */
+function jsonFromCreateResult(orderId, r) {
+  const errStr =
+    r.error != null
+      ? (typeof r.error === "string" ? r.error : String(r.error))
+      : r.error_message != null
+        ? String(r.error_message)
+        : r.reason != null
+          ? String(r.reason)
+          : "dropi_create_failed";
+  return {
+    ok: false,
+    order_id: orderId,
+    error: errStr,
+    error_message: r.error_message,
+    error_code: r.error_code,
+    error_details: r.error_details,
+    raw_error: r.raw_error,
+    context: r.context,
+    reason: r.reason,
+  };
 }
 
 /**
@@ -230,7 +293,7 @@ export function registerDropiRoutes(app) {
         );
       }
       if (!r.ok) {
-        return res.status(502).json({ ok: false, order_id: orderId, error: r.error ?? "dropi_create_failed" });
+        return res.status(502).json(/** @type {Record<string, unknown>} */ (jsonFromCreateResult(orderId, r)));
       }
 
       const { data: mapAfter } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
@@ -238,9 +301,8 @@ export function registerDropiRoutes(app) {
         jsonMapResponse(mapAfter, orderId, { dropiCreated: true, fromExisting: false, includeResponse: true }, r)
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[dropi/orders/test-create]", { orderId, error: msg });
-      return res.status(500).json({ ok: false, order_id: orderId, error: msg });
+      logRouteCatch("[dropi/orders/test-create]", orderId, e);
+      return res.status(500).json(/** @type {Record<string, unknown>} */ (jsonErrorBody(orderId, e)));
     }
   });
 
@@ -292,16 +354,15 @@ export function registerDropiRoutes(app) {
         );
       }
       if (!r.ok) {
-        return res.status(502).json({ ok: false, order_id: orderId, error: r.error ?? "dropi_create_failed" });
+        return res.status(502).json(/** @type {Record<string, unknown>} */ (jsonFromCreateResult(orderId, r)));
       }
       const { data: mapAfter } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
       return res.json(
         jsonMapResponse(mapAfter, orderId, { dropiCreated: true, fromExisting: false, includeResponse: false }, r)
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[dropi/orders/create]", { orderId, error: msg });
-      return res.status(500).json({ ok: false, order_id: orderId, error: msg });
+      logRouteCatch("[dropi/orders/create]", orderId, e);
+      return res.status(500).json(/** @type {Record<string, unknown>} */ (jsonErrorBody(orderId, e)));
     }
   });
 }
