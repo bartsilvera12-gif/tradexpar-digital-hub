@@ -40,6 +40,8 @@ import {
 } from "./pagopar.js";
 import { registerDropiRoutes } from "./integrations/dropi/routes.js";
 import { createDropiOrderForInternalOrder } from "./integrations/dropi/createOrderForInternal.js";
+import { registerFastraxRoutes } from "./integrations/fastrax/routes.js";
+import { createFastraxOrderForInternalOrder } from "./integrations/fastrax/createOrderForInternal.js";
 import { createApiKeyMiddleware } from "./middleware/apiKey.js";
 
 /**
@@ -669,6 +671,7 @@ app.use("/api/pagopar/webhook", express.urlencoded({ extended: true, limit: "1mb
 app.use(express.json({ limit: "512kb" }));
 
 registerDropiRoutes(app);
+registerFastraxRoutes(app);
 
 app.get("/health", (_req, res) => {
   let supabaseHost = "";
@@ -1132,6 +1135,18 @@ app.post("/api/pagopar/webhook", async (req, res) => {
             }
           } catch (e) {
             console.error("[webhook][dropi-order] excepción", e instanceof Error ? e.message : e);
+          }
+        })();
+        void (async () => {
+          try {
+            const r = await createFastraxOrderForInternalOrder(supabaseAdmin(), updated.id, { context: "webhook" });
+            if (r && r.ok === true && r.skipped === true) {
+              console.info("[webhook][fastrax-order] omitido", { order_id: updated.id, reason: r.reason });
+            } else if (r && r.ok === false && r.error) {
+              console.warn("[webhook][fastrax-order] no creado en Fastrax", { order_id: updated.id, error: r.error });
+            }
+          } catch (e) {
+            console.error("[webhook][fastrax-order] excepción", e instanceof Error ? e.message : e);
           }
         })();
       });
