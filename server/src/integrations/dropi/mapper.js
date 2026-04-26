@@ -20,29 +20,123 @@ const DROPI_IMPORT_MARGIN_PERCENT = 0.5;
 const DROPI_IMPORT_MARGIN_FIXED = 25000;
 
 /**
- * Claves de costo en el JSON de Dropi / bridge (misma semántica que se guarda en `dropi_cost_price`).
+ * Número finito ≥ 0, o null (no aplica).
+ * @param {unknown} v
+ * @returns {number | null}
+ */
+function parseNonNegCostValue(v) {
+  if (v == null || v === "" || (typeof v === "string" && v.trim() === "")) return null;
+  if (Array.isArray(v) || (typeof v === "object" && v !== null)) return null;
+  const n = Number(v);
+  if (Number.isFinite(n) && n >= 0) return n;
+  return null;
+}
+
+/**
+ * Lee `price` o `cost` de un nodo (objeto producto/depósito), no arrays.
+ * @param {unknown} node
+ * @param {string} pathLabel
+ * @returns {{ value: number, path: string } | null}
+ */
+function pickCostFromWarehouseNode(node, pathLabel) {
+  if (node == null || typeof node !== "object" || Array.isArray(node)) return null;
+  const o = /** @type {Record<string, unknown>} */ (node);
+  for (const field of ["price", "cost"]) {
+    if (!hasOwn(o, field)) continue;
+    const v = parseNonNegCostValue(o[field]);
+    if (v != null) return { value: v, path: `${pathLabel}.${field}` };
+  }
+  return null;
+}
+
+/**
+ * `raw.warehouse_product` / `raw.warehouse_product_variation`: array u objeto; si es array, prueba cada índice.
+ * @param {Record<string, unknown>} raw
+ * @param {string} key
+ * @returns {{ value: number, path: string } | null}
+ */
+function pickCostFromWarehouseKey(raw, key) {
+  const w = raw[key];
+  if (w == null) return null;
+  if (Array.isArray(w)) {
+    for (let i = 0; i < w.length; i++) {
+      const got = pickCostFromWarehouseNode(w[i], `${key}[${i}]`);
+      if (got) return got;
+    }
+    return null;
+  }
+  if (typeof w === "object") {
+    return pickCostFromWarehouseNode(w, key);
+  }
+  return null;
+}
+
+/**
+ * Costo para `dropi_cost_price`: raíz, depósitos y claves frecuentes en el JSON Dropi/bridge.
  * @param {Record<string, unknown>} raw
  * @returns {number | null}
  */
 function pickDropiCostFromRaw(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const keys = [
-    "dropi_cost_price",
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const productId =
+    o.id != null
+      ? String(o.id)
+      : o.ID != null
+        ? String(o.ID)
+        : o.product_id != null
+          ? String(o.product_id)
+          : null;
+
+  const tryRootKeys = (keys) => {
+    for (const k of keys) {
+      if (!hasOwn(o, k)) continue;
+      const v = parseNonNegCostValue(o[k]);
+      if (v != null) {
+        return { v, path: k };
+      }
+    }
+    return null;
+  };
+
+  /** 1) Depósitos: suele ser donde viene el costo/price neto real. */
+  const fromWh = pickCostFromWarehouseKey(o, "warehouse_product");
+  if (fromWh) {
+    console.info("[dropi/mapper] cost_detected", {
+      source: fromWh.path,
+      value: fromWh.value,
+      product_id: productId,
+    });
+    return fromWh.value;
+  }
+  const fromVar = pickCostFromWarehouseKey(o, "warehouse_product_variation");
+  if (fromVar) {
+    console.info("[dropi/mapper] cost_detected", {
+      source: fromVar.path,
+      value: fromVar.value,
+      product_id: productId,
+    });
+    return fromVar.value;
+  }
+
+  const root = tryRootKeys([
     "my_cost",
     "distributor_net_price",
+    "dropi_cost_price",
     "cost",
     "cost_price",
     "net_cost",
     "base_cost",
-  ];
-  for (const k of keys) {
-    if (!hasOwn(raw, k)) continue;
-    const v = /** @type {unknown} */ (raw[k]);
-    if (v == null || v === "" || (typeof v === "string" && v.trim() === "")) continue;
-    if (Array.isArray(v) || (typeof v === "object" && v !== null)) continue;
-    const n = Number(v);
-    if (Number.isFinite(n) && n >= 0) return n;
+  ]);
+  if (root) {
+    console.info("[dropi/mapper] cost_detected", {
+      source: root.path,
+      value: root.v,
+      product_id: productId,
+    });
+    return root.v;
   }
+
   return null;
 }
 
