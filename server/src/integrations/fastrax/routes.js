@@ -1,7 +1,7 @@
 import { createRequireAdminMiddleware } from "../../adminAuth.js";
 import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
 import { fastraxConfigured, fastraxEnabled, getVersion, listProductsPage } from "./client.js";
-import { createFastraxOrderForInternalOrder } from "./createOrderForInternal.js";
+import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
 import { runFastraxProductSync } from "./sync-products.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
@@ -91,8 +91,11 @@ export function registerFastraxRoutes(app) {
         if (r?.ok === true) {
           return res.json({ ok: true, order_id: orderId, source: "fastrax", live: true, ...r });
         }
-        if (r?.reason === "no_map" || r?.reason === "missing_fastrax_order_id") {
+        if (r?.reason === "no_map") {
           return res.status(404).json(r);
+        }
+        if (r?.reason === "not_configured" || r?.reason === "fastrax_disabled") {
+          return res.status(503).json(r);
         }
         return res.status(502).json(r);
       }
@@ -144,7 +147,7 @@ export function registerFastraxRoutes(app) {
         });
       }
       const { data: mapEx } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
-      if (mapEx?.fastrax_order_id) {
+      if (mapEx && (mapEx.fastrax_pdc || mapEx.fastrax_order_id)) {
         return res.json({ ok: true, order_id: orderId, skipped: true, map: mapEx });
       }
       const r = await createFastraxOrderForInternalOrder(sb, orderId, { context: "admin" });
@@ -153,6 +156,32 @@ export function registerFastraxRoutes(app) {
       }
       const { data: map2 } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
       return res.json({ ok: true, ...r, map: map2 ?? null });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  app.post("/api/admin/orders/:orderId/fastrax/invoice", requireApiKey, async (req, res) => {
+    const orderId = String(req.params.orderId || "").trim();
+    if (!orderId) {
+      return res.status(400).json({ ok: false, error: "orderId inválido" });
+    }
+    try {
+      if (!fastraxEnabled() || !fastraxConfigured()) {
+        return res.status(503).json({ ok: false, error: "Fastrax no disponible" });
+      }
+      const sb = supabaseService();
+      const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
+      if (oe) throw oe;
+      if (!orderRow?.id) {
+        return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
+      }
+      const r = await runFastraxInvoiceForMap(sb, orderId);
+      if (!r.ok) {
+        return res.status(502).json({ ok: false, order_id: orderId, ...r });
+      }
+      const { data: map2 } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
+      return res.json({ ok: true, order_id: orderId, map: map2 ?? null, parsed: r.parsed });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }

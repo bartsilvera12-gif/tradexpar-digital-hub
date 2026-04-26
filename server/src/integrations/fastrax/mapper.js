@@ -2,6 +2,10 @@
  * Mapeo Fastrax → filas `tradexpar.products`. source: fastrax
  */
 
+import { findFirstStringKeyDeep, extractFastraxPedPdc } from "./fastraxResponse.js";
+
+export { extractFastraxPedPdc };
+
 export const FASTRAX_SOURCE = "fastrax";
 
 function str(v) {
@@ -151,45 +155,47 @@ function rowUrl(r) {
 }
 
 /**
- * Estados ope=13: `sit` (documentación: tracking con sit).
+ * ope=13: campo `sit` (1–9).
  * @param {unknown} n
  * @param {string | null} [fallback]
  */
 export function sitToLabel(n, fallback = null) {
   const s = n != null ? String(n).trim() : "";
   const k = s.replace(/^0+/, "") || s;
-  const table = { "1": "emitido", "3": "pagado", "6": "expedido", "7": "entregado" };
+  const table = {
+    "1": "Emitido",
+    "2": "Borrado",
+    "3": "Pagado",
+    "4": "Separando",
+    "5": "Separado",
+    "6": "Expedido",
+    "7": "Entregado",
+    "8": "RMA",
+    "9": "Devuelto",
+  };
   if (table[k]) return table[k];
   if (fallback) return fallback;
-  return s || "desconocido";
+  return s || "Desconocido";
 }
 
 /**
- * @param {unknown} parsed
- * @returns {string | null}
- */
-export function pickFastraxOrderIdFromCreateResponse(parsed) {
-  if (parsed == null) return null;
-  const o = isPlainObject(parsed) ? /** @type {Record<string, unknown>} */ (parsed) : null;
-  if (!o) return null;
-  const direct = o.nro ?? o.Nro ?? o.nro_ped ?? o.num_pedido ?? o.id_pedido ?? o.ped ?? o.Ped ?? o.numero ?? o.num;
-  if (direct != null && str(direct) !== "") return str(direct);
-  const d = o.data;
-  if (d && isPlainObject(d)) {
-    const p = pickFastraxOrderIdFromCreateResponse(d);
-    if (p) return p;
-  }
-  return null;
-}
-
-/**
+ * ope=13: localizar `sit` en toda la respuesta.
  * @param {unknown} parsed
  * @returns {string | number | null}
  */
 export function pickSitCode(parsed) {
-  const o = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? /** @type {Record<string, unknown>} */ (parsed) : null;
-  if (!o) return null;
-  const v = o.sit ?? o.Sit ?? o.est ?? o.Est ?? o.estado ?? o.cod_sit;
-  if (v == null) return null;
-  return typeof v === "number" ? v : str(v) || null;
+  if (parsed == null) return null;
+  if (!Array.isArray(parsed) && isPlainObject(parsed)) {
+    const o = /** @type {Record<string, unknown>} */ (parsed);
+    for (const k of ["sit", "Sit", "SIT", "estado", "est", "Est"]) {
+      if (o[k] != null && o[k] !== "")
+        return typeof o[k] === "number" ? o[k] : str(o[k]) || null;
+    }
+  }
+  const deep = findFirstStringKeyDeep(parsed, ["sit", "Sit", "SIT", "estado", "est", "Est"]);
+  if (deep) {
+    const n = Number(deep);
+    return Number.isFinite(n) ? n : deep;
+  }
+  return null;
 }

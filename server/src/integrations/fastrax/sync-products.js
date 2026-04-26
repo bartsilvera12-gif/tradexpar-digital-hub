@@ -1,5 +1,6 @@
 /**
  * Sincroniza catálogo Fastrax: ope=4 por páginas (y opcional ope=98 al final) → upsert en `products`.
+ * Requiere `tradexpar.products.external_sku` (ver `server/sql/fastrax_supabase_sql_arrays.mjs` / Supabase).
  */
 
 import { fastraxPost, fastraxConfigured, fastraxEnabled, listProductsPage } from "./client.js";
@@ -89,28 +90,50 @@ export async function runFastraxProductSync(sb, options = {}) {
       image: m.image || null,
       product_source_type: FASTRAX_SOURCE,
       external_provider: FASTRAX_SOURCE,
+      external_sku: m.external_sku,
       external_product_id: m.external_sku,
       external_payload: m.external_payload,
       external_last_sync_at: now,
       updated_at: now,
       external_active: m.price > 0,
     };
-    const { data: ex, error: eFind } = await sb
+
+    let exId = null;
+    const { data: byExtSku, error: eBySku } = await sb
       .from("products")
       .select("id")
       .eq("external_provider", FASTRAX_SOURCE)
-      .eq("external_product_id", m.external_sku)
+      .eq("external_sku", m.external_sku)
       .maybeSingle();
-    if (eFind) {
+    if (eBySku) {
       stats.failed += 1;
-      stats.errors.push(eFind.message);
+      stats.errors.push(eBySku.message);
       continue;
     }
-    if (ex?.id) {
+    if (byExtSku?.id) {
+      exId = byExtSku.id;
+    } else {
+      const { data: byEp, error: eByEp } = await sb
+        .from("products")
+        .select("id")
+        .eq("external_provider", FASTRAX_SOURCE)
+        .eq("external_product_id", m.external_sku)
+        .maybeSingle();
+      if (eByEp) {
+        stats.failed += 1;
+        stats.errors.push(eByEp.message);
+        continue;
+      }
+      if (byEp?.id) {
+        exId = byEp.id;
+      }
+    }
+
+    if (exId) {
       const { error: eUp } = await sb
         .from("products")
         .update({ ...row })
-        .eq("id", ex.id);
+        .eq("id", exId);
       if (eUp) {
         stats.failed += 1;
         stats.errors.push(eUp.message);

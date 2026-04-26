@@ -1,10 +1,11 @@
 /**
- * Fastrax Market (POST JSON). Credenciales solo por env: FASTRAX_API_URL, FASTRAX_COD, FASTRAX_PASS.
- * ope: operación; el cuerpo incluye cod/pas.
+ * Fastrax Market (POST JSON). Credenciales: FASTRAX_API_URL, FASTRAX_COD, FASTRAX_PASS.
+ * Tras HTTP 2xx se aplica comprobación de negocio (estatus/cestatus) vía `fastraxResponse.js`.
  */
 
 import https from "node:https";
 import { URL } from "node:url";
+import { withFastraxBusinessGate, logFastraxOpe } from "./fastraxResponse.js";
 
 function envTrim(key) {
   const v = process.env[key];
@@ -38,8 +39,8 @@ export function getFastraxCreds() {
 }
 
 /**
- * @param {Record<string, unknown>} extra
  * @param {number} ope
+ * @param {Record<string, unknown>} extra
  */
 function buildJsonBody(ope, extra) {
   const { cod, pas } = getFastraxCreds();
@@ -49,69 +50,6 @@ function buildJsonBody(ope, extra) {
     pas: String(pas),
     ...extra,
   });
-}
-
-/**
- * POST: con `FASTRAX_SSL_INSECURE=1` se usa `https` con `rejectUnauthorized: false`;
- * si no, `fetch` (TLS estándar).
- * @param {number} ope
- * @param {Record<string, unknown>} [extra]
- * @returns {Promise<{ ok: boolean, status: number, parsed: unknown, raw?: string, message?: string }>}
- */
-export async function fastraxPost(ope, extra = {}) {
-  if (!fastraxConfigured()) {
-    return { ok: false, status: 0, message: "Fastrax no configurado (FASTRAX_* en .env).", parsed: null };
-  }
-  const { url: baseUrl } = getFastraxCreds();
-  if (!baseUrl) {
-    return { ok: false, status: 0, message: "FASTRAX_API_URL vacía", parsed: null };
-  }
-  const body = buildJsonBody(ope, extra);
-  const timeoutMs = Math.min(
-    180_000,
-    Math.max(5_000, Number(process.env.FASTRAX_REQUEST_TIMEOUT_MS || 90_000) || 90_000)
-  );
-  if (sslInsecure()) {
-    return fastraxPostHttps(baseUrl, body, timeoutMs, { rejectUnauthorized: false });
-  }
-
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
-  let res;
-  try {
-    res = await fetch(baseUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body,
-      signal: controller.signal,
-    });
-  } catch (e) {
-    clearTimeout(t);
-    return {
-      ok: false,
-      status: 0,
-      message: e instanceof Error ? e.message : String(e),
-      parsed: null,
-    };
-  } finally {
-    clearTimeout(t);
-  }
-
-  const text = await res.text();
-  let parsed;
-  try {
-    parsed = text ? JSON.parse(text) : null;
-  } catch {
-    parsed = { _raw: text?.slice(0, 8_000) || "" };
-  }
-  if (!res.ok) {
-    const msg =
-      parsed && typeof parsed === "object" && parsed && "message" in parsed
-        ? String(/** @type {Record<string, unknown>} */ (parsed).message)
-        : `HTTP ${res.status}`;
-    return { ok: false, status: res.status, message: msg, parsed };
-  }
-  return { ok: true, status: res.status, parsed, raw: text };
 }
 
 /**
@@ -182,6 +120,73 @@ function fastraxPostHttps(baseUrl, body, timeoutMs, tls) {
   });
 }
 
+/**
+ * @param {number} ope
+ * @param {Record<string, unknown>} [extra]
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function fastraxPost(ope, extra = {}) {
+  if (!fastraxConfigured()) {
+    return { ok: false, status: 0, message: "Fastrax no configurado (FASTRAX_* en .env).", parsed: null };
+  }
+  const { url: baseUrl } = getFastraxCreds();
+  if (!baseUrl) {
+    return { ok: false, status: 0, message: "FASTRAX_API_URL vacía", parsed: null };
+  }
+  const body = buildJsonBody(ope, extra);
+  const timeoutMs = Math.min(
+    180_000,
+    Math.max(5_000, Number(process.env.FASTRAX_REQUEST_TIMEOUT_MS || 90_000) || 90_000)
+  );
+  logFastraxOpe(ope);
+  let r;
+  if (sslInsecure()) {
+    r = await fastraxPostHttps(baseUrl, body, timeoutMs, { rejectUnauthorized: false });
+  } else {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(baseUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      clearTimeout(t);
+      return {
+        ok: false,
+        status: 0,
+        message: e instanceof Error ? e.message : String(e),
+        parsed: null,
+      };
+    } finally {
+      clearTimeout(t);
+    }
+    const text = await res.text();
+    let parsed;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = { _raw: text?.slice(0, 8_000) || "" };
+    }
+    if (!res.ok) {
+      const msg =
+        parsed && typeof parsed === "object" && parsed && "message" in parsed
+          ? String(/** @type {Record<string, unknown>} */ (parsed).message)
+          : `HTTP ${res.status}`;
+      r = { ok: false, status: res.status, message: msg, parsed };
+    } else {
+      r = { ok: true, status: res.status, parsed, raw: text };
+    }
+  }
+  if (!r.ok) {
+    return r;
+  }
+  return withFastraxBusinessGate(/** @type {Record<string, unknown>} */ (r), { ope });
+}
+
 export async function getVersion() {
   return fastraxPost(10, {});
 }
@@ -200,13 +205,27 @@ export async function getStockPrice(extra = {}) {
 }
 
 /**
- * ope=12: enviar pedido. `orderPayload` se fusiona luego de cod/pas/ope en el cuerpo JSON.
- * Ajustar campos (det, nro, …) vía mapeo en `createOrderForInternal.js` según manual.
+ * ope=12: ped, sku, gra, qtd, pgt (el cliente añade cod, pas, ope).
  */
-export async function createFastraxRemoteOrder(orderPayload) {
-  return fastraxPost(12, orderPayload && typeof orderPayload === "object" ? orderPayload : {});
+export async function createFastraxRemoteOrder12(payload) {
+  return fastraxPost(12, payload && typeof payload === "object" ? payload : {});
 }
 
+/**
+ * ope=13: preferir cuerpo con pdc, o con ped.
+ */
+export async function queryFastraxOrderStatus13(queryBody) {
+  return fastraxPost(13, queryBody && typeof queryBody === "object" ? queryBody : {});
+}
+
+/** @deprecated */
 export async function getOrderStatus(extra) {
-  return fastraxPost(13, extra && typeof extra === "object" ? extra : {});
+  return queryFastraxOrderStatus13(extra);
+}
+
+/**
+ * ope=15: facturar. Usar pdc o ped.
+ */
+export async function fastraxInvoiceOrder15(invoiceBody) {
+  return fastraxPost(15, invoiceBody && typeof invoiceBody === "object" ? invoiceBody : {});
 }

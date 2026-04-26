@@ -1,23 +1,14 @@
 /**
- * Consulta estado de pedido en Fastrax (ope=13) y actualiza `fastrax_order_map`.
+ * ope=13: preferir pdc; si no hay, ped. Vector/estatus vía client.
  */
 
-import { getOrderStatus, fastraxConfigured, fastraxEnabled } from "./client.js";
-import { sitToLabel, pickSitCode } from "./mapper.js";
+import { queryFastraxOrderStatus13, fastraxConfigured, fastraxEnabled } from "./client.js";
+import { pickSitCode, sitToLabel } from "./mapper.js";
 import { supabaseService } from "./db.js";
-
-/**
- * Nombre de campo en el cuerpo ope=13 para el id de pedido Fastrax. Por defecto `nro` (ver manual).
- */
-function ope13OrderIdField() {
-  const s = (process.env.FASTRAX_OPE13_ID_FIELD || "nro").trim() || "nro";
-  return s;
-}
 
 /**
  * @param {string} orderId
  * @param {import('@supabase/supabase-js').SupabaseClient} [sb]
- * @returns {Promise<Record<string, unknown>>}
  */
 export async function syncFastraxOrderStatusForOrderId(orderId, sb) {
   if (!fastraxEnabled()) {
@@ -39,49 +30,57 @@ export async function syncFastraxOrderStatusForOrderId(orderId, sb) {
   if (!map?.id) {
     return { ok: false, order_id: oid, reason: "no_map" };
   }
-  const fId = map.fastrax_order_id != null ? String(map.fastrax_order_id).trim() : "";
-  if (!fId) {
-    return { ok: false, order_id: oid, reason: "missing_fastrax_order_id" };
-  }
-  const field = ope13OrderIdField();
-  const body = { [field]: fId };
-  const r = await getOrderStatus(body);
-  if (!r.ok) {
-    const msg = (r && r.message) || "ope=13 error";
-    const ts = new Date().toISOString();
+
+  const pdc = map.fastrax_pdc != null && String(map.fastrax_pdc).trim() ? String(map.fastrax_pdc).trim() : "";
+  const ped = map.fastrax_ped != null && String(map.fastrax_ped).trim() ? String(map.fastrax_ped).trim() : oid;
+  const body = pdc ? { pdc } : { ped };
+  const r0 = await queryFastraxOrderStatus13(body);
+  const lastSync = new Date().toISOString();
+  if (!r0 || r0.ok === false) {
+    const errMsg = str(r0 && (r0.message || r0.cestatus)) || "ope=13 error";
     await client
       .from("fastrax_order_map")
       .update({
-        last_error: String(msg).slice(0, 2_000),
-        updated_at: ts,
+        last_error: errMsg.slice(0, 2_000),
+        error: errMsg.slice(0, 2_000),
+        response: r0 && r0.parsed && typeof r0.parsed === "object" ? r0.parsed : { err: errMsg },
+        updated_at: lastSync,
       })
       .eq("order_id", oid);
-    return { ok: false, order_id: oid, reason: "fastrax_api_error", error: String(msg) };
+    return { ok: false, order_id: oid, reason: "fastrax_api_error", error: errMsg };
   }
 
-  const sit = pickSitCode(r.parsed);
+  const sit = pickSitCode(r0.parsed);
+  const codeNum = sit != null && !Number.isNaN(Number(sit)) ? Math.floor(Number(sit)) : null;
   const label = sitToLabel(sit, null);
-  const lastSync = new Date().toISOString();
   await client
     .from("fastrax_order_map")
     .update({
-      response: r.parsed && typeof r.parsed === "object" ? r.parsed : { data: r.parsed },
-      fastrax_sit: sit != null ? String(sit) : null,
+      response: r0.parsed && typeof r0.parsed === "object" ? r0.parsed : { data: r0.parsed },
+      fastrax_sit: sit != null ? str(sit) : null,
+      fastrax_status_code: codeNum,
       fastrax_status_label: label,
       fastrax_status: "synced",
       status: "ok",
       last_sync_at: lastSync,
       last_error: null,
+      error: null,
       updated_at: lastSync,
     })
     .eq("order_id", oid);
-
   return {
     ok: true,
     order_id: oid,
-    fastrax_order_id: fId,
+    fastrax_pdc: pdc || null,
+    fastrax_ped: ped,
     sit,
+    fastrax_status_code: codeNum,
     label,
     last_sync_at: lastSync,
   };
+}
+
+function str(x) {
+  if (x == null) return "";
+  return String(x);
 }

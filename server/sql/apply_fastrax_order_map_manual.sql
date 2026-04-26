@@ -34,3 +34,21 @@ create index if not exists idx_fastrax_order_map_fastrax_order_id on tradexpar.f
 
 -- 4) (Opcional) comentario en columna
 comment on column tradexpar.fastrax_order_map.fastrax_sit is 'Código de estado Fastrax (ope 13, campo sit si aplica)';
+
+-- 5) columnas ope=12/13/15 (idempotente)
+alter table tradexpar.fastrax_order_map add column if not exists fastrax_ped text;
+alter table tradexpar.fastrax_order_map add column if not exists fastrax_pdc text;
+alter table tradexpar.fastrax_order_map add column if not exists invoice_response jsonb;
+alter table tradexpar.fastrax_order_map add column if not exists fastrax_status_code int;
+
+-- 6) productos: SKU Fastrax + índice parcial
+alter table tradexpar.products add column if not exists external_sku text;
+create unique index if not exists ux_products_fastrax_provider_sku
+  on tradexpar.products (external_provider, external_sku)
+  where external_provider = 'fastrax' and external_sku is not null;
+
+comment on column tradexpar.fastrax_order_map.fastrax_ped is 'Pedido ecommerce enviado a Fastrax (ope=12, ped)';
+comment on column tradexpar.fastrax_order_map.fastrax_pdc is 'Pedido generado en sistema Fastrax (ope=12, pdc)';
+comment on column tradexpar.fastrax_order_map.invoice_response is 'Respuesta ope=15 (facturar), si aplica';
+comment on column tradexpar.fastrax_order_map.fastrax_status_code is 'Código entero ope=13 (campo sit mapeado)';
+comment on column tradexpar.products.external_sku is 'SKU canónico Fastrax (eje con external_provider=fastrax)';
