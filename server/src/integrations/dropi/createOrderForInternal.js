@@ -17,160 +17,37 @@ function utcNowIso() {
 }
 
 /**
- * Mínimo margen (guaraníes) sobre costo Dropi: `max(sale, suggested, unit+min) > cost`.
- * Configurable: `DROPI_MIN_MARGIN_PYG` (default 5000).
- */
-function readDropiMinMarginPyg() {
-  const n = Number(envTrim("DROPI_MIN_MARGIN_PYG") || envTrim("DROPI_MIN_MARGIN") || "5000");
-  if (!Number.isFinite(n) || n < 0) return 5000;
-  return n;
-}
-
-/**
- * @param {unknown} v
- * @returns {number | null} null = ausente, no 0
- */
-function numOrNull(v) {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return null;
-  return n;
-}
-
-/**
- * @param {Record<string, unknown>} p
- * @returns {Record<string, unknown> | null}
- */
-function productExtPayload(p) {
-  const ep = p.external_payload;
-  if (ep && typeof ep === "object" && !Array.isArray(ep)) {
-    return /** @type {Record<string, unknown>} */ (ep);
-  }
-  return null;
-}
-
-/**
- * @param {Record<string, unknown>} p
- * @param {string[]} keys
- */
-function pickNumberFrom(p, ext, keys) {
-  for (const k of keys) {
-    if (k in p && p[k] != null) {
-      const n = numOrNull(p[k]);
-      if (n != null) return n;
-    }
-  }
-  for (const k of keys) {
-    if (ext && k in ext) {
-      const n = numOrNull(ext[k]);
-      if (n != null) return n;
-    }
-  }
-  return null;
-}
-
-const DROP_COST_EXT_KEYS = [
-  "dropi_cost_price",
-  "cost",
-  "cost_price",
-  "my_cost",
-  "purchase_price",
-  "precio_compra",
-  "value_cost",
-  "provider_price",
-  "suggested_purchase",
-  "costo",
-  "base_cost",
-];
-
-/**
- * @param {Record<string, unknown>} p
- * @param {Record<string, unknown> | null} ext
- */
-function readDropiCost(p, ext) {
-  const d = numOrNull(p.dropi_cost_price);
-  if (d != null) return d;
-  for (const k of DROP_COST_EXT_KEYS) {
-    if (ext && k in ext) {
-      const n = numOrNull(ext[k]);
-      if (n != null) return n;
-    }
-  }
-  return null;
-}
-
-/**
- * Precio de venta enviado a Dropi: max(sale, suggested, product_unit + margen_mín).
- * Cumplir: selling_price > dropi_cost_price.
- *
+ * Precio de venta por ítem: **siempre** `order_items.unit_price` (cobrado al cliente) para el bridge.
  * @param {Record<string, unknown>} line
- * @param {Record<string, unknown>} p
- * @param {number} marginMin
- * @param {string} orderId
- * @returns {{ ok: true, sellingPrice: number, lineSubtotal: number, cost: number, margin: number, detail: Record<string, unknown> } | { ok: false, message: string, detail: Record<string, unknown> }}
+ * @returns {number}
  */
-function computeDropiItemSellingPrice(line, p, marginMin, orderId) {
-  const ext = productExtPayload(p);
-  const lineUnit = numOrNull(line.unit_price);
-  const saleCands = [
-    "sale_price",
-    "public_price",
-    "publicsale_price",
-    "price_sale",
-  ];
-  const priceCol = numOrNull(p.price);
-  const sale = pickNumberFrom(p, ext, saleCands) ?? priceCol ?? 0;
-  const sugg = pickNumberFrom(p, ext, ["suggested_price", "suggested", "sugerido"]) ?? 0;
-  /** Tercer término: solo `product` (p + raw); si falta `unit_price`, se usa `price` como base de lista. */
-  const productUnit = pickNumberFrom(p, ext, ["unit_price", "base_unit_price", "retail_unit"]) ?? priceCol ?? 0;
-  const t3 = (typeof productUnit === "number" && Number.isFinite(productUnit) ? productUnit : 0) + marginMin;
-  const selling = Math.max(sale, sugg, t3);
-  const cost = readDropiCost(p, ext);
-  const productId = line.product_id != null ? String(line.product_id) : "";
+function lineSaleUnitPriceGuaranies(line) {
+  const n = Number(line.unit_price);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n);
+}
 
-  const detail = {
-    order_id: orderId,
-    product_id: productId,
-    margin_min: marginMin,
-    sale,
-    suggested: sugg,
-    product_unit: productUnit,
-    unit_plus_min: t3,
-    line_unit: lineUnit,
-    selling,
-    cost,
-  };
-
-  if (cost == null) {
-    console.warn("[dropi/order-create] margin_check", { ...detail, ok: false, reason: "missing_cost" });
-    return {
-      ok: false,
-      message:
-        "No se pudo determinar el costo Dropi del producto; definí `dropi_cost_price` o `cost` en el catálogo o en el payload de sync.",
-      detail: { ...detail, ok: false, reason: "missing_cost" },
-    };
+/**
+ * `dropi_cost_price` tiene prioridad; si no hay, `cost`. Si faltan ambos o no son numéricos, null.
+ * @param {Record<string, unknown>} product
+ * @returns {{ cost: number, fallback_used: boolean } | null}
+ */
+function resolveProductUnitCost(product) {
+  const dropi = product.dropi_cost_price;
+  const base = product.cost;
+  if (dropi != null && dropi !== "") {
+    const n = Number(dropi);
+    if (Number.isFinite(n)) {
+      return { cost: n, fallback_used: false };
+    }
   }
-
-  if (selling <= cost) {
-    const margin = selling - cost;
-    console.warn("[dropi/order-create] margin_check", {
-      ...detail,
-      margin,
-      ok: false,
-      reason: "margin_lte_zero",
-    });
-    return {
-      ok: false,
-      message: "El producto no tiene margen suficiente para Dropi",
-      detail: { ...detail, margin, ok: false, reason: "margin_lte_zero" },
-    };
+  if (base != null && base !== "") {
+    const n = Number(base);
+    if (Number.isFinite(n)) {
+      return { cost: n, fallback_used: true };
+    }
   }
-
-  const margin = selling - cost;
-  console.info("[dropi/order-create] margin_check", { ...detail, margin, ok: true });
-  const qty = Math.max(1, Number(line.quantity) || 1);
-  const lineSubtotal = Math.round(selling * qty * 100) / 100;
-  return { ok: true, sellingPrice: selling, lineSubtotal, cost, margin, detail: { ...detail, margin, ok: true, quantity: qty } };
+  return null;
 }
 
 /** @param {Record<string, unknown> | null | undefined} r */
@@ -266,11 +143,19 @@ function pickDropiOrderMeta(bridge) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {string} orderId
- * @param {{ context?: "webhook" | "admin_create" | "admin_test", force?: boolean }} [options]
+ * @param {{ context?: "webhook" | "admin_create" | "admin_test", force?: boolean, echoBridgePayload?: boolean }} [options]
  * @returns {Promise<Record<string, unknown>>}
  */
 export async function createDropiOrderForInternalOrder(sb, orderId, options = {}) {
-  const { context = "webhook" } = options;
+  const { context = "webhook", echoBridgePayload = false } = options;
+  /** Fijado al armar el body del POST; en respuestas (p. ej. test-create) replica lo enviado. */
+  let lastPayload = /** @type {Record<string, unknown> | null} */ (null);
+  const withEcho = (o) => {
+    if (echoBridgePayload && lastPayload != null) {
+      return { ...o, bridge_payload: lastPayload };
+    }
+    return o;
+  };
   const oid = String(orderId || "").trim();
   if (!oid) {
     console.info("[dropi/order-create] start", { order_id: null, context, skipped: "empty_order_id" });
@@ -335,7 +220,9 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   const { data: prows, error: perr } = await sb
     .from("products")
-    .select("id, sku, product_source_type, external_provider, external_product_id, price, external_payload")
+    .select(
+      "id, name, sku, product_source_type, external_provider, external_product_id, price, sale_price, cost, dropi_cost_price, external_payload"
+    )
     .in("id", productIds);
   if (perr) {
     return { ok: false, order_id: oid, skipped: false, reason: "products_query", ...shapeError(perr) };
@@ -386,15 +273,15 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   }
   console.info("[dropi/order-create] dropi items found", { order_id: oid, n: dropiForBridge.length });
 
-  const marginMin = readDropiMinMarginPyg();
-  const pricedForBridge = [];
-  for (const row of dropiForBridge) {
-    const pRec = row.product && typeof row.product === "object" ? row.product : {};
-    const lRec = row.line && typeof row.line === "object" ? row.line : {};
-    const m = computeDropiItemSellingPrice(/** @type {Record<string, unknown>} */ (lRec), /** @type {Record<string, unknown>} */ (pRec), marginMin, oid);
-    if (!m.ok) {
-      const errText = m.message;
-      const mapM = await upsertMap(sb, {
+  const costByProductId = new Map();
+  for (const { line, product } of dropiForBridge) {
+    const pl = /** @type {Record<string, unknown>} */ (line);
+    const p = /** @type {Record<string, unknown>} */ (product);
+    const pid = pl.product_id != null ? String(pl.product_id) : "";
+    const resolved = resolveProductUnitCost(p);
+    if (resolved == null) {
+      const errText = "Un producto con external_provider=dropi no tiene cost ni dropi_cost_price en el catálogo; no se envió el pedido a Dropi";
+      const mapErrC = await upsertMap(sb, {
         order_id: oid,
         status: "failed",
         dropi_status: "failed",
@@ -402,25 +289,19 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
         error: errText,
         updated_at: utcNowIso(),
       });
-      if (mapM) {
-        return { ok: false, skipped: false, order_id: oid, context: "margin_map_upsert", ...shapeError(mapM) };
+      if (mapErrC) {
+        return { ok: false, skipped: false, order_id: oid, context: "missing_cost_map_upsert", ...shapeError(mapErrC) };
       }
-      console.error("[dropi/order-create] margin_check failed", m.detail);
-      return {
-        ok: false,
-        skipped: false,
-        order_id: oid,
-        ...shapeError(errText),
-        error_details: m.detail,
-        margin_check: m.detail,
-      };
+      console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText, product_id: pid });
+      return { ok: false, skipped: false, order_id: oid, ...shapeError(errText) };
     }
-    pricedForBridge.push({
-      line: row.line,
-      product: row.product,
-      sellingPrice: m.sellingPrice,
-      lineSubtotal: m.lineSubtotal,
+    console.info("[dropi/order-create] cost_resolved", {
+      product_id: pid,
+      cost: resolved.cost,
+      dropi_cost_price: p.dropi_cost_price,
+      fallback_used: resolved.fallback_used,
     });
+    costByProductId.set(pid, resolved);
   }
 
   if (!dropiConfigured() || !resolveBridgeBaseUrl()) {
@@ -454,20 +335,33 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       address_reference:
         orderRow.customer_address_reference != null ? String(orderRow.customer_address_reference) : "",
     },
-    items: pricedForBridge.map(({ line, product, sellingPrice, lineSubtotal }) => {
+    items: dropiForBridge.map(({ line, product }) => {
+      const pl = /** @type {Record<string, unknown>} */ (line);
       const p = /** @type {Record<string, unknown>} */ (product);
+      const idStr = pl.product_id != null ? String(pl.product_id) : "";
+      const costRow = costByProductId.get(idStr);
+      const u = lineSaleUnitPriceGuaranies(pl);
+      const qty = Math.max(1, Number(pl.quantity) || 1);
+      const sub = Math.round(u * qty * 100) / 100;
       return {
-        line_index: line.line_index,
-        product_id: String(line.product_id),
-        product_name: line.product_name != null ? String(line.product_name) : "",
-        quantity: Math.max(1, Number(line.quantity) || 1),
-        unit_price: sellingPrice,
-        line_subtotal: lineSubtotal,
+        line_index: pl.line_index,
+        product_id: pl.product_id != null ? String(pl.product_id) : "",
+        product_name: pl.product_name != null ? String(pl.product_name) : "",
+        quantity: qty,
+        /** Precio por unidad = cobrado al cliente en Tradexpar */
+        price: u,
+        sale_price: u,
+        suggested_price: u,
+        unit_price: u,
+        /** Costo unitario: dropi_cost_price o cost (misma regla que resolveProductUnitCost) */
+        cost: costRow != null ? costRow.cost : null,
+        line_subtotal: sub,
         sku: p.sku != null ? String(p.sku) : "",
         dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
       };
     }),
   };
+  lastPayload = payload;
 
   const ts0 = utcNowIso();
   const pErr = await upsertMap(sb, {
@@ -480,9 +374,10 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     updated_at: ts0,
   });
   if (pErr) {
-    return { ok: false, order_id: oid, skipped: false, context: "pending_map_upsert", ...shapeError(pErr) };
+    return withEcho({ ok: false, order_id: oid, skipped: false, context: "pending_map_upsert", ...shapeError(pErr) });
   }
-  console.info("[dropi/order-create] bridge request", { order_id: oid, path: pathSeg, lines: pricedForBridge.length });
+  console.info("[dropi/order-create] bridge request", { order_id: oid, path: pathSeg, lines: dropiForBridge.length });
+  console.info("[dropi/order-create] bridge request payload", JSON.stringify(payload, null, 2));
 
   let bridgeRes;
   try {
@@ -501,10 +396,10 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       updated_at: utcNowIso(),
     });
     if (mu) {
-      return { ok: false, order_id: oid, context: "bridge_ex_map_upsert", ...shapeError(mu) };
+      return withEcho({ ok: false, order_id: oid, context: "bridge_ex_map_upsert", ...shapeError(mu) });
     }
     console.error("[dropi/order-create] bridge error", { order_id: oid, error_message: sh.error_message, error_code: sh.error_code, raw: e });
-    return { ok: false, order_id: oid, ...sh };
+    return withEcho({ ok: false, order_id: oid, ...sh });
   }
 
   const meta = pickDropiOrderMeta(/** @type {Record<string, unknown>} */ (bridgeRes));
@@ -521,10 +416,10 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       updated_at: utcNowIso(),
     });
     if (mFail) {
-      return { ok: false, order_id: oid, context: "no_dropi_id_map_upsert", ...shapeError(mFail) };
+      return withEcho({ ok: false, order_id: oid, context: "no_dropi_id_map_upsert", ...shapeError(mFail) });
     }
     console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
-    return { ok: false, order_id: oid, ...shapeError(errText) };
+    return withEcho({ ok: false, order_id: oid, ...shapeError(errText) });
   }
 
   const syncTs = utcNowIso();
@@ -545,7 +440,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     updated_at: syncTs,
   });
   if (okMap) {
-    return { ok: false, order_id: oid, context: "success_map_upsert", ...shapeError(okMap) };
+    return withEcho({ ok: false, order_id: oid, context: "success_map_upsert", ...shapeError(okMap) });
   }
   const { data: afterWrite } = await sb.from("dropi_order_map").select("id, order_id").eq("order_id", oid).maybeSingle();
   console.info("[dropi/order-create] map saved", {
@@ -556,7 +451,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   const orderPatch = { external_order_url: meta.url || null };
   await sb.from("orders").update(orderPatch).eq("id", oid);
 
-  for (const { line } of pricedForBridge) {
+  for (const { line } of dropiForBridge) {
     const lid = line.id != null ? String(line.id) : "";
     if (!lid) continue;
     await sb
@@ -571,7 +466,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   }
 
   console.info("[dropi/order-create] bridge success", { order_id: oid, dropi_order_id: meta.id });
-  return {
+  return withEcho({
     ok: true,
     order_id: oid,
     dropi_order_id: meta.id,
@@ -579,7 +474,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     dropi_order_url: meta.url,
     map_id: mapIdFromRow(afterWrite),
     bridge_response: /** @type {Record<string, unknown>} */ (bridgeRes),
-  };
+  });
 }
 
 /** @param {unknown} row */
