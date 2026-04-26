@@ -40,6 +40,7 @@ import {
 } from "./pagopar.js";
 import { registerDropiRoutes } from "./integrations/dropi/routes.js";
 import { createDropiOrderForInternalOrder } from "./integrations/dropi/createOrderForInternal.js";
+import { createApiKeyMiddleware } from "./middleware/apiKey.js";
 
 /**
  * Base del proyecto PostgREST (sin `/rest/v1`). Si pegás la URL del curl completo, se quita el sufijo.
@@ -79,6 +80,7 @@ const ORDERS_SCHEMA = resolveOrdersSchema();
 /** `SUPABASE_LOG_DEBUG=0` silencia logs Supabase. Por defecto activo para alinear con curl / depuración. */
 const SUPABASE_LOG_DEBUG = String(process.env.SUPABASE_LOG_DEBUG ?? "1").trim() !== "0";
 const API_KEY = process.env.API_PUBLIC_KEY || process.env.API_KEY || "";
+const apiKeyMiddleware = createApiKeyMiddleware();
 
 const _ppPubKey = stripPagoparSecret(process.env.PAGOPAR_PUBLIC_KEY || "");
 const _ppPubTok = stripPagoparSecret(process.env.PAGOPAR_PUBLIC_TOKEN || "");
@@ -341,14 +343,6 @@ function serializeCaughtError(e) {
     }
   }
   return { error: e != null ? String(e) : "Error interno" };
-}
-
-function apiKeyMiddleware(req, res, next) {
-  const key = req.headers["x-api-key"];
-  if (!API_KEY || key !== API_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
 }
 
 /** Mapea fila orders → status para SuccessPage.tsx */
@@ -1130,8 +1124,10 @@ app.post("/api/pagopar/webhook", async (req, res) => {
       setImmediate(() => {
         void (async () => {
           try {
-            const r = await createDropiOrderForInternalOrder(supabaseAdmin(), updated.id);
-            if (r && r.ok === false && r.error) {
+            const r = await createDropiOrderForInternalOrder(supabaseAdmin(), updated.id, { context: "webhook" });
+            if (r && r.ok === true && r.skipped === true) {
+              console.info("[webhook][dropi-order] omitido", { order_id: updated.id, reason: r.reason });
+            } else if (r && r.ok === false && r.error) {
               console.warn("[webhook][dropi-order] no creado en Dropi", { order_id: updated.id, error: r.error });
             }
           } catch (e) {

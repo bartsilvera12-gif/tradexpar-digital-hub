@@ -1,60 +1,51 @@
 import { createRequireAdminMiddleware } from "../../adminAuth.js";
+import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
 import { dropiConfigured } from "./client.js";
 import { createDropiOrderForInternalOrder } from "./createOrderForInternal.js";
+import { orderCanFulfillDropiTest } from "./orderDropiGates.js";
 import { supabaseService } from "./db.js";
 import { runDropiProductSync } from "./sync-products.js";
 import { processDropiImageQueue } from "./sync-images.js";
 
 const requireAdmin = createRequireAdminMiddleware();
+const requireApiKey = createApiKeyMiddleware();
 
 /**
- * Misma regla que createOrderForInternal: al menos un ítem listo; si alguna línea es Dropi sin
- * `external_product_id`, el flujo no es válido (falle create).
- * @param {import('@supabase/supabase-js').SupabaseClient} sb
+ * @param {Record<string, unknown> | null | undefined} m
  * @param {string} orderId
- * @returns {Promise<{ ok: boolean, reason?: string }>}
+ * @param {boolean} includeResponse
+ * @param {Record<string, unknown> | null} [r]
  */
-async function orderCanFulfillDropiTest(sb, orderId) {
-  const { data: items, error: ie } = await sb
-    .from("order_items")
-    .select("product_id")
-    .eq("order_id", orderId);
-  if (ie) throw ie;
-  const rows = Array.isArray(items) ? items : [];
-  if (rows.length === 0) {
-    return { ok: false, reason: "no_line_items" };
+function jsonMapResponse(m, orderId, { dropiCreated, fromExisting, includeResponse }, r) {
+  const map = m && typeof m === "object" ? /** @type {Record<string, unknown>} */ (m) : null;
+  const st = String(map?.dropi_status ?? map?.status ?? "");
+  const out = {
+    ok: true,
+    order_id: orderId,
+    has_dropi_items: true,
+    dropi_created: dropiCreated,
+    from_existing: fromExisting,
+    dropi_order_id: (map?.dropi_order_id ?? r?.dropi_order_id) != null ? String(map?.dropi_order_id ?? r?.dropi_order_id) : null,
+    dropi_order_code: (map?.dropi_order_code ?? r?.dropi_order_code) != null ? String(map?.dropi_order_code ?? r?.dropi_order_code) : null,
+    map_id: map?.id != null ? map.id : (map?.order_id != null ? map.order_id : r?.map_id) ?? null,
+    dropi_status: st || null,
+    bridge_response: null,
+  };
+  if (includeResponse) {
+    out.bridge_response = (map?.response ?? r?.bridge_response) != null ? map?.response ?? r?.bridge_response : null;
   }
-  const pids = [...new Set(rows.map((r) => r && r.product_id).filter(Boolean).map(String))];
-  if (pids.length === 0) {
-    return { ok: false, reason: "no_product_ids" };
+  return out;
+}
+
+function canReasonMessage(reason) {
+  if (reason === "no_line_items") return "El pedido no tiene ítems.";
+  if (reason === "dropi_missing_external_product_id") {
+    return "Hay producto(s) con external_provider=dropi sin external_product_id en el catálogo.";
   }
-  const { data: prows, error: pe } = await sb
-    .from("products")
-    .select("id, product_source_type, external_provider, external_product_id")
-    .in("id", pids);
-  if (pe) throw pe;
-  let hasDropiWithExt = false;
-  let hasDropiMissingExt = false;
-  for (const p of prows ?? []) {
-    const r = p && typeof p === "object" ? p : {};
-    const pst = String(r.product_source_type ?? "");
-    const prov = String(r.external_provider ?? "");
-    const isDropi = pst === "dropi" || prov === "dropi";
-    if (!isDropi) continue;
-    const extP = r.external_product_id != null ? String(r.external_product_id).trim() : "";
-    if (extP) {
-      hasDropiWithExt = true;
-    } else {
-      hasDropiMissingExt = true;
-    }
+  if (reason === "no_fulfillable_dropi" || reason === "no_product_ids") {
+    return "El pedido no tiene productos con external_provider=dropi y external_product_id; no se puede enviar a Dropi.";
   }
-  if (hasDropiMissingExt) {
-    return { ok: false, reason: "dropi_missing_external_product_id" };
-  }
-  if (!hasDropiWithExt) {
-    return { ok: false, reason: "no_fulfillable_dropi" };
-  }
-  return { ok: true };
+  return "No se puede sincronizar este pedido con Dropi.";
 }
 
 /**
@@ -173,139 +164,144 @@ export function registerDropiRoutes(app) {
   });
 
   /**
-   * Prueba manual: creación Dropi sin Pagopar. No toca payment_status, webhook ni create-payment.
-   * Reintento si ?force=1 cuando el mapa está `failed` o `pending` (nunca pisa `succeeded`).
-   * POST /api/admin/orders/:orderId/dropi/test-create
+   * Prueba manual: `x-api-key` = API_PUBLIC_KEY | API_KEY. Reintento con ?force=1.
+   * POST /api/admin/orders/:id/dropi/test-create?force=1
    */
-  app.post("/api/admin/orders/:orderId/dropi/test-create", requireAdmin, async (req, res) => {
-    const orderId = String(req.params.orderId || "").trim();
+  app.post("/api/admin/orders/:id/dropi/test-create", requireApiKey, async (req, res) => {
+    const orderId = String(req.params.id || "").trim();
     const force =
-      String(req.query?.force ?? "").trim() === "1" ||
-      String(req.query?.force ?? "").toLowerCase() === "true";
-
-    console.info("[dropi/orders/test] requested", { orderId, force });
+      String(req.query?.force ?? "").trim() === "1" || String(req.query?.force ?? "").toLowerCase() === "true";
 
     if (!orderId) {
-      return res.status(400).json({
-        success: false,
-        status: null,
-        dropi_order_id: null,
-        dropi_order_url: null,
-        error: "orderId inválido",
-      });
+      return res.status(400).json({ ok: false, error: "id inválido" });
     }
 
     try {
       const sb = supabaseService();
-
       const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
       if (oe) throw oe;
       if (!orderRow?.id) {
-        return res.status(404).json({
-          success: false,
-          status: null,
-          dropi_order_id: null,
-          dropi_order_url: null,
-          error: "Pedido no encontrado",
+        return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
+      }
+
+      const can = await orderCanFulfillDropiTest(sb, orderId);
+      if (!can.ok) {
+        return res.status(422).json({
+          ok: false,
+          order_id: orderId,
+          has_dropi_items: false,
+          error: canReasonMessage(can.reason || "unknown"),
         });
       }
 
       const { data: mapBefore, error: me } = await sb
         .from("dropi_order_map")
-        .select("status, dropi_order_id, dropi_order_url, last_error")
+        .select("*")
         .eq("order_id", orderId)
         .maybeSingle();
       if (me) throw me;
 
-      if (mapBefore?.status === "succeeded" && mapBefore?.dropi_order_id) {
-        console.info("[dropi/orders/test] skipped existing", { orderId, reason: "already_succeeded" });
-        return res.json({
-          success: true,
-          skipped: true,
-          reason: "already_succeeded",
-          status: mapBefore.status,
-          dropi_order_id: mapBefore.dropi_order_id,
-          dropi_order_url: mapBefore.dropi_order_url ?? null,
-          error: mapBefore.last_error ?? null,
-        });
+      const mSt = String(mapBefore?.dropi_status ?? mapBefore?.status ?? "");
+      const mSucc = mSt === "succeeded" && mapBefore && mapBefore.dropi_order_id;
+      if (mSucc) {
+        return res.json(
+          jsonMapResponse(mapBefore, orderId, {
+            dropiCreated: false,
+            fromExisting: true,
+            includeResponse: true,
+          }, null)
+        );
+      }
+      if (mapBefore && !force) {
+        return res.json(
+          jsonMapResponse(mapBefore, orderId, {
+            dropiCreated: mSt === "succeeded" && Boolean(mapBefore.dropi_order_id),
+            fromExisting: true,
+            includeResponse: true,
+          }, null)
+        );
       }
 
-      const st = mapBefore?.status;
-      if ((st === "failed" || st === "pending") && !force) {
-        console.info("[dropi/orders/test] skipped existing", { orderId, reason: "needs_force", map_status: st });
-        return res.status(409).json({
-          success: false,
-          skipped: true,
-          reason: "needs_query_param_force",
-          status: st ?? null,
-          dropi_order_id: mapBefore?.dropi_order_id ?? null,
-          dropi_order_url: mapBefore?.dropi_order_url ?? null,
-          error: "Reintento solo con ?force=1 (el mapa está failed o pending).",
-        });
+      const r = await createDropiOrderForInternalOrder(sb, orderId, { context: "admin_test", force: true });
+      if (r.skipped === true) {
+        const { data: map2 } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
+        return res.json(
+          jsonMapResponse(map2, orderId, { dropiCreated: false, fromExisting: true, includeResponse: true }, r)
+        );
+      }
+      if (!r.ok) {
+        return res.status(502).json({ ok: false, order_id: orderId, error: r.error ?? "dropi_create_failed" });
       }
 
-      const dropiCheck = await orderCanFulfillDropiTest(sb, orderId);
-      if (!dropiCheck.ok) {
-        const msg =
-          dropiCheck.reason === "no_line_items"
-            ? "El pedido no tiene ítems."
-            : dropiCheck.reason === "dropi_missing_external_product_id"
-              ? "Hay producto(s) Dropi sin external_product_id en el catálogo."
-              : "El pedido no tiene líneas con producto Dropi y external_product_id; no se puede enviar a Dropi.";
-        return res.status(422).json({
-          success: false,
-          status: mapBefore?.status ?? null,
-          dropi_order_id: mapBefore?.dropi_order_id ?? null,
-          dropi_order_url: mapBefore?.dropi_order_url ?? null,
-          error: msg,
-        });
-      }
-
-      const r = await createDropiOrderForInternalOrder(sb, orderId);
-
-      const { data: mapAfter, error: ae } = await sb
-        .from("dropi_order_map")
-        .select("status, dropi_order_id, dropi_order_url, last_error")
-        .eq("order_id", orderId)
-        .maybeSingle();
-      if (ae) throw ae;
-
-      const errOut =
-        mapAfter?.last_error != null && String(mapAfter.last_error).trim() !== ""
-          ? String(mapAfter.last_error)
-          : r && r.error != null && String(r.error) !== ""
-            ? String(r.error)
-            : null;
-
-      const fromMap = Boolean(mapAfter?.dropi_order_id) && mapAfter?.status === "succeeded";
-      const fromResult = r && r.ok === true && (r.dropi_order_id != null && String(r.dropi_order_id).trim() !== "");
-      const success = fromMap || fromResult;
-
-      if (success) {
-        console.info("[dropi/orders/test] success", { orderId, dropi_order_id: mapAfter?.dropi_order_id ?? r?.dropi_order_id });
-      } else if (mapAfter || r) {
-        console.warn("[dropi/orders/test] failed", { orderId, map_status: mapAfter?.status, error: errOut, reason: r?.reason });
-      }
-
-      return res.json({
-        success,
-        skipped: r.skipped === true,
-        reason: r?.reason,
-        status: mapAfter?.status ?? (fromResult ? "succeeded" : null),
-        dropi_order_id: mapAfter?.dropi_order_id ?? r?.dropi_order_id ?? null,
-        dropi_order_url: mapAfter?.dropi_order_url ?? r?.dropi_order_url ?? null,
-        error: success ? null : errOut,
-      });
+      const { data: mapAfter } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
+      return res.json(
+        jsonMapResponse(mapAfter, orderId, { dropiCreated: true, fromExisting: false, includeResponse: true }, r)
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[dropi/orders/test] failed", { orderId, error: msg });
-      return res.status(500).json({
-        success: false,
-        status: null,
-        dropi_order_id: null,
-        dropi_order_url: null,
-        error: msg,
-      });
+      console.error("[dropi/orders/test-create]", { orderId, error: msg });
+      return res.status(500).json({ ok: false, order_id: orderId, error: msg });
+    }
+  });
+
+  /**
+   * Creación “definitiva” (misma lógica; sin reintento forzado; si ya hay mapa, devuelve el registro).
+   * POST /api/admin/orders/:id/dropi/create
+   */
+  app.post("/api/admin/orders/:id/dropi/create", requireApiKey, async (req, res) => {
+    const orderId = String(req.params.id || "").trim();
+    if (!orderId) {
+      return res.status(400).json({ ok: false, error: "id inválido" });
+    }
+    try {
+      const sb = supabaseService();
+      const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
+      if (oe) throw oe;
+      if (!orderRow?.id) {
+        return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
+      }
+      const can = await orderCanFulfillDropiTest(sb, orderId);
+      if (!can.ok) {
+        return res.status(422).json({
+          ok: false,
+          order_id: orderId,
+          has_dropi_items: false,
+          error: canReasonMessage(can.reason || "unknown"),
+        });
+      }
+      const { data: mapEx, error: merr } = await sb
+        .from("dropi_order_map")
+        .select("*")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (merr) throw merr;
+      if (mapEx) {
+        return res.json(
+          jsonMapResponse(mapEx, orderId, {
+            dropiCreated: (String(mapEx?.dropi_status ?? mapEx?.status) === "succeeded" && Boolean(mapEx?.dropi_order_id)),
+            fromExisting: true,
+            includeResponse: false,
+          }, null)
+        );
+      }
+      const r = await createDropiOrderForInternalOrder(sb, orderId, { context: "admin_create" });
+      if (r.skipped) {
+        const { data: map2 } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
+        return res.json(
+          jsonMapResponse(map2, orderId, { dropiCreated: false, fromExisting: true, includeResponse: false }, r)
+        );
+      }
+      if (!r.ok) {
+        return res.status(502).json({ ok: false, order_id: orderId, error: r.error ?? "dropi_create_failed" });
+      }
+      const { data: mapAfter } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
+      return res.json(
+        jsonMapResponse(mapAfter, orderId, { dropiCreated: true, fromExisting: false, includeResponse: false }, r)
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[dropi/orders/create]", { orderId, error: msg });
+      return res.status(500).json({ ok: false, order_id: orderId, error: msg });
     }
   });
 }
