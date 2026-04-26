@@ -294,3 +294,48 @@ export async function postDropiBridgeJson(pathSegment, bodyObj) {
 
   return /** @type {Record<string, unknown>} */ (parsed && typeof parsed === "object" ? parsed : {});
 }
+
+/**
+ * `DROPI_BRIDGE_GET_ORDER_PATH` (opcional). Sin definir, no se llama HTTP y el sync usa el JSON almacenado o devuelve pending.
+ * Ejemplos: `get-order` → GET `{base}/get-order/{dropiId}`; `order-status/{id}` con `{id}` reemplazable.
+ * @param {string | number} dropiOrderId
+ * @returns {Promise<Record<string, unknown> | null>} `null` si el path no está configurado; si 4xx/5xx lanza Error.
+ */
+export async function fetchDropiBridgeGetOrderByDropiId(dropiOrderId) {
+  const sub = String(envTrim("DROPI_BRIDGE_GET_ORDER_PATH") || "").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!sub) return null;
+  const { base, key } = assertBridgeEnv();
+  const id = encodeURIComponent(String(dropiOrderId).trim());
+  const path = sub.replace(/\{id\}/g, id).replace(/\{dropi_id\}/g, id);
+  const url = path.includes(id) || /\{[a-z_]+\}/i.test(sub) ? `${base}/${path}` : `${base}/${path}/${id}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: bridgeHeaders(key),
+  });
+  const text = await res.text();
+  let parsed;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`GET pedido Dropi: JSON inválido (${res.status})`);
+  }
+
+  console.info("[dropi/bridge] fetchDropiBridgeGetOrderByDropiId", {
+    url,
+    httpStatus: res.status,
+    isSuccess: parsed && typeof parsed === "object" && "isSuccess" in parsed ? parsed.isSuccess : undefined,
+    ...(bridgeVerboseLogs() ? { resumen: truncateBodySummary(parsed) } : {}),
+  });
+
+  if (!res.ok) {
+    const errResumido = summarizeHttpError(parsed, text, res.status);
+    throw new Error(errResumido);
+  }
+  if (parsed && typeof parsed === "object" && parsed.isSuccess === false) {
+    const bits = [];
+    if (parsed.message != null) bits.push(String(parsed.message));
+    if (bits.length) throw new Error(truncateSummary(bits.join(" | "), 1500));
+  }
+  return /** @type {Record<string, unknown>} */ (parsed && typeof parsed === "object" ? parsed : {});
+}

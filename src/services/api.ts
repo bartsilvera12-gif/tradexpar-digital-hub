@@ -169,4 +169,29 @@ export const api = {
     if (ref) q.set("ref", ref);
     return apiFetch<PaymentStatus>(`/api/public/payment-status?${q.toString()}`);
   },
+
+  /**
+   * Panel pedidos: estado Dropi en `dropi_order_map` (mismo `x-api-key` que otras APIs Node).
+   */
+  getAdminOrderDropiStatus: (orderId: string) =>
+    apiFetch<{
+      ok: boolean;
+      order_id: string;
+      has_map: boolean;
+      map: Record<string, unknown> | null;
+    }>(`/api/admin/orders/${encodeURIComponent(orderId)}/dropi/status`),
+
+  /** Refresca estado (bridge GET o re-parseo de `response`). */
+  postAdminOrderDropiSyncStatus: (orderId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/dropi/sync-status`,
+      { method: "POST", body: "{}" }
+    ),
+
+  /** Crea el pedido en Dropi (si el mapa aún no existe; mismo que create explícito). */
+  postAdminOrderDropiCreate: (orderId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/dropi/create`,
+      { method: "POST", body: "{}" }
+    ),
 };

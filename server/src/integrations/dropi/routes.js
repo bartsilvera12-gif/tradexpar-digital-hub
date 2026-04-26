@@ -7,6 +7,7 @@ import { orderCanFulfillDropiTest } from "./orderDropiGates.js";
 import { supabaseService } from "./db.js";
 import { runDropiProductSync } from "./sync-products.js";
 import { processDropiImageQueue } from "./sync-images.js";
+import { syncDropiOrderStatus } from "./syncOrderStatus.js";
 
 const requireAdmin = createRequireAdminMiddleware();
 const requireApiKey = createApiKeyMiddleware();
@@ -34,6 +35,9 @@ function jsonMapResponse(m, orderId, { dropiCreated, fromExisting, includeRespon
   };
   if (includeResponse) {
     out.bridge_response = (map?.response ?? r?.bridge_response) != null ? map?.response ?? r?.bridge_response : null;
+  }
+  if (r && r.bridge_payload != null) {
+    out.bridge_payload = r.bridge_payload;
   }
   return out;
 }
@@ -98,7 +102,7 @@ function jsonFromCreateResult(orderId, r) {
         : r.reason != null
           ? String(r.reason)
           : "dropi_create_failed";
-  return {
+  const o = {
     ok: false,
     order_id: orderId,
     error: errStr,
@@ -109,6 +113,8 @@ function jsonFromCreateResult(orderId, r) {
     context: r.context,
     reason: r.reason,
   };
+  if (r.bridge_payload != null) o.bridge_payload = r.bridge_payload;
+  return o;
 }
 
 /**
@@ -285,7 +291,11 @@ export function registerDropiRoutes(app) {
         );
       }
 
-      const r = await createDropiOrderForInternalOrder(sb, orderId, { context: "admin_test", force: true });
+      const r = await createDropiOrderForInternalOrder(sb, orderId, {
+        context: "admin_test",
+        force: true,
+        echoBridgePayload: true,
+      });
       if (r.skipped === true) {
         const { data: map2 } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
         return res.json(
@@ -302,6 +312,84 @@ export function registerDropiRoutes(app) {
       );
     } catch (e) {
       logRouteCatch("[dropi/orders/test-create]", orderId, e);
+      return res.status(500).json(/** @type {Record<string, unknown>} */ (jsonErrorBody(orderId, e)));
+    }
+  });
+
+  /**
+   * Estado de Dropi guardado (sin llamar a bridge). `x-api-key`.
+   * GET /api/admin/orders/:id/dropi/status
+   */
+  app.get("/api/admin/orders/:id/dropi/status", requireApiKey, async (req, res) => {
+    const orderId = String(req.params.id || "").trim();
+    if (!orderId) {
+      return res.status(400).json({ ok: false, error: "id inválido" });
+    }
+    try {
+      const sb = supabaseService();
+      const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
+      if (oe) throw oe;
+      if (!orderRow?.id) {
+        return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
+      }
+      const { data: map, error: me } = await sb
+        .from("dropi_order_map")
+        .select("*")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (me) throw me;
+      if (!map) {
+        return res.json({ ok: true, order_id: orderId, has_map: false, map: null });
+      }
+      return res.json({ ok: true, order_id: orderId, has_map: true, map });
+    } catch (e) {
+      logRouteCatch("[dropi/orders/status GET]", orderId, e);
+      return res.status(500).json(/** @type {Record<string, unknown>} */ (jsonErrorBody(orderId, e)));
+    }
+  });
+
+  /**
+   * Sincronizar estado con bridge (o solo re-etiquetar desde `response` almacenado). `x-api-key`.
+   * POST /api/admin/orders/:id/dropi/sync-status
+   */
+  app.post("/api/admin/orders/:id/dropi/sync-status", requireApiKey, async (req, res) => {
+    const orderId = String(req.params.id || "").trim();
+    if (!orderId) {
+      return res.status(400).json({ ok: false, error: "id inválido" });
+    }
+    try {
+      const sb = supabaseService();
+      const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
+      if (oe) throw oe;
+      if (!orderRow?.id) {
+        return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
+      }
+      const r = await syncDropiOrderStatus(orderId);
+      if (r.reason === "no_map" || r.reason === "load_error" || r.reason === "update_error" || r.reason === "bridge_error" || r.reason === "invalid_order_id") {
+        if (r.reason === "no_map") {
+          return res.status(404).json(r);
+        }
+        return res.status(502).json(r);
+      }
+      if (r.ok === false && r.reason === "missing_dropi_order_id") {
+        return res.status(422).json(r);
+      }
+      if (r.ok === false && r.reason === "dropi_status_endpoint_pending") {
+        return res.status(503).json(r);
+      }
+      if (r.ok === true) {
+        return res.json({
+          ok: true,
+          order_id: r.order_id,
+          dropi_order_id: r.dropi_order_id,
+          dropi_status: r.dropi_status,
+          dropi_status_label: r.dropi_status_label,
+          last_sync_at: r.last_sync_at,
+        });
+      }
+      return res.status(500).json(r);
+    } catch (e) {
+      logRouteCatch("[dropi/orders/sync-status]", orderId, e);
       return res.status(500).json(/** @type {Record<string, unknown>} */ (jsonErrorBody(orderId, e)));
     }
   });
