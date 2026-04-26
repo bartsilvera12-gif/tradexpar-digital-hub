@@ -17,7 +17,7 @@ function utcNowIso() {
 }
 
 /**
- * Precio de venta por ítem: **siempre** `order_items.unit_price` (cobrado al cliente) para el bridge.
+ * Precio unitario en la línea del pedido Tradexpar (`order_items.unit_price`), antes de la regla Dropi.
  * @param {Record<string, unknown>} line
  * @returns {number}
  */
@@ -25,6 +25,35 @@ function lineSaleUnitPriceGuaranies(line) {
   const n = Number(line.unit_price);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n);
+}
+
+function dropiMinProfitGs() {
+  const n = Number(process.env.DROPI_MIN_PROFIT_GS || 30000);
+  if (!Number.isFinite(n) || n < 0) return 30000;
+  return n;
+}
+
+/** @param {unknown} v */
+function numberForMax(v) {
+  if (v == null || v === "") return 0;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/**
+ * Mínimo piso de venta para el bridge: Dropi descuenta envío/comisión; no basta con unit_price + costo crudo.
+ * @param {Record<string, unknown>} line
+ * @param {Record<string, unknown>} product
+ * @param {number} dropiCost
+ * @param {number} minProfit
+ */
+function resolveDropiSellingPriceGuaranies(line, product, dropiCost, minProfit) {
+  const originalUnitPrice = lineSaleUnitPriceGuaranies(line);
+  const saleP = numberForMax(product.sale_price);
+  const listP = numberForMax(product.price);
+  const floor = dropiCost + minProfit;
+  const finalDropiPrice = Math.round(Math.max(originalUnitPrice, saleP, listP, floor));
+  return { finalDropiPrice, originalUnitPrice };
 }
 
 /**
@@ -322,6 +351,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   }
 
   const pathSeg = envTrim("DROPI_BRIDGE_ORDER_PATH") || "order";
+  const minProfit = dropiMinProfitGs();
   const payload = {
     tradexpar_order_id: oid,
     payment_confirmed: true,
@@ -340,20 +370,30 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       const p = /** @type {Record<string, unknown>} */ (product);
       const idStr = pl.product_id != null ? String(pl.product_id) : "";
       const costRow = costByProductId.get(idStr);
-      const u = lineSaleUnitPriceGuaranies(pl);
+      const dropiCost = costRow != null ? costRow.cost : 0;
+      const { finalDropiPrice, originalUnitPrice } = resolveDropiSellingPriceGuaranies(
+        pl,
+        p,
+        dropiCost,
+        minProfit
+      );
+      console.info("[dropi/order-create] price_resolved", {
+        cost: dropiCost,
+        original_unit_price: originalUnitPrice,
+        min_profit: minProfit,
+        final_dropi_price: finalDropiPrice,
+      });
       const qty = Math.max(1, Number(pl.quantity) || 1);
-      const sub = Math.round(u * qty * 100) / 100;
+      const sub = Math.round(finalDropiPrice * qty * 100) / 100;
       return {
         line_index: pl.line_index,
         product_id: pl.product_id != null ? String(pl.product_id) : "",
         product_name: pl.product_name != null ? String(pl.product_name) : "",
         quantity: qty,
-        /** Precio por unidad = cobrado al cliente en Tradexpar */
-        price: u,
-        sale_price: u,
-        suggested_price: u,
-        unit_price: u,
-        /** Costo unitario: dropi_cost_price o cost (misma regla que resolveProductUnitCost) */
+        price: finalDropiPrice,
+        sale_price: finalDropiPrice,
+        suggested_price: finalDropiPrice,
+        unit_price: finalDropiPrice,
         cost: costRow != null ? costRow.cost : null,
         line_subtotal: sub,
         sku: p.sku != null ? String(p.sku) : "",
