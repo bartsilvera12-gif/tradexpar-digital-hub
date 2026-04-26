@@ -205,13 +205,20 @@ function buildProductRow(raw, mapped) {
   const imgs = mapped.imageUrls.length ? mapped.imageUrls : [];
   const primary = imgs[0] ?? "";
   /** jsonb: vacío como null para alinear con otros inserts del proyecto */
+  const list = Number(mapped.price) || 0;
+  const dCost = mapped.dropiCostPrice != null && Number.isFinite(Number(mapped.dropiCostPrice)) ? Number(mapped.dropiCostPrice) : null;
   const row = {
     name: mapped.name,
     sku: mapped.sku,
     description: mapped.description,
     category: mapped.category,
-    price: mapped.price,
+    price: list,
+    sale_price: list,
     stock: mapped.stock,
+    cost: dCost,
+    dropi_cost_price: dCost,
+    margin_percent: mapped.marginPercent ?? 0.5,
+    margin_fixed: mapped.marginFixed ?? 25000,
     image: primary,
     images: imgs.length ? imgs : null,
     product_source_type: "dropi",

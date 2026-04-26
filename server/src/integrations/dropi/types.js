@@ -6,6 +6,10 @@
  * @property {string} description
  * @property {string} category
  * @property {number} price
+ * @property {number} salePrice
+ * @property {number | null} dropiCostPrice
+ * @property {number} marginPercent
+ * @property {number} marginFixed
  * @property {number} stock
  * @property {'stock' | 'warehouse_product' | 'warehouse_product_variation' | 'fallback'} stockSource
  * @property {string} brand

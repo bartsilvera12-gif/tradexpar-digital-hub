@@ -16,6 +16,65 @@ const hasOwn =
     ? Object.hasOwn
     : (o, p) => Object.prototype.hasOwnProperty.call(o, p);
 
+const DROPI_IMPORT_MARGIN_PERCENT = 0.5;
+const DROPI_IMPORT_MARGIN_FIXED = 25000;
+
+/**
+ * Claves de costo en el JSON de Dropi / bridge (misma semántica que se guarda en `dropi_cost_price`).
+ * @param {Record<string, unknown>} raw
+ * @returns {number | null}
+ */
+function pickDropiCostFromRaw(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const keys = [
+    "dropi_cost_price",
+    "my_cost",
+    "distributor_net_price",
+    "cost",
+    "cost_price",
+    "net_cost",
+    "base_cost",
+  ];
+  for (const k of keys) {
+    if (!hasOwn(raw, k)) continue;
+    const v = /** @type {unknown} */ (raw[k]);
+    if (v == null || v === "" || (typeof v === "string" && v.trim() === "")) continue;
+    if (Array.isArray(v) || (typeof v === "object" && v !== null)) continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
+/**
+ * Regla de lista Tradexpar para import Dropi: márgenes 50% y +25.000 Gs, redondeo a miles.
+ * @param {number} dropiCost
+ * @returns {{ finalPrice: number, pricePercent: number, priceFixed: number, marginPercent: number, marginFixed: number }}
+ */
+function computeListPriceFromDropiCost(dropiCost) {
+  const cost = Number(dropiCost);
+  if (!Number.isFinite(cost) || cost < 0) {
+    return {
+      finalPrice: 0,
+      pricePercent: 0,
+      priceFixed: 0,
+      marginPercent: DROPI_IMPORT_MARGIN_PERCENT,
+      marginFixed: DROPI_IMPORT_MARGIN_FIXED,
+    };
+  }
+  const pricePercent = cost * (1 + DROPI_IMPORT_MARGIN_PERCENT);
+  const priceFixed = cost + DROPI_IMPORT_MARGIN_FIXED;
+  const pre = Math.max(pricePercent, priceFixed);
+  const finalPrice = Math.ceil(pre / 1000) * 1000;
+  return {
+    finalPrice,
+    pricePercent,
+    priceFixed,
+    marginPercent: DROPI_IMPORT_MARGIN_PERCENT,
+    marginFixed: DROPI_IMPORT_MARGIN_FIXED,
+  };
+}
+
 /** Claves (producto raíz) donde un número o string numérico = stock explícito. */
 const EXPLICIT_STOCK_KEYS = [
   "stock",
@@ -334,7 +393,7 @@ export function mapDropiProduct(raw, detailRequestedId) {
 
   const category = pickCategory(raw) || "Dropi";
 
-  const price =
+  const priceFromPayload =
     num(
       raw.sale_price ??
         raw.price_sale ??
@@ -345,6 +404,20 @@ export function mapDropiProduct(raw, detailRequestedId) {
         raw.suggested_price,
       0
     );
+
+  const dropiCost = pickDropiCostFromRaw(raw);
+  const pricing =
+    dropiCost != null
+      ? computeListPriceFromDropiCost(dropiCost)
+      : {
+          finalPrice: priceFromPayload,
+          pricePercent: 0,
+          priceFixed: 0,
+          marginPercent: DROPI_IMPORT_MARGIN_PERCENT,
+          marginFixed: DROPI_IMPORT_MARGIN_FIXED,
+        };
+  const price = dropiCost != null ? pricing.finalPrice : priceFromPayload;
+  const salePrice = price;
 
   const { stock, stockSource } = computeDropiStockAndSource(raw);
 
@@ -367,6 +440,8 @@ export function mapDropiProduct(raw, detailRequestedId) {
     description: description.slice(0, 120),
     category,
     price: Math.round(price * 100) / 100,
+    dropiCost: dropiCost != null ? Math.round(Number(dropiCost) * 100) / 100 : null,
+    costBased: dropiCost != null,
     stock,
     brand,
     imgs: imageUrls.slice(0, 12),
@@ -380,6 +455,10 @@ export function mapDropiProduct(raw, detailRequestedId) {
     description: description.slice(0, 20000),
     category: category.slice(0, 300),
     price,
+    salePrice,
+    dropiCostPrice: dropiCost,
+    marginPercent: pricing.marginPercent,
+    marginFixed: pricing.marginFixed,
     stock,
     stockSource,
     brand: brand.slice(0, 200),
