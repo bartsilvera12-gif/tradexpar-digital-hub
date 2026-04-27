@@ -1,6 +1,6 @@
 import { createRequireAdminMiddleware } from "../../adminAuth.js";
 import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
-import { fastraxConfigured, fastraxEnabled, getVersion, listProductsPage } from "./client.js";
+import { fastraxConfigured, fastraxEnabled, getFastraxImageOpe3, getVersion, listProductsPage } from "./client.js";
 import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
 import {
@@ -74,6 +74,32 @@ export function registerFastraxRoutes(app) {
    * Solo lectura: ope=4 (una página, tam ≤20) + ope=2 por fila. Auth: `x-api-key` o admin JWT.
    * Query: q, page, size, only_stock, opc. sku (solo detalle ope=2).
    */
+  /**
+   * Proxy a Fastrax ope=3 (imagen; no se persiste en DB).
+   */
+  app.get("/api/admin/fastrax/products/:sku/image/:img", requireApiKeyOrAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const sku = String(req.params.sku ?? "").trim();
+    const nImg = Math.max(1, Math.floor(Number(req.params.img) || 1));
+    if (!sku) {
+      return res.status(400).json({ ok: false, error: "sku" });
+    }
+    const r = await getFastraxImageOpe3(sku, nImg);
+    if (!r || !r.ok) {
+      return res
+        .status(502)
+        .json({ ok: false, error: r && "message" in r && r.message ? r.message : "ope3" });
+    }
+    if (!r.body) {
+      return res.status(502).json({ ok: false, error: "Cuerpo imagen vacío" });
+    }
+    res.setHeader("Content-Type", r.contentType || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(200).send(r.body);
+  });
+
   app.get("/api/admin/fastrax/products/search", requireApiKeyOrAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });

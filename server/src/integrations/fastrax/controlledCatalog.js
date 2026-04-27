@@ -304,8 +304,10 @@ function ope2RowToSearchItem(row, sku, ope2Failed, errMsg) {
   const name = nRaw != null && String(nRaw) !== "" ? decodeFastraxNom(nRaw) : "";
   const price = Math.max(0, numF(row.pre));
   const stock = Math.max(0, Math.floor(numF(row.sal)));
-  return {
-    sku: String(sku).trim(),
+  const skuS = String(sku).trim();
+  const imgN = numF(row.img);
+  const base = {
+    sku: skuS,
     name,
     price,
     stock,
@@ -316,9 +318,16 @@ function ope2RowToSearchItem(row, sku, ope2Failed, errMsg) {
       );
       return Math.floor(numF(st));
     })(),
-    /** Copia plana; seguro en JSON. */
     raw_detail: { ...row },
   };
+  if (imgN > 0) {
+    return {
+      ...base,
+      image_count: Math.max(0, Math.floor(imgN)),
+      preview_image_url: `/api/admin/fastrax/products/${encodeURIComponent(skuS)}/image/1`,
+    };
+  }
+  return base;
 }
 
 /**

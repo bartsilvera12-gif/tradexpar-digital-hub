@@ -64,6 +64,10 @@ export type FastraxAdminListItem = {
   stock: number;
   /** ope=2: cantidad o equivalente. */
   images_count: number;
+  /** Si `raw_detail.img` > 0, número de imágenes en Fastrax. */
+  image_count?: number;
+  /** Ruta relativa; anteponer `VITE_API_BASE_URL` para el `<img src>`. */
+  preview_image_url?: string;
   /** p. ej. Fastrax `sit`. */
   status: number;
   /** Fila ope=2 (sin tocar), o `_ope2_error` si falló ope=2. */
