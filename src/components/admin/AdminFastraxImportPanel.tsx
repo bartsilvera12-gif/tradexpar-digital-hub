@@ -51,28 +51,34 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
 
   const load = useCallback(
     async (p: number) => {
-    setLoading(true);
-    try {
-      const r = await searchFastraxProductsForAdmin({
-        page: p,
-        size,
-        search: appliedSearch || undefined,
-        only_stock: onlyStock,
-      });
-      if (r && "ok" in r && r.ok) {
-        setPage(r.page);
-        setRows(r.items);
-      } else {
-        setRows([]);
-        const m = (r as { message?: string; error?: string })?.message || (r as { error?: string })?.error;
-        throw new Error(typeof m === "string" && m ? m : "Búsqueda Fastrax falló");
+      setLoading(true);
+      try {
+        const r = await searchFastraxProductsForAdmin({
+          page: p,
+          size,
+          q: appliedSearch || undefined,
+          only_stock: onlyStock,
+        });
+        if (r == null || typeof r !== "object" || r.ok !== true) {
+          setRows([]);
+          const m = (r as { message?: string; error?: string })?.message || (r as { error?: string })?.error;
+          throw new Error(typeof m === "string" && m ? m : "Búsqueda Fastrax falló");
+        }
+        const list = Array.isArray(r.items) ? r.items : [];
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.log("[fastrax-ui] result", { ok: r.ok, items: list.length, page: (r as { page?: number }).page });
+        }
+        setRows(list);
+        if (typeof (r as { page?: number }).page === "number") {
+          setPage((r as { page: number }).page);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        toast({ variant: "destructive", title: "Fastrax", description: msg });
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ variant: "destructive", title: "Fastrax", description: msg });
-    } finally {
-      setLoading(false);
-    }
     },
     [size, appliedSearch, onlyStock]
   );

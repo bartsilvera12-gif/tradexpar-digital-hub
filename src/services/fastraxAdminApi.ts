@@ -74,14 +74,15 @@ export type FastraxAdminListItem = {
   raw_detail?: Record<string, unknown> | null;
 };
 
-/** Solo lectura: ope=4 + ope=2 por fila, o con `sku` solo ope=2. */
+/** Respuesta búsqueda: el backend puede enviar u omitir `page` / `size` / `total_pages` / `source_count`. */
 export type FastraxSearchOk = {
   ok: true;
-  page: number;
-  size: number;
-  total_pages: number;
-  source_count: number;
+  page?: number;
+  size?: number;
+  total_pages?: number;
+  source_count?: number;
   items: FastraxAdminListItem[];
+  data?: unknown;
 };
 
 export type FastraxSearchResult = FastraxSearchOk | { ok: false; ope?: number; message?: string; error?: string; parsed?: unknown };
@@ -124,39 +125,44 @@ export type FastraxSyncMassiveResult = {
   error?: string;
 };
 
-const searchParams = (o: {
+function buildFastraxSearchQueryString(args: {
   page?: number;
   size?: number;
   sku?: string;
   q?: string;
   search?: string;
   only_stock?: boolean;
-}) => {
-  const s = new URLSearchParams();
-  if (o.page != null) s.set("page", String(o.page));
-  const size = Math.max(1, Math.min(20, Math.floor(Number(o.size) || 20)));
-  s.set("size", String(size));
-  if (o.sku?.trim()) s.set("sku", o.sku.trim());
-  const q = (o.q?.trim() || o.search?.trim()) ?? "";
-  if (q) s.set("q", q);
-  if (o.only_stock === true) s.set("only_stock", "1");
-  return s.toString();
-};
+}): string {
+  const params = new URLSearchParams();
+  params.set("page", String(args.page ?? 1));
+  const size = Math.max(1, Math.min(20, Math.floor(Number(args.size) || 20)));
+  params.set("size", String(size));
+  const text = (args.q || args.search)?.trim() ?? "";
+  if (text) params.set("q", String(text));
+  if (args.sku != null) {
+    const s = String(args.sku).trim();
+    if (s) params.set("sku", s);
+  }
+  if (typeof args.only_stock === "boolean") {
+    params.set("only_stock", args.only_stock ? "true" : "false");
+  }
+  return params.toString();
+}
 
 /**
- * ope=4 (lista) o ope=2 (detalle) sin persistir; los filtros de texto/stock son sobre la página listada.
+ * ope=4 (lista) o ope=2 (detalle) sin persistir; query con `q` (no `search`); `only_stock` true|false.
  */
 export async function searchFastraxProductsForAdmin(args: {
   page?: number;
   size?: number;
   sku?: string;
-  /** Texto; también se acepta `search` (alias). */
   q?: string;
+  /** Alias de `q` (compat). */
   search?: string;
   only_stock?: boolean;
 }): Promise<FastraxSearchResult> {
-  const q = searchParams(args);
-  return fastraxAdminJson<FastraxSearchResult>(`/api/admin/fastrax/products/search?${q}`, { method: "GET" });
+  const qs = buildFastraxSearchQueryString(args);
+  return fastraxAdminJson<FastraxSearchResult>(`/api/admin/fastrax/products/search?${qs}`, { method: "GET" });
 }
 
 /**
