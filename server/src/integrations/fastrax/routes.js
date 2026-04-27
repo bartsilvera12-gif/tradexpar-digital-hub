@@ -3,6 +3,7 @@ import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
 import { fastraxConfigured, fastraxEnabled, getVersion, listProductsPage } from "./client.js";
 import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
+import { importFastraxSkusToProducts, searchFastraxAdmin } from "./controlledCatalog.js";
 import { runFastraxProductSync } from "./sync-products.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
@@ -48,6 +49,48 @@ export function registerFastraxRoutes(app) {
       return res.status(502).json({ ok: false, message: r.message, ope4_page: p, parsed: r.parsed });
     }
     return res.json({ ok: true, ope: 4, page: p, data: r.parsed });
+  });
+
+  app.get("/api/admin/fastrax/products/search", requireAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    const size = Math.max(1, Math.min(500, Math.floor(Number(req.query.size) || 20)));
+    const sku = req.query.sku != null && String(req.query.sku).trim() ? String(req.query.sku).trim() : undefined;
+    const search = req.query.search != null && String(req.query.search).trim() ? String(req.query.search) : undefined;
+    const onlyQ = String(req.query.only_stock ?? "").toLowerCase();
+    const only_stock = onlyQ === "1" || onlyQ === "true" || onlyQ === "yes";
+    const r = await searchFastraxAdmin({ page, size, sku, search, only_stock });
+    if (r && r.ok) {
+      return res.json(r);
+    }
+    return res.status(502).json(
+      r && typeof r === "object"
+        ? r
+        : { ok: false, error: "fastrax_search_failed" }
+    );
+  });
+
+  app.post("/api/admin/fastrax/products/import", requireAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const skus = Array.isArray(body.skus) ? body.skus.map((s) => String(s).trim()).filter(Boolean) : [];
+    if (skus.length === 0) {
+      return res.status(400).json({ ok: false, error: "skus requerido (array no vacío)" });
+    }
+    try {
+      const sb = supabaseService();
+      const result = await importFastraxSkusToProducts(sb, skus);
+      return res.json(result);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   });
 
   app.post("/api/admin/fastrax/sync-products", requireAdmin, async (req, res) => {

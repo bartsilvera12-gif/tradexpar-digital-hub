@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Plus, Search, Edit, Trash2, Loader2, RefreshCw } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Loader2, Package } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminFastraxImportPanel } from "@/components/admin/AdminFastraxImportPanel";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,7 +32,6 @@ import {
 import { formatGuaraniesInteger, parseGuaraniesInput } from "@/lib/paraguayNumberFormat";
 import { tradexpar } from "@/services/tradexpar";
 import { syncDropiTest } from "@/services/dropiCatalog";
-import { syncFastraxProducts } from "@/services/fastraxCatalog";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { getDiscountPercentage, getEffectivePrice, getStockLabel } from "@/lib/productHelpers";
@@ -90,7 +91,7 @@ export default function AdminProductsPage() {
   const [openForm, setOpenForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Product>>(emptyForm);
-  const [fastraxSyncing, setFastraxSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"catalog" | "fastrax">("catalog");
   const [dropiImportId, setDropiImportId] = useState("");
   const [dropiImportLoading, setDropiImportLoading] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "tradexpar" | "dropi" | "fastrax">("all");
@@ -128,56 +129,6 @@ export default function AdminProductsPage() {
     const sku = (p.sku ?? "").toLowerCase();
     return name.includes(searchNorm) || sku.includes(searchNorm);
   });
-
-  const handleFastraxSync = async () => {
-    if (fastraxSyncing) return;
-    setFastraxSyncing(true);
-    try {
-      const res = await syncFastraxProducts();
-      const s = res.stats;
-      const nothingWritten = s.inserted + s.updated === 0 && s.failed > 0 && res.products_seen > 0;
-      const partialOk = s.inserted + s.updated > 0 && s.failed > 0;
-      const lines = [
-        `Procesados (API): ${res.products_seen}`,
-        res.sync_mode_used ? `Modo: ${res.sync_mode_used}${res.changed_fallback_used ? " (fallback desde ope=99)" : ""}` : null,
-        res.catalog_list_ope ? `Listado API: ope=${res.catalog_list_ope}` : null,
-        `Nuevos ${s.inserted}, actualizados ${s.updated}`,
-        s.unchanged ? `Sin cambios: ${s.unchanged}` : null,
-        s.skipped ? `Omitidos: ${s.skipped}` : null,
-        s.images_fetched ? `Imágenes: ${s.images_fetched}` : null,
-        s.failed ? `Fallidos: ${s.failed}` : null,
-        s.deactivated ? `Marcados inactivos: ${s.deactivated}` : null,
-        res.db_error_sample ? `DB: ${res.db_error_sample}` : null,
-      ].filter(Boolean);
-      if (nothingWritten && s.failed > 0) {
-        toast({
-          variant: "destructive",
-          title: "Fastrax: no se guardó ningún producto",
-          description: lines.join(" · "),
-        });
-      } else if (partialOk) {
-        toast({
-          title: "Fastrax: sincronización parcial",
-          description: lines.join(" · "),
-        });
-      } else {
-        toast({
-          title: "Fastrax actualizado",
-          description: lines.join(" · "),
-        });
-      }
-      refreshProductsQuiet();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast({
-        variant: "destructive",
-        title: "No se pudo sincronizar Fastrax",
-        description: msg,
-      });
-    } finally {
-      setFastraxSyncing(false);
-    }
-  };
 
   const handleDropiImportById = async () => {
     if (dropiImportLoading) return;
@@ -291,31 +242,17 @@ export default function AdminProductsPage() {
 
   const headerActions = (
     <div className="flex flex-row flex-wrap items-center justify-end gap-2 w-full lg:w-auto shrink-0">
-      <Button
-        type="button"
-        variant="outline"
-        size="default"
-        onClick={() => void handleFastraxSync()}
-        disabled={fastraxSyncing}
-        className="gap-2 min-h-10 whitespace-nowrap"
-        aria-label="Sincronizar catálogo Fastrax"
-      >
-        {fastraxSyncing ? (
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
-        ) : (
-          <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
-        )}
-        Actualizar productos Fastrax
-      </Button>
-      <Button
-        type="button"
-        onClick={startCreate}
-        className="gap-2 min-h-10 whitespace-nowrap"
-        aria-label="Crear producto nuevo"
-      >
-        <Plus className="h-4 w-4" />
-        Nuevo producto
-      </Button>
+      {activeTab === "catalog" && (
+        <Button
+          type="button"
+          onClick={startCreate}
+          className="gap-2 min-h-10 whitespace-nowrap"
+          aria-label="Crear producto nuevo"
+        >
+          <Plus className="h-4 w-4" />
+          Nuevo producto
+        </Button>
+      )}
     </div>
   );
 
@@ -325,7 +262,29 @@ export default function AdminProductsPage() {
       description="Administrá el catálogo local. Los productos Fastrax se guardan aquí y usan el mismo flujo de carrito y pedidos que el resto."
       actions={headerActions}
     >
-      <div className="space-y-3 w-full">
+      <div className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v === "fastrax" ? "fastrax" : "catalog")}
+          className="w-full"
+        >
+          <TabsList className="mb-3 w-full sm:w-auto">
+            <TabsTrigger value="catalog" className="gap-1.5">
+              <Search className="h-3.5 w-3.5" />
+              Catálogo
+            </TabsTrigger>
+            <TabsTrigger value="fastrax" className="gap-1.5">
+              <Package className="h-3.5 w-3.5" />
+              Fastrax
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="fastrax" className="mt-0 outline-none">
+            <AdminFastraxImportPanel onLocalCatalogRefresh={refreshProductsQuiet} />
+          </TabsContent>
+
+          <TabsContent value="catalog" className="mt-0 w-full outline-none">
+            <div className="space-y-3 w-full">
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
           <p className="text-sm font-semibold text-foreground">Importar producto Dropi por ID</p>
           <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:items-end max-w-lg">
@@ -395,7 +354,6 @@ export default function AdminProductsPage() {
             </Select>
           </div>
         </div>
-      </div>
 
       {loading && <Loader text="Cargando productos..." />}
       {error && <ErrorState message={error} onRetry={fetchProducts} />}
@@ -493,6 +451,11 @@ export default function AdminProductsPage() {
         </div>
       )}
 
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+
       {openForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className={cn(ADMIN_FORM_MODAL, "max-w-2xl")}>
@@ -576,7 +539,7 @@ export default function AdminProductsPage() {
                   <SelectContent>
                     <SelectItem value="tradexpar">Tradexpar</SelectItem>
                     <SelectItem value="dropi">Dropi</SelectItem>
-                    <SelectItem value="fastrax">Fastrax (recomendado vía sincronización)</SelectItem>
+                    <SelectItem value="fastrax">Fastrax (importar desde la pestaña Fastrax)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -4,15 +4,8 @@
  */
 
 import { fastraxPost, fastraxConfigured, fastraxEnabled, listProductsPage } from "./client.js";
-import {
-  extractProductRows,
-  mapFastraxRowToProduct,
-  FASTRAX_SOURCE,
-} from "./mapper.js";
-
-function utcNowIso() {
-  return new Date().toISOString();
-}
+import { upsertFastraxMappedRow } from "./fastraxProductUpsert.js";
+import { extractProductRows, mapFastraxRowToProduct } from "./mapper.js";
 
 const DEFAULT_MAX_PAGES = 100;
 const OPE4_STOP = 2;
@@ -78,76 +71,14 @@ export async function runFastraxProductSync(sb, options = {}) {
   const stats = { total_seen: 0, inserted: 0, updated: 0, failed: 0, errors: [] };
   for (const m of seen.values()) {
     stats.total_seen += 1;
-    const now = utcNowIso();
-    const row = {
-      name: m.name,
-      sku: m.external_sku,
-      description: m.description,
-      category: m.category,
-      brand: m.brand,
-      price: m.price,
-      stock: m.stock,
-      image: m.image || null,
-      product_source_type: FASTRAX_SOURCE,
-      external_provider: FASTRAX_SOURCE,
-      external_sku: m.external_sku,
-      external_product_id: m.external_sku,
-      external_payload: m.external_payload,
-      external_last_sync_at: now,
-      updated_at: now,
-      external_active: m.price > 0,
-    };
-
-    let exId = null;
-    const { data: byExtSku, error: eBySku } = await sb
-      .from("products")
-      .select("id")
-      .eq("external_provider", FASTRAX_SOURCE)
-      .eq("external_sku", m.external_sku)
-      .maybeSingle();
-    if (eBySku) {
+    const u = await upsertFastraxMappedRow(sb, m);
+    if (!u.ok) {
       stats.failed += 1;
-      stats.errors.push(eBySku.message);
-      continue;
-    }
-    if (byExtSku?.id) {
-      exId = byExtSku.id;
+      stats.errors.push(String(u.error || "upsert"));
+    } else if (u.action === "inserted") {
+      stats.inserted += 1;
     } else {
-      const { data: byEp, error: eByEp } = await sb
-        .from("products")
-        .select("id")
-        .eq("external_provider", FASTRAX_SOURCE)
-        .eq("external_product_id", m.external_sku)
-        .maybeSingle();
-      if (eByEp) {
-        stats.failed += 1;
-        stats.errors.push(eByEp.message);
-        continue;
-      }
-      if (byEp?.id) {
-        exId = byEp.id;
-      }
-    }
-
-    if (exId) {
-      const { error: eUp } = await sb
-        .from("products")
-        .update({ ...row })
-        .eq("id", exId);
-      if (eUp) {
-        stats.failed += 1;
-        stats.errors.push(eUp.message);
-      } else {
-        stats.updated += 1;
-      }
-    } else {
-      const { error: eIn } = await sb.from("products").insert([{ ...row }]);
-      if (eIn) {
-        stats.failed += 1;
-        stats.errors.push(eIn.message);
-      } else {
-        stats.inserted += 1;
-      }
+      stats.updated += 1;
     }
   }
 

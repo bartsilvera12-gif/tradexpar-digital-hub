@@ -205,12 +205,22 @@ export async function getVersion() {
   return fastraxPost(10, {});
 }
 
-export async function listProductsPage(page = 1) {
+/**
+ * ope=4: listado con tamaño y página controlables.
+ * @param {number} [page]
+ * @param {number} [size] — tam (1–500)
+ */
+export async function listFastraxProductsOpe4(page = 1, size = 50) {
   const pagKey = (envTrim("FASTRAX_OPE4_PAGE_PARAM") || "pag").trim() || "pag";
   const tamKey = (envTrim("FASTRAX_OPE4_SIZE_PARAM") || "tam").trim() || "tam";
-  const tam = Math.max(1, Math.min(500, Number(envTrim("FASTRAX_OPE4_PAGE_SIZE") || 50) || 50));
+  const tam = Math.max(1, Math.min(500, Math.floor(Number(size) || 50)));
   const p = Math.max(1, Math.floor(Number(page) || 1));
   return fastraxPost(4, { [tamKey]: tam, [pagKey]: p });
+}
+
+export async function listProductsPage(page = 1) {
+  const tam = Math.max(1, Math.min(500, Number(envTrim("FASTRAX_OPE4_PAGE_SIZE") || 50) || 50));
+  return listFastraxProductsOpe4(page, tam);
 }
 
 export async function getProductDetails(sku) {

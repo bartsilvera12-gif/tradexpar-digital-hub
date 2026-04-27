@@ -24,6 +24,12 @@ export const SQL_3_COMMENTS = [
 ]
 
 /**
+ * Import controlado (admin) por SKU: no requiere sentencias adicionales si `external_sku` e índices
+ * (SQL_2) ya existen. Copiá solo si falta el esquema.
+ */
+export const SQL_4_FASTRAX_CONTROLLED_IMPORTER = []
+
+/**
  * @deprecated nombres previos; conservados por si hay scripts viejos
  */
 const SQL_1_CREATE_TABLES = [
