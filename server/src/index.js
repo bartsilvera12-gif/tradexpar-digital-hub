@@ -668,6 +668,8 @@ app.use(
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   })
 );
+/** Imágenes importadas Fastrax: `/fastrax-products/{sku}.jpg` */
+app.use(express.static(path.join(serverDir, "public"), { index: false }));
 /** Webhook: body crudo a veces viene como JSON o x-www-form-urlencoded */
 app.use("/api/pagopar/webhook", express.json({ limit: "1mb" }));
 app.use("/api/pagopar/webhook", express.urlencoded({ extended: true, limit: "1mb" }));

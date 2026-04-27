@@ -3,6 +3,7 @@
  */
 
 import { FASTRAX_SOURCE, mapFastraxRowToProduct } from "./mapper.js";
+import { saveLocalFastraxProductImageIfNeeded } from "./localFastraxImage.js";
 
 function str(v) {
   if (v == null) return "";
@@ -70,6 +71,7 @@ export async function upsertFastraxFromImportItem(sb, item) {
   const dbc = descBrandCatFromFastraxDetail(rawPayload);
 
   const now = new Date().toISOString();
+  const localImg = await saveLocalFastraxProductImageIfNeeded(extSku, rawPayload);
   const row = {
     name,
     sku: extSku,
@@ -78,7 +80,7 @@ export async function upsertFastraxFromImportItem(sb, item) {
     brand: dbc.brand,
     price,
     stock,
-    image: "",
+    image: localImg || "",
     product_source_type: FASTRAX_SOURCE,
     external_provider: FASTRAX_SOURCE,
     external_sku: extSku,
@@ -134,6 +136,12 @@ export async function upsertFastraxFromRawRow(sb, raw) {
  */
 export async function upsertFastraxMappedRow(sb, m) {
   const now = new Date().toISOString();
+  const localImg = await saveLocalFastraxProductImageIfNeeded(
+    m.external_sku,
+    m.external_payload && typeof m.external_payload === "object" && !Array.isArray(m.external_payload)
+      ? /** @type {Record<string, unknown>} */ (m.external_payload)
+      : null
+  );
   const row = {
     name: m.name,
     sku: m.external_sku,
@@ -142,7 +150,7 @@ export async function upsertFastraxMappedRow(sb, m) {
     brand: m.brand,
     price: m.price,
     stock: m.stock,
-    image: m.image || null,
+    image: localImg || m.image || null,
     product_source_type: FASTRAX_SOURCE,
     external_provider: FASTRAX_SOURCE,
     external_sku: m.external_sku,

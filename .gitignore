@@ -32,3 +32,7 @@ dist-ssr
 # Playwright (artefactos locales)
 test-results/
 playwright-report/
+
+# Cache imágenes Fastrax en el servidor de pagos (solo .gitkeep versionado)
+server/public/fastrax-products/*
+!server/public/fastrax-products/.gitkeep
