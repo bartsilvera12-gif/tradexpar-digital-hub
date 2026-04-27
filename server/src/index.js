@@ -27,7 +27,6 @@ function syncSupabaseEnvFromViteFallbacks() {
 syncSupabaseEnvFromViteFallbacks();
 import { createClient } from "@supabase/supabase-js";
 import {
-  buildWebhookResponseResultadoArray,
   checkoutUrlFromHash,
   consultarPedidoPagopar,
   getFirstItemFromResultadoValue,
@@ -40,6 +39,7 @@ import {
   phpStrvalFloatval,
   sha1Hex,
   stripPagoparSecret,
+  traerFormasPagoPagopar,
   verifyWebhookToken,
 } from "./pagopar.js";
 import { registerDropiRoutes } from "./integrations/dropi/routes.js";
@@ -193,11 +193,11 @@ function pagoparTemplate(str, orderId) {
  */
 function extractPagoparRequestOptions(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return { mode: null, overrides: {} };
+    return { mode: null, overrides: {}, forma_pago: null };
   }
   const p = body.pagopar;
   if (!p || typeof p !== "object" || Array.isArray(p)) {
-    return { mode: null, overrides: {} };
+    return { mode: null, overrides: {}, forma_pago: null };
   }
   const mode = p.product_mode ?? p.mode ?? null;
   const overrides = {
@@ -214,7 +214,14 @@ function extractPagoparRequestOptions(body) {
   for (const [k, v] of Object.entries(overrides)) {
     if (v !== undefined && v !== null && String(v).trim() !== "") cleaned[k] = v;
   }
-  return { mode, overrides: cleaned };
+  let forma_pago = null;
+  if (p.forma_pago != null && String(p.forma_pago).trim() !== "") {
+    const n = Math.floor(Number(p.forma_pago));
+    if (Number.isFinite(n) && n >= 0) {
+      forma_pago = n;
+    }
+  }
+  return { mode, overrides: cleaned, forma_pago };
 }
 
 /** Placeholder que reemplaza PagoPar en la URL de retorno (documentación / panel). */
@@ -716,6 +723,25 @@ app.get("/health", (_req, res) => {
 });
 
 /**
+ * GET /api/public/pagopar/payment-methods — listado de medios (POST forma-pago/1.1/traer en PagoPar).
+ */
+app.get("/api/public/pagopar/payment-methods", apiKeyMiddleware, async (_req, res) => {
+  try {
+    if (!PAGOPAR_PRIVATE_KEY || !PAGOPAR_PUBLIC_KEY) {
+      return res.status(503).json({ ok: false, error: "PagoPar no configurado" });
+    }
+    const r = await traerFormasPagoPagopar({ privateKey: PAGOPAR_PRIVATE_KEY, publicKey: PAGOPAR_PUBLIC_KEY });
+    return res.json({ ok: true, methods: r.methods });
+  } catch (e) {
+    console.error("[pagopar/payment-methods]", e);
+    return res.status(502).json({
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+});
+
+/**
  * POST /api/public/orders/:orderId/create-payment
  */
 app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (req, res) => {
@@ -776,7 +802,10 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     }
     console.info("[create-payment][debug] pedido encontrado id=", order.id, "status=", order.status);
 
-    const { mode: reqPagoparMode, overrides: pagoparOverrides } = extractPagoparRequestOptions(req.body);
+    const { mode: reqPagoparMode, overrides: pagoparOverrides, forma_pago: reqFormaPago } =
+      extractPagoparRequestOptions(req.body);
+    const formaPagoElegida =
+      reqFormaPago != null && Number.isFinite(reqFormaPago) ? Math.floor(reqFormaPago) : PAGOPAR_FORMA_PAGO;
     const pagoparProductMode = normalizePagoparProductMode(reqPagoparMode);
     if (pagoparProductMode === "physical" && PAGOPAR_PHYSICAL_REQUIRE_BUYER_SHIPPING) {
       const addr = pagoparItemStr(order.customer_address).trim();
@@ -842,7 +871,7 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
       fecha_maxima_pago,
       id_pedido_comercio: idPedidoComercio,
       descripcion_resumen: resolvePagoparDescripcionResumen(orderId, pagoparProductMode),
-      forma_pago: PAGOPAR_FORMA_PAGO,
+      forma_pago: formaPagoElegida,
     };
     if (PAGOPAR_SEND_PAYLOAD_URLS) {
       pagoparBody.url_respuesta = PAGOPAR_RETURN_URL;
@@ -1208,9 +1237,21 @@ app.post("/api/pagopar/webhook", async (req, res) => {
       });
     }
 
-    const respArray = buildWebhookResponseResultadoArray(body);
-    console.info("[pagopar/webhook] 200 con resultado (items)", { count: respArray.length, hash: String(hashPedido).slice(0, 8) + "…" });
-    return res.status(200).json(respArray);
+    // 200: PagoPar espera el cuerpo = solo `resultado` (array; si vino un objeto, un ítem en array)
+    if (resultado == null) {
+      console.info("[pagopar/webhook] 200", { out: "[] (sin resultado)", hash: String(hashPedido).slice(0, 8) + "…" });
+      return res.status(200).json([]);
+    }
+    if (Array.isArray(resultado)) {
+      console.info("[pagopar/webhook] 200", { out: "array", count: resultado.length, hash: String(hashPedido).slice(0, 8) + "…" });
+      return res.status(200).json(resultado);
+    }
+    if (typeof resultado === "object") {
+      console.info("[pagopar/webhook] 200", { out: "[object]", count: 1, hash: String(hashPedido).slice(0, 8) + "…" });
+      return res.status(200).json([resultado]);
+    }
+    console.info("[pagopar/webhook] 200", { out: "[] (resultado inesperado)", hash: String(hashPedido).slice(0, 8) + "…" });
+    return res.status(200).json([]);
   } catch (e) {
     console.error("[pagopar/webhook]", e);
     return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : "error" });

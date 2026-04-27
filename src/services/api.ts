@@ -128,6 +128,8 @@ function assertCreatePaymentJson(data: unknown): PaymentResponse {
  * Catálogo, pedidos, clientes, wishlist y admin de datos → `tradexpar` (Supabase).
  */
 export type CreatePaymentPagoparOptions = {
+  /** Código de forma de pago PagoPar (panel / endpoint forma-pago/traer). */
+  forma_pago?: number;
   product_mode?: "physical" | "virtual" | string;
   mode?: string;
   item_categoria?: string;
@@ -138,6 +140,15 @@ export type CreatePaymentPagoparOptions = {
   vendedor_direccion_referencia?: string;
   vendedor_direccion_coordenadas?: string;
   id_producto?: number | string;
+};
+
+/** Método normalizado desde PagoPar `forma-pago/1.1/traer`. */
+export type PagoparPaymentMethod = {
+  id: number;
+  title: string;
+  description: string;
+  min_amount: number | null;
+  commission_percent: number | null;
 };
 
 async function createPaymentRequest(
@@ -193,6 +204,11 @@ export const api = {
    */
   getPagoparStatus: (hash: string) =>
     apiFetch<PaymentStatus>(`/api/public/pagopar/status?${new URLSearchParams({ hash }).toString()}`),
+
+  getPagoparPaymentMethods: () =>
+    apiFetch<{ ok: boolean; methods: PagoparPaymentMethod[]; error?: string }>(
+      "/api/public/pagopar/payment-methods"
+    ),
 
   /**
    * Panel pedidos: estado Dropi en `dropi_order_map` (mismo `x-api-key` que otras APIs Node).

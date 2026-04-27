@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { Product } from "@/types";
 import { ShoppingCart, Plus, Minus, Heart } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/productHelpers";
 import { ProductPromoBadge } from "@/components/store/ProductPromoBadge";
 import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
+import { withAffiliateRef } from "@/lib/affiliate";
 
 interface ProductCardProps {
   product: Product;
@@ -30,7 +31,10 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { addItem } = useCart();
   const { has, toggle } = useWishlist();
   useTrackAffiliateBuyerProduct(product.id);
+  const [searchParams] = useSearchParams();
   const aff = useAffiliateBuyerDiscountOptional();
+  const refForLink = searchParams.get("ref");
+  const productHref = withAffiliateRef(`/products/${product.id}`, refForLink);
   const [showQty, setShowQty] = useState(false);
   const [qty, setQty] = useState(1);
   const discountPct = getDiscountPercentage(product);
@@ -54,11 +58,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.04 }}
-      className="group relative bg-card rounded-xl overflow-hidden border hover:shadow-card-hover transition-shadow duration-300"
+      className="group relative bg-card rounded-lg sm:rounded-xl overflow-hidden border hover:shadow-card-hover transition-shadow duration-300 h-full min-w-0 flex flex-col"
     >
       {/* Image area */}
-      <Link to={`/products/${product.id}`} className="block relative">
-        <div className="aspect-square bg-muted/20 flex items-center justify-center p-5 relative overflow-hidden">
+      <Link to={productHref} className="block relative">
+        <div className="aspect-square bg-muted/20 flex items-center justify-center p-3 sm:p-5 relative overflow-hidden">
           {/* Badges */}
           <div className="absolute top-2.5 left-0 z-10 flex flex-col gap-2">
             {discountPct > 0 && <ProductPromoBadge variant="sale" percent={discountPct} shape="ribbon" />}
@@ -110,12 +114,12 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       </Link>
 
       {/* Info */}
-      <div className="p-3.5 flex flex-col gap-1.5 min-h-[140px]">
+      <div className="p-2.5 sm:p-3.5 flex flex-col gap-1.5 min-h-[128px] sm:min-h-[140px] flex-1">
         {product.category && (
           <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">{product.category}</p>
         )}
-        <Link to={`/products/${product.id}`}>
-          <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+        <Link to={productHref} className="min-w-0">
+          <h3 className="text-[13px] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors [overflow-wrap:anywhere]">
             {product.name}
           </h3>
         </Link>

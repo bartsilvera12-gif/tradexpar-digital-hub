@@ -154,12 +154,25 @@ export default function AdminDashboardPage() {
   const monthRevenue = ordersThisMonth.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const totalRevenue = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
 
-  const categoryData = products.reduce<Record<string, number>>((acc, p) => {
-    const cat = p.category || "Sin categoría";
-    acc[cat] = (acc[cat] || 0) + 1;
-    return acc;
-  }, {});
-  const chartData = Object.entries(categoryData).map(([name, count]) => ({ name, count }));
+  const chartData = useMemo(() => {
+    if (products.length === 0) return [];
+    const byType: Record<NonNullable<Product["product_source_type"]>, number> = {
+      dropi: 0,
+      fastrax: 0,
+      tradexpar: 0,
+    };
+    for (const p of products) {
+      const t = p.product_source_type;
+      if (t === "dropi") byType.dropi += 1;
+      else if (t === "fastrax") byType.fastrax += 1;
+      else byType.tradexpar += 1;
+    }
+    return [
+      { name: "Dropi", count: byType.dropi },
+      { name: "Fastrax", count: byType.fastrax },
+      { name: "Tradexpar", count: byType.tradexpar },
+    ];
+  }, [products]);
 
   const recentOrders = useMemo(() => {
     return [...orders]

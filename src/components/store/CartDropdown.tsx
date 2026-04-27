@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef, useState, useCallback, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Trash2, Minus, Plus } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
+import { withAffiliateRef } from "@/lib/affiliate";
 
 const PANEL_W = 320;
 const GAP = 8;
@@ -17,8 +18,10 @@ interface CartDropdownProps {
 }
 
 export function CartDropdown({ open, onClose, anchorRef }: CartDropdownProps) {
+  const [searchParams] = useSearchParams();
   const { items, removeItem, updateQuantity, totalItems } = useCart();
   const { lineUnitPrice, cartTotal } = useAffiliateBuyerDiscount();
+  const refForLink = searchParams.get("ref");
   const totalPrice = cartTotal(items);
   const [pos, setPos] = useState({ top: 0, left: 0, width: PANEL_W });
   /** Ignora cierre por capa justo después de abrir (mismo gesto / doble evento / click fantasma táctil). */
@@ -175,7 +178,7 @@ export function CartDropdown({ open, onClose, anchorRef }: CartDropdownProps) {
                 Seguir comprando
               </button>
               <Link
-                to="/cart"
+                to={withAffiliateRef("/cart", refForLink)}
                 onClick={onClose}
                 className="px-3 py-2.5 text-xs font-medium text-center gradient-celeste text-primary-foreground rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center"
               >

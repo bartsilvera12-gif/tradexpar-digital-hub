@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
-import { api } from "@/services/api";
+import { api, type PagoparPaymentMethod } from "@/services/api";
 import { tradexpar } from "@/services/tradexpar";
-import { Loader2, User } from "lucide-react";
+import { Loader2, User, Wallet } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,6 +31,14 @@ import { PAGOPAR_CIUDADES_PY } from "@/config/pagoparCiudadesPy";
 
 const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+function isPagoQrMethod(m: PagoparPaymentMethod | null | undefined) {
+  if (!m) return false;
+  const t = `${m.title} ${m.description}`.toLowerCase();
+  if (/\bpago\s*qr\b/.test(t) || (/\bqr\b/.test(t) && t.includes("pago"))) return true;
+  if (m.title.toLowerCase().trim() === "pago qr") return true;
+  return false;
+}
 
 type CheckoutForm = {
   firstName: string;
@@ -53,6 +69,7 @@ export default function CheckoutPage() {
   const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
   const totalPrice = cartTotal(items);
   const { user } = useCustomerAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [form, setForm] = useState<CheckoutForm>({
     firstName: "",
@@ -71,6 +88,16 @@ export default function CheckoutPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Pedido creado, pendiente de iniciar pago con PagoPar. */
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PagoparPaymentMethod[]>([]);
+  const [loadMethodsError, setLoadMethodsError] = useState<string | null>(null);
+  const [loadingMethods, setLoadingMethods] = useState(false);
+  const [selectedFormaPago, setSelectedFormaPago] = useState<number | null>(null);
+  const [showQrIntroDialog, setShowQrIntroDialog] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [methodFetchNonce, setMethodFetchNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,9 +170,50 @@ export default function CheckoutPage() {
 
   const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
 
+  useEffect(() => {
+    if (!showPaymentMethodDialog || !pendingOrderId) return;
+    let cancelled = false;
+    setLoadingMethods(true);
+    setLoadMethodsError(null);
+    setPaymentMethods([]);
+    void (async () => {
+      try {
+        const r = await api.getPagoparPaymentMethods();
+        if (cancelled) return;
+        if (!r.ok || !Array.isArray(r.methods)) {
+          throw new Error((r as { error?: string }).error || "No se pudo cargar medios de pago");
+        }
+        setPaymentMethods(r.methods);
+        if (r.methods.length > 0) {
+          setSelectedFormaPago(r.methods[0].id);
+        } else {
+          setSelectedFormaPago(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLoadMethodsError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) setLoadingMethods(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showPaymentMethodDialog, pendingOrderId, methodFetchNonce]);
+
+  const selectedMethod: PagoparPaymentMethod | null = useMemo(() => {
+    if (selectedFormaPago == null) return null;
+    return paymentMethods.find((m) => m.id === selectedFormaPago) ?? null;
+  }, [paymentMethods, selectedFormaPago]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
+    if (pendingOrderId) {
+      setShowPaymentMethodDialog(true);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -205,24 +273,20 @@ export default function CheckoutPage() {
         location_url,
         customer_location_id: customerLocationId,
         checkout_type: checkoutType ?? "tradexpar",
-        affiliate_ref: getActiveAffiliateRef() || undefined,
+        affiliate_ref:
+          (() => {
+            const fromUrl = new URLSearchParams(location.search).get("ref")?.trim();
+            if (fromUrl) return fromUrl;
+            return getActiveAffiliateRef() || undefined;
+          })(),
       });
 
       if (affiliatesAvailable()) {
         void finalizeAffiliateAttribution(order.id);
       }
 
-      const payment = await api.createPayment(order.id);
-
-      clearCart();
-
-      if (payment.paymentLink) {
-        sessionStorage.setItem("tradexpar_order_id", order.id);
-        sessionStorage.setItem("tradexpar_payment_ref", payment.ref);
-        window.location.href = payment.paymentLink;
-      } else {
-        navigate(`/success?order_id=${order.id}&ref=${payment.ref}`);
-      }
+      setPendingOrderId(order.id);
+      setShowPaymentMethodDialog(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al procesar el pedido");
     } finally {
@@ -230,22 +294,64 @@ export default function CheckoutPage() {
     }
   };
 
+  const runCreatePaymentAndRedirect = async (formaPago: number) => {
+    const oid = pendingOrderId;
+    if (!oid) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const payment = await api.createPayment(oid, { pagopar: { forma_pago: formaPago } });
+      clearCart();
+      setShowPaymentMethodDialog(false);
+      setShowQrIntroDialog(false);
+      setPendingOrderId(null);
+      if (payment.paymentLink) {
+        sessionStorage.setItem("tradexpar_order_id", oid);
+        sessionStorage.setItem("tradexpar_payment_ref", payment.ref);
+        window.location.href = payment.paymentLink;
+      } else {
+        navigate(`/success?order_id=${oid}&ref=${payment.ref}`);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo iniciar el pago con PagoPar");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const onClickContinuarPago = () => {
+    if (selectedFormaPago == null || !selectedMethod) return;
+    if (isPagoQrMethod(selectedMethod)) {
+      setShowPaymentMethodDialog(false);
+      setShowQrIntroDialog(true);
+      return;
+    }
+    void runCreatePaymentAndRedirect(selectedFormaPago);
+  };
+
+  const onConfirmQrAndPay = () => {
+    if (selectedFormaPago == null) return;
+    void runCreatePaymentAndRedirect(selectedFormaPago);
+  };
+
   if (items.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <p className="text-muted-foreground">No hay productos en el carrito.</p>
+      <div className="container mx-auto py-12 sm:py-20 text-center min-w-0 max-w-full px-2">
+        <p className="text-sm sm:text-base text-muted-foreground [text-wrap:balance]">No hay productos en el carrito.</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 sm:py-10 max-w-6xl min-w-0">
-      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-6 sm:mb-8">Checkout</h1>
+    <div className="container mx-auto py-5 sm:py-8 md:py-10 max-w-6xl min-w-0 w-full">
+      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-4 sm:mb-6 md:mb-8 pr-1 [text-wrap:balance]">
+        Checkout
+      </h1>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="grid lg:grid-cols-3 gap-8 items-start max-w-5xl mx-auto lg:max-w-none">
-          <div className="lg:col-span-2">
-            <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+        <div className="grid lg:grid-cols-3 gap-5 sm:gap-7 lg:gap-8 items-start max-w-5xl mx-auto lg:max-w-none">
+          <div className="lg:col-span-2 min-w-0">
+            <div className="bg-card rounded-2xl border shadow-card p-3.5 sm:p-5 md:p-6 space-y-4 sm:space-y-5">
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold text-foreground">Datos del cliente</h2>
                 <p className="text-xs text-muted-foreground">
@@ -500,6 +606,149 @@ export default function CheckoutPage() {
           </div>
         </div>
       </form>
+
+      {pendingOrderId && !showPaymentMethodDialog && (
+        <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground max-w-5xl mx-auto lg:mx-0">
+          <p>
+            El pedido ya fue registrado. Completá el pago con PagoPar o{" "}
+            <button
+              type="button"
+              className="text-primary font-semibold underline"
+              onClick={() => setShowPaymentMethodDialog(true)}
+            >
+              abrí de nuevo el selector de medios
+            </button>
+            .
+          </p>
+        </div>
+      )}
+
+      <Dialog open={showPaymentMethodDialog} onOpenChange={setShowPaymentMethodDialog}>
+        <DialogContent className="max-w-md max-h-[min(90vh,560px)] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              Cómo querés pagar
+            </DialogTitle>
+            <DialogDescription>
+              Elegí un medio. Serás redirigido a PagoPar con el monto y datos del pedido.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingMethods ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground text-sm">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando medios de pago…
+            </div>
+          ) : loadMethodsError ? (
+            <div className="space-y-3">
+              <p className="text-sm text-destructive">{loadMethodsError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setLoadMethodsError(null);
+                  setMethodFetchNonce((n) => n + 1);
+                }}
+              >
+                Reintentar
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <ul className="space-y-2" role="radiogroup" aria-label="Método de pago PagoPar">
+                {paymentMethods.map((m) => {
+                  const active = selectedFormaPago === m.id;
+                  return (
+                    <li key={m.id}>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSelectedFormaPago(m.id)}
+                        className={`w-full text-left rounded-xl border p-3 transition-colors ${
+                          active ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border/80 hover:bg-muted/40"
+                        }`}
+                      >
+                        <p className="font-medium text-foreground">{m.title}</p>
+                        {m.description ? <p className="text-xs text-muted-foreground mt-1 [text-wrap:balance]">{m.description}</p> : null}
+                        <div className="mt-1 flex flex-wrap gap-x-3 text-[10px] text-muted-foreground">
+                          {m.min_amount != null && m.min_amount > 0 && <span>Mín. ₲{m.min_amount.toLocaleString("es-PY")}</span>}
+                          {m.commission_percent != null && m.commission_percent > 0 && (
+                            <span>Comisión: {m.commission_percent}%</span>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {paymentMethods.length === 0 && (
+                <p className="text-sm text-muted-foreground">No se recibieron medios de pago desde PagoPar.</p>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowPaymentMethodDialog(false)}
+              disabled={paying}
+            >
+              Más tarde
+            </Button>
+            <Button
+              type="button"
+              className="gradient-celeste text-white"
+              disabled={paying || selectedFormaPago == null || paymentMethods.length === 0}
+              onClick={onClickContinuarPago}
+            >
+              {paying ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin inline" />
+                  Iniciando…
+                </>
+              ) : (
+                "Continuar al pago"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showQrIntroDialog} onOpenChange={setShowQrIntroDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Finalizá tu transacción pagando con QR</DialogTitle>
+            <DialogDescription className="text-foreground/90 [text-wrap:balance]">
+              Vamos a abrir PagoPar para que completes el pago. Tené lista la app de tu billetera o banco para
+              escanear el QR en la siguiente pantalla.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowQrIntroDialog(false);
+                setShowPaymentMethodDialog(true);
+              }}
+              disabled={paying}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              className="gradient-celeste text-white"
+              onClick={onConfirmQrAndPay}
+              disabled={paying}
+            >
+              {paying ? <Loader2 className="h-4 w-4 mr-2 animate-spin inline" /> : null}
+              Ir a PagoPar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

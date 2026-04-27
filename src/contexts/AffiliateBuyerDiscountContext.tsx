@@ -10,7 +10,6 @@ import {
 import { useLocation } from "react-router-dom";
 import type { CartItem, Product } from "@/types";
 import { useCart } from "@/contexts/CartContext";
-import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { getStoreLineUnitPrice } from "@/lib/productHelpers";
 import { affiliatesAvailable, fetchStoreAffiliateBuyerDiscounts } from "@/services/affiliateTradexparService";
 
@@ -57,10 +56,10 @@ export function AffiliateBuyerDiscountProvider({ children }: { children: ReactNo
     });
   }, []);
 
+  /** Solo `?ref=` en la URL: sin query no aplica descuento (nada de cookie/30d ni “última visita”). */
   const resolvedRef = useMemo(() => {
     const q = new URLSearchParams(location.search).get("ref");
-    if (q?.trim()) return q.trim();
-    return getActiveAffiliateRef();
+    return (q && q.trim()) || null;
   }, [location.search]);
 
   const mergedIdsKey = useMemo(() => {

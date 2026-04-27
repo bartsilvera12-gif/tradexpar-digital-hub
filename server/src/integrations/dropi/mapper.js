@@ -5,6 +5,18 @@ function str(v) {
   return String(v).trim();
 }
 
+/** Texto de relleno que no debe persistirse en `description` (import sin texto). */
+function isDropiImportDescriptionPlaceholder(s) {
+  if (s == null || !String(s).trim()) return false;
+  const t = String(s)
+    .replace(/\s+/g, " ")
+    .replace(/[()]/g, "")
+    .replace(/[\u2013\u2014–—]/g, "-")
+    .trim()
+    .toLowerCase();
+  return t === "sin descripción - importado desde dropi";
+}
+
 function num(v, fallback = 0) {
   if (v == null || v === "") return fallback;
   const n = Number(v);
@@ -541,11 +553,14 @@ export function mapDropiProduct(raw, detailRequestedId) {
   const name =
     pickString(raw, ["name", "nombre", "title", "descripcion_corta"]) || `Producto Dropi ${externalId}`;
 
-  const description = pickString(
+  let description = pickString(
     raw,
     ["description", "descripcion", "content", "short_description"],
     ""
   );
+  if (isDropiImportDescriptionPlaceholder(description)) {
+    description = "";
+  }
 
   const category = pickCategory(raw) || "Dropi";
 

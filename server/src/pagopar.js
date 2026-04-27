@@ -274,27 +274,6 @@ export function mapPagoparItemToOrderPaymentStatus(first, body) {
 }
 
 /**
- * 200 al webhook: JSON debe ser un **array** (PagoPar reenvía/valida `resultado`).
- * @param {object} body - req.body
- * @returns {object[]}
- */
-export function buildWebhookResponseResultadoArray(body) {
-  if (!body || typeof body !== "object") return [];
-  let r = body.resultado;
-  if (typeof r === "string") {
-    try {
-      r = JSON.parse(r);
-    } catch {
-      return [];
-    }
-  }
-  if (r == null) return [];
-  if (Array.isArray(r)) return r;
-  if (typeof r === "object") return [r];
-  return [];
-}
-
-/**
  * @param {string} hashPedido
  * @param {{ privateKey: string, publicKey: string }} keys
  */
@@ -335,4 +314,100 @@ export async function consultarPedidoPagopar(hashPedido, keys) {
     throw new Error(`PagoPar traer: no es JSON: ${text.slice(0, 200)}`);
   }
   return data;
+}
+
+/** POST …/api/forma-pago/1.1/traer/ — token: sha1(private_key + "FORMA-PAGO") */
+export const PAGOPAR_FORMA_PAGO_TRAER_PATH = "/api/forma-pago/1.1/traer";
+
+/**
+ * @param {unknown} data
+ * @returns {object[]}
+ */
+function extractResultadoArrayForFormaPago(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return [];
+  const row = /** @type {Record<string, unknown>} */ (data);
+  let r = row.resultado;
+  if (typeof r === "string") {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return [];
+    }
+  }
+  if (r == null) return [];
+  if (Array.isArray(r)) return r.filter((x) => x && typeof x === "object");
+  if (typeof r === "object") return [r];
+  return [];
+}
+
+/**
+ * @param {object} o
+ */
+function normalizeFormaPagoItem(o) {
+  if (!o || typeof o !== "object") return null;
+  const raw = o;
+  const idRaw = raw.forma_pago ?? raw.formaPago;
+  if (idRaw === undefined || idRaw === null) return null;
+  const idNum = Number(idRaw);
+  if (!Number.isFinite(idNum)) return null;
+  const mMin = raw.monto_minimo ?? raw.montoMinimo;
+  const pCom = raw.porcentaje_comision ?? raw.porcentajeComision;
+  return {
+    id: Math.floor(idNum),
+    title: String(raw.titulo ?? raw.title ?? "").trim() || "Método de pago",
+    description: String(raw.descripcion ?? raw.description ?? "").trim(),
+    min_amount: mMin != null && mMin !== "" && !Number.isNaN(Number(mMin)) ? Number(mMin) : null,
+    commission_percent: pCom != null && pCom !== "" && !Number.isNaN(Number(pCom)) ? Number(pCom) : null,
+  };
+}
+
+/**
+ * Lista de formas de pago (endpoint 1.1/traer).
+ * @param {{ privateKey: string, publicKey: string }} keys
+ */
+export async function traerFormasPagoPagopar(keys) {
+  const { apiBase } = getPagoparEndpoints();
+  const base = String(apiBase || "")
+    .trim()
+    .replace(/\/+$/, "");
+  let path = PAGOPAR_FORMA_PAGO_TRAER_PATH.trim();
+  if (!path.startsWith("/")) path = `/${path}`;
+  if (!path.endsWith("/")) path = `${path}/`;
+  const url = `${base}${path}`;
+  const publicKey = stripPagoparSecret(keys.publicKey);
+  const privateKey = stripPagoparSecret(keys.privateKey);
+  if (!privateKey || !publicKey) {
+    throw new Error("Faltan claves PagoPar (pública / privada)");
+  }
+  const token = buildGenericToken(keys.privateKey, "FORMA-PAGO");
+  const payload = { token, token_publico: publicKey };
+  console.info("[pagopar/forma-pago] POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    console.warn("[pagopar/forma-pago] HTTP", res.status, text.slice(0, 600));
+    throw new Error(`PagoPar forma-pago HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`PagoPar forma-pago: respuesta no JSON: ${text.slice(0, 200)}`);
+  }
+  const items = extractResultadoArrayForFormaPago(data);
+  if (items.length === 0 && !isPagoparRespuestaOk(data && data.respuesta)) {
+    const msg = data && data.mensaje != null ? String(data.mensaje) : "respuesta no ok o sin resultados";
+    console.warn("[pagopar/forma-pago] API respuesta", msg);
+    throw new Error(msg);
+  }
+  const methods = [];
+  for (const it of items) {
+    const n = normalizeFormaPagoItem(/** @type {object} */ (it));
+    if (n) methods.push(n);
+  }
+  return { ok: true, methods, raw: data };
 }

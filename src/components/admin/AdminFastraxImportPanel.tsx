@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  ExternalLink,
-  Loader2,
-  Search,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +23,6 @@ import {
   type FastraxAdminListItem,
 } from "@/services/fastraxAdminApi";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Props = {
   onLocalCatalogRefresh?: () => void;
@@ -47,8 +39,6 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
   const [importing, setImporting] = useState(false);
   /** Selección global por SKU (persiste al cambiar de página o filtro). */
   const [selectedItemsBySku, setSelectedItemsBySku] = useState<Record<string, FastraxAdminListItem>>({});
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailJson, setDetailJson] = useState<string>("");
 
   const load = useCallback(
     async (p: number) => {
@@ -140,26 +130,6 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
       toast({ variant: "destructive", title: "Import", description: msg });
     } finally {
       setImporting(false);
-    }
-  };
-
-  const openDetail = async (sku: string) => {
-    setDetailOpen(true);
-    setDetailJson("…");
-    try {
-      const r = await searchFastraxProductsForAdmin({ sku, size: 1, page: 1 });
-      if (r && "ok" in r && r.ok) {
-        const raw = r.items[0]?.raw_detail;
-        if (raw != null) {
-          setDetailJson(JSON.stringify(raw, null, 2));
-        } else {
-          setDetailJson(JSON.stringify(r, null, 2));
-        }
-      } else {
-        setDetailJson("Sin datos");
-      }
-    } catch (e) {
-      setDetailJson(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -328,39 +298,22 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
                     </span>
                   </td>
                   <td className={`${ADMIN_TD} text-right`}>
-                    <div className="inline-flex items-center justify-end gap-1">
-                      <Button type="button" size="sm" variant="secondary" onClick={() => void openDetail(row.sku)} className="h-8">
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                        Ver detalle
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void doImport([row])}
-                        disabled={importing}
-                        className="h-8"
-                      >
-                        <Download className="h-3.5 w-3.5 mr-1" />
-                        Importar
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void doImport([row])}
+                      disabled={importing}
+                      className="h-8"
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" />
+                      Importar
+                    </Button>
                   </td>
                 </tr>
               ))}
           </tbody>
         </table>
       </div>
-
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Detalle Fastrax (ope=2, respuesta API)</DialogTitle>
-          </DialogHeader>
-          <pre className="text-xs bg-muted/40 rounded-md p-3 overflow-x-auto font-mono whitespace-pre-wrap break-all">
-            {detailJson}
-          </pre>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

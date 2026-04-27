@@ -4,6 +4,28 @@
  */
 const TAG_RE = /<\/?[a-z][^>]*>/gi;
 
+/**
+ * Texto de relleno histórico en productos importados (Dropi) que no debemos mostrar.
+ * Coincide con o sin paréntesis y con distintos guiones (– — -).
+ */
+export function isImportPlaceholderDescription(raw: string | null | undefined): boolean {
+  if (raw == null) return false;
+  const t = String(raw)
+    .replace(/\s+/g, " ")
+    .replace(/[()]/g, "")
+    .replace(/[\u2013\u2014–—]/g, "-")
+    .trim()
+    .toLowerCase();
+  return t === "sin descripción - importado desde dropi" || t === "sin descripción-importado desde dropi";
+}
+
+/** Uso al mapear filas de API: vacío en lugar del placeholder. */
+export function productDescriptionForClient(raw: string | null | undefined): string {
+  if (raw == null) return "";
+  if (isImportPlaceholderDescription(raw)) return "";
+  return String(raw);
+}
+
 function decodeBasicEntities(s: string): string {
   return s
     .replace(/&nbsp;/gi, " ")
@@ -18,8 +40,10 @@ export function productDescriptionPlainText(raw: string | null | undefined): str
   if (raw == null) return "";
   const s0 = String(raw).trim();
   if (!s0) return "";
+  if (isImportPlaceholderDescription(s0)) return "";
   if (!/<[a-z!/?]/.test(s0)) {
-    return decodeBasicEntities(s0);
+    const dec = decodeBasicEntities(s0);
+    return isImportPlaceholderDescription(dec) ? "" : dec;
   }
   let t = s0
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
@@ -35,5 +59,6 @@ export function productDescriptionPlainText(raw: string | null | undefined): str
     .replace(/[ \t]+/g, " ")
     .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n");
-  return t.replace(/\n +/g, "\n").trim();
+  const out = t.replace(/\n +/g, "\n").trim();
+  return isImportPlaceholderDescription(out) ? "" : out;
 }

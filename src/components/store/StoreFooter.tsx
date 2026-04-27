@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-import { DDI } from "@/lib/ddiLabels";
 import logoIcon from "@/assets/logo-x-flat.png";
 import paymentMethods from "@/assets/payment-methods.png";
 import { Mail, Phone, MapPin, Truck, ShieldCheck, Headphones, CheckCircle } from "lucide-react";
@@ -16,15 +14,15 @@ export function StoreFooter() {
     <>
       {/* Trust bar */}
       <div className="bg-card border-y">
-        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-xl overflow-hidden border border-border bg-border">
+        <div className="container mx-auto py-2.5 sm:py-3 md:py-4 min-w-0">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-lg sm:rounded-xl overflow-hidden border border-border bg-border max-w-full">
             {trustItems.map((item) => (
               <div
                 key={item.label}
-                className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-4 py-3 bg-card text-center min-w-0"
+                className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 md:gap-2.5 px-1.5 sm:px-3 md:px-4 py-2.5 sm:py-3 bg-card text-center min-w-0"
               >
                 <item.icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
-                <span className="text-[10px] sm:text-xs font-bold tracking-wide sm:tracking-wider text-foreground uppercase leading-tight">
+                <span className="text-[9px] min-[400px]:text-[10px] sm:text-xs font-bold tracking-tight sm:tracking-wide text-foreground uppercase leading-tight [text-wrap:balance] px-0.5">
                   {item.label}
                 </span>
               </div>
@@ -33,48 +31,34 @@ export function StoreFooter() {
         </div>
       </div>
     <footer className="bg-secondary text-secondary-foreground">
-      <div className="container mx-auto px-3 sm:px-4 pt-10 sm:pt-14 pb-[max(2rem,env(safe-area-inset-bottom))] sm:pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
+      <div className="container mx-auto pt-8 sm:pt-12 md:pt-14 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-8 min-w-0 max-w-full">
+        <div className="mb-10 max-w-4xl mx-auto flex flex-col sm:flex-row justify-center items-start gap-10 sm:gap-12 md:gap-16 lg:gap-20">
           {/* Brand */}
-          <div className="md:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="w-full sm:w-[min(100%,22rem)] text-center sm:text-left mx-auto sm:mx-0">
+            <div className="flex items-center justify-center sm:justify-start gap-2 mb-4">
               <img src={logoIcon} alt="Tradexpar" className="w-8 h-8" width={32} height={32} />
               <span className="text-lg font-bold tracking-tight">
                 TRADE<span className="text-gradient">XPAR</span>
               </span>
             </div>
-            <p className="text-sm text-secondary-foreground/60 max-w-sm leading-relaxed">
+            <p className="text-sm text-secondary-foreground/60 max-w-sm mx-auto sm:mx-0 leading-relaxed">
               Distribución digital profesional. Tecnología confiable, productos de calidad y soporte dedicado para tu negocio.
             </p>
           </div>
 
-          {/* Nav */}
-          <div>
-            <h4 className="font-semibold mb-4 text-xs uppercase tracking-widest text-secondary-foreground/40">Navegación</h4>
-            <div className="flex flex-col gap-2.5">
-              <Link to="/" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Inicio</Link>
-              <Link to="/products" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Catálogo</Link>
-              <Link to="/afiliados" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors leading-snug">
-                Ser {DDI.singular}
-              </Link>
-              <Link to="/cart" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Carrito</Link>
-              <Link to="/wishlist" className="text-sm text-secondary-foreground/60 hover:text-primary transition-colors">Favoritos</Link>
-            </div>
-          </div>
-
           {/* Contact */}
-          <div>
+          <div className="w-full sm:w-auto sm:min-w-[12rem] text-center sm:text-left mx-auto sm:mx-0">
             <h4 className="font-semibold mb-4 text-xs uppercase tracking-widest text-secondary-foreground/40">Contacto</h4>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-col gap-3 items-center sm:items-start">
+              <div className="flex items-center justify-center sm:justify-start gap-2.5">
                 <Mail className="h-4 w-4 text-primary shrink-0" />
                 <span className="text-sm text-secondary-foreground/60">info@tradexpar.com</span>
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center sm:justify-start gap-2.5">
                 <Phone className="h-4 w-4 text-primary shrink-0" />
                 <span className="text-sm text-secondary-foreground/60">+595 XXX XXX XXX</span>
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center sm:justify-start gap-2.5">
                 <MapPin className="h-4 w-4 text-primary shrink-0" />
                 <span className="text-sm text-secondary-foreground/60">Paraguay</span>
               </div>

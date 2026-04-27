@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Trash2, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { useCart } from "@/contexts/CartContext";
@@ -10,8 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
+import { withAffiliateRef } from "@/lib/affiliate";
 
 export default function CartPage() {
+  const [searchParams] = useSearchParams();
+  const refForLink = searchParams.get("ref");
   const { items, removeItem, updateQuantity } = useCart();
   const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
   const totalPrice = cartTotal(items);
@@ -51,14 +54,17 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-20">
+      <div className="container mx-auto py-12 sm:py-20 min-w-0 max-w-full text-center">
         <EmptyState
           title="Tu carrito está vacío"
           description="Explora nuestros productos y agrega lo que necesites."
-          icon={<ShoppingBag className="h-12 w-12" />}
+          icon={<ShoppingBag className="h-10 w-10 sm:h-12 sm:w-12" />}
         />
-        <div className="text-center mt-6">
-          <Link to="/products" className="inline-flex px-6 py-3 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity">
+        <div className="text-center mt-6 sm:mt-8">
+          <Link
+            to={withAffiliateRef("/products", refForLink)}
+            className="inline-flex min-h-12 items-center justify-center px-6 py-3 text-[15px] sm:text-base gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity touch-manipulation w-full max-w-sm sm:w-auto"
+          >
             Explorar productos
           </Link>
         </div>
@@ -67,10 +73,12 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-10">
-      <h1 className="text-3xl font-bold text-foreground mb-8">Carrito de compras</h1>
+    <div className="container mx-auto py-6 sm:py-10 min-w-0 max-w-full">
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-5 sm:mb-8 [text-wrap:balance] pr-1">
+        Carrito de compras
+      </h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         <div className="lg:col-span-2 space-y-4">
           {items.map((item) => {
             const lineImg = resolveProductPrimaryImageSrc(item.product);
@@ -81,13 +89,17 @@ export default function CartPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 bg-card rounded-2xl border shadow-card"
+              className="flex flex-col gap-3 p-3.5 sm:p-4 sm:flex-row sm:items-center sm:gap-4 bg-card rounded-2xl border shadow-card"
             >
               <div className="flex gap-3 flex-1 min-w-0">
                 {lineImg ? (
-                  <img src={lineImg} alt={item.product.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
+                  <img
+                    src={lineImg}
+                    alt={item.product.name}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl object-cover shrink-0"
+                  />
                 ) : (
-                  <div className="w-20 h-20 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
                     <span className="text-[10px] text-muted-foreground text-center">[imagen producto]</span>
                   </div>
                 )}
@@ -119,8 +131,8 @@ export default function CartPage() {
         </div>
 
         {/* Summary */}
-        <div className="bg-card rounded-2xl border shadow-card p-5 sm:p-6 h-fit lg:sticky lg:top-24 space-y-4">
-          <h2 className="text-lg font-semibold text-foreground mb-6">Resumen</h2>
+        <div className="bg-card rounded-2xl border shadow-card p-4 sm:p-5 md:p-6 h-fit lg:sticky lg:top-24 space-y-4 min-w-0">
+          <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4 sm:mb-6">Resumen</h2>
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
@@ -133,8 +145,8 @@ export default function CartPage() {
             </div>
           </div>
           <Link
-            to="/checkout"
-            className="block w-full text-center px-6 py-3.5 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
+            to={withAffiliateRef("/checkout", refForLink)}
+            className="inline-flex w-full min-h-12 sm:min-h-11 text-center px-5 py-3.5 sm:py-3 text-[15px] sm:text-base gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 transition-opacity touch-manipulation items-center justify-center"
           >
             Proceder al pago
           </Link>

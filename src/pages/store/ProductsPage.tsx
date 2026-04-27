@@ -44,31 +44,36 @@ export default function ProductsPage() {
   const hasActiveFilters = category !== "all" || source !== "all" || offersOnly;
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto py-6 sm:py-8 min-w-0 max-w-full">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Catálogo</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
+      <div className="mb-5 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground [text-wrap:balance]">
+          Catálogo
+        </h1>
+        <p className="text-muted-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
           {filtered.length} producto{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}
         </p>
       </div>
 
       {/* Search + filter toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 mb-5 sm:mb-6">
         <div className="relative flex-1 w-full sm:max-w-lg min-w-0">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
-            type="text"
+            type="search"
+            enterKeyHint="search"
+            inputMode="search"
+            autoComplete="off"
             placeholder="Buscar productos..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+            className="w-full min-h-12 pl-10 pr-4 py-2.5 rounded-xl border bg-card text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
           />
         </div>
         <button
           type="button"
           onClick={() => setShowFilters(!showFilters)}
-          className={`w-full sm:w-auto shrink-0 justify-center min-h-11 px-4 py-2.5 rounded-xl border text-sm font-medium inline-flex items-center gap-2 transition-all touch-manipulation ${
+          className={`w-full sm:w-auto shrink-0 justify-center min-h-12 sm:min-h-11 px-4 py-2.5 rounded-xl border text-sm font-medium inline-flex items-center gap-2 transition-all touch-manipulation ${
             showFilters || hasActiveFilters
               ? "bg-primary text-primary-foreground border-primary"
               : "bg-card text-muted-foreground hover:border-primary/30"
@@ -84,7 +89,7 @@ export default function ProductsPage() {
 
       {/* Filters panel */}
       {showFilters && (
-        <div className="mb-6 p-4 bg-card rounded-xl border space-y-4">
+        <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 bg-card rounded-xl border space-y-3 sm:space-y-4">
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Categoría</p>
             <div className="flex gap-2 flex-wrap items-center">
@@ -140,7 +145,7 @@ export default function ProductsPage() {
         <EmptyState title="Sin resultados" description="No se encontraron productos con esos filtros." />
       )}
       {!loading && !error && filtered.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 lg:gap-5 min-w-0">
           {filtered.map((p, i) => (
             <ProductCard key={p.id} product={p} index={i} />
           ))}

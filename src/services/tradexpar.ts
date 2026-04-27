@@ -32,6 +32,7 @@ import {
   isTransientNetworkOrServerError,
   sleep,
 } from "@/lib/networkResilience";
+import { productDescriptionForClient } from "@/lib/productDescriptionText";
 
 function oauthProviderFromUser(user: User): "google" | "facebook" | null {
   for (const id of user.identities ?? []) {
@@ -247,7 +248,7 @@ function mapProduct(row: Record<string, unknown>): Product {
     image: primary,
     images: allImages.length > 0 ? allImages : undefined,
     sku: String(row.sku ?? ""),
-    description: String(row.description ?? ""),
+    description: productDescriptionForClient(String(row.description ?? "")),
     category: String(row.category ?? ""),
     brand: row.brand != null ? String(row.brand) : "",
     weight_kg: row.weight_kg != null && row.weight_kg !== "" ? Number(row.weight_kg) : null,

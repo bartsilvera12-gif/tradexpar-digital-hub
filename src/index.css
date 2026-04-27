@@ -65,18 +65,41 @@
   html {
     -webkit-tap-highlight-color: transparent;
     overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: clip;
+    min-width: 280px;
   }
   #root {
     min-height: 100dvh;
     min-height: 100svh;
   }
+  button,
+  a[href],
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    @apply touch-manipulation;
+  }
 }
 
 @layer utilities {
+  /* Bordes seguros en móviles con notch (usa con padding horizontal en layouts). */
+  .px-safe {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+
   .gradient-hero {
     background: linear-gradient(135deg, hsl(213 63% 17%) 0%, hsl(213 63% 12%) 50%, hsl(195 89% 20%) 100%);
   }

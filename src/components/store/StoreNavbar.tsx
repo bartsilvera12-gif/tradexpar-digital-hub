@@ -14,6 +14,7 @@ import { affiliatesAvailable } from "@/services/affiliateTradexparService";
 import { DDI } from "@/lib/ddiLabels";
 import { cn } from "@/lib/utils";
 import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
+import { withAffiliateRef } from "@/lib/affiliate";
 
 const VIRAL_DROPI_LABEL = "Los más virales";
 /** Naranja fuego: solo texto, sin fondo */
@@ -28,6 +29,8 @@ export function StoreNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  /** Solo el `?ref=` actual: lo propagamos a enlaces para no perder el enlace con descuento al navegar. */
+  const refForNav = searchParams.get("ref");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -87,27 +90,35 @@ export function StoreNavbar() {
     setQuery("");
     setShowResults(false);
     setMobileOpen(false);
-    navigate(`/products/${product.id}`);
+    navigate(withAffiliateRef(`/products/${product.id}`, refForNav));
   };
 
   const handleCategorySelect = (cat: string) => {
     setCatOpen(false);
     setMobileOpen(false);
-    navigate(`/products?category=${encodeURIComponent(cat)}`);
+    navigate(
+      withAffiliateRef(
+        `/products?category=${encodeURIComponent(cat)}`,
+        refForNav
+      )
+    );
   };
 
   const handleViralDropiSelect = () => {
     setCatOpen(false);
     setMobileOpen(false);
-    navigate("/products?source=dropi");
+    navigate(withAffiliateRef("/products?source=dropi", refForNav));
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-background border-b border-border/50 pt-[env(safe-area-inset-top)]">
-      <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 md:gap-0 md:flex-row md:items-center md:h-16 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-2.5 md:py-0 md:gap-4 lg:gap-5 xl:gap-6">
+    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 pt-[env(safe-area-inset-top)]">
+      <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 md:gap-0 md:flex-row md:items-center md:h-16 px-3 sm:px-5 md:px-8 lg:px-10 xl:px-12 py-2.5 md:py-0 md:gap-4 lg:gap-5 xl:gap-6 max-w-full">
         <div className="flex w-full min-h-11 items-center justify-between gap-3 shrink-0 md:contents md:min-h-0">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 touch-manipulation">
+        <Link
+          to={withAffiliateRef("/", refForNav)}
+          className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 touch-manipulation"
+        >
           <img src={logoIcon} alt="Tradexpar" className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" width={32} height={32} />
           <span className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
             TRADE<span className="text-gradient">XPAR</span>
@@ -120,7 +131,7 @@ export function StoreNavbar() {
           className="hidden md:flex flex-1 min-w-0 justify-center px-2 lg:px-4 xl:px-6"
         >
           <div className="w-full max-w-md lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
-            <div className="flex w-full border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow">
+            <div className="flex w-full min-w-0 border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow">
               <input
                 type="search"
                 inputMode="search"
@@ -130,10 +141,13 @@ export function StoreNavbar() {
                 onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
                 onFocus={() => query.trim() && setShowResults(true)}
                 placeholder="Estoy buscando..."
-                className="flex-1 px-4 py-2 text-sm bg-card text-foreground placeholder:text-muted-foreground outline-none"
+                className="min-w-0 flex-1 px-4 py-2 text-sm bg-card text-foreground placeholder:text-muted-foreground outline-none"
               />
-              <button className="px-4 bg-primary text-primary-foreground flex items-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors">
-                <Search className="h-4 w-4" />
+              <button
+                type="button"
+                className="shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 bg-primary text-primary-foreground inline-flex items-center justify-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <Search className="h-4 w-4 shrink-0" />
                 Buscar
               </button>
             </div>
@@ -186,7 +200,7 @@ export function StoreNavbar() {
         <div className="hidden md:flex shrink-0 items-center gap-2 lg:gap-3 min-w-0">
           <nav className="flex items-center gap-4 lg:gap-5 xl:gap-6 min-w-0">
             <Link
-              to="/"
+              to={withAffiliateRef("/", refForNav)}
               className={`shrink-0 text-sm font-medium transition-colors hover:text-primary ${
                 location.pathname === "/" ? "text-primary" : "text-muted-foreground"
               }`}
@@ -194,7 +208,7 @@ export function StoreNavbar() {
               Inicio
             </Link>
             <Link
-              to="/products"
+              to={withAffiliateRef("/products", refForNav)}
               className={`shrink-0 text-sm font-medium transition-colors hover:text-primary ${
                 location.pathname.startsWith("/products") ? "text-primary" : "text-muted-foreground"
               }`}
@@ -202,7 +216,7 @@ export function StoreNavbar() {
               Catálogo
             </Link>
             <Link
-              to="/sobre-tradexpar"
+              to={withAffiliateRef("/sobre-tradexpar", refForNav)}
               className={`shrink-0 text-sm font-medium transition-colors hover:text-primary whitespace-nowrap ${
                 location.pathname === "/sobre-tradexpar" ? "text-primary" : "text-muted-foreground"
               }`}
@@ -210,7 +224,7 @@ export function StoreNavbar() {
               Sobre Tradexpar
             </Link>
             <Link
-              to="/afiliados"
+              to={withAffiliateRef("/afiliados", refForNav)}
               className={`shrink-0 max-w-[11rem] lg:max-w-[13rem] xl:max-w-none text-sm font-medium transition-colors hover:text-primary text-left leading-snug xl:whitespace-nowrap ${
                 location.pathname === "/afiliados" ? "text-primary" : "text-muted-foreground"
               }`}
@@ -271,7 +285,7 @@ export function StoreNavbar() {
           <div className="flex items-center gap-3 lg:gap-4 shrink-0 touch-manipulation">
             {showAffiliateNav && (
               <Link
-                to="/afiliados/panel"
+                to={withAffiliateRef("/afiliados/panel", refForNav)}
                 className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-primary/10 active:bg-primary/15 transition-colors text-primary"
                 title={DDI.panelTitle}
               >
@@ -279,14 +293,14 @@ export function StoreNavbar() {
               </Link>
             )}
             <Link
-              to={user ? "/account" : "/login"}
+              to={withAffiliateRef(user ? "/account" : "/login", refForNav)}
               className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
               title={user ? "Mi cuenta" : "Ingresar"}
             >
               <User className="h-5 w-5 text-foreground" />
             </Link>
             <Link
-              to="/wishlist"
+              to={withAffiliateRef("/wishlist", refForNav)}
               className="relative flex items-center justify-center min-h-10 min-w-10 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
               title="Favoritos"
             >
@@ -324,7 +338,7 @@ export function StoreNavbar() {
         <div className="flex md:hidden items-center gap-0.5 sm:gap-2 shrink-0 ml-auto touch-manipulation">
           {showAffiliateNav && (
             <Link
-              to="/afiliados/panel"
+              to={withAffiliateRef("/afiliados/panel", refForNav)}
               className="hidden sm:flex relative items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-primary/10 active:bg-primary/15 transition-colors text-primary"
               title={DDI.panelTitle}
             >
@@ -332,14 +346,14 @@ export function StoreNavbar() {
             </Link>
           )}
           <Link
-            to={user ? "/account" : "/login"}
+            to={withAffiliateRef(user ? "/account" : "/login", refForNav)}
             className="relative flex items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
             title={user ? "Mi cuenta" : "Ingresar"}
           >
             <User className="h-5 w-5 text-foreground" />
           </Link>
           <Link
-            to="/wishlist"
+            to={withAffiliateRef("/wishlist", refForNav)}
             className="relative flex items-center justify-center min-h-11 min-w-11 rounded-full hover:bg-muted/50 active:bg-muted/70 transition-colors"
             title="Favoritos"
           >
@@ -389,7 +403,7 @@ export function StoreNavbar() {
           className="w-full md:hidden shrink-0"
         >
           <div className="relative">
-            <div className="flex w-full border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-ring shadow-sm">
+            <div className="flex w-full min-w-0 border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-ring shadow-sm">
               <input
                 type="search"
                 inputMode="search"
@@ -399,14 +413,15 @@ export function StoreNavbar() {
                 onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
                 onFocus={() => query.trim() && setShowResults(true)}
                 placeholder="Estoy buscando..."
-                className="flex-1 min-h-11 px-3 sm:px-4 py-2.5 text-base sm:text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none"
+                className="min-w-0 flex-1 min-h-12 px-3 sm:px-4 py-2.5 text-base sm:text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none"
               />
               <button
                 type="button"
-                className="shrink-0 px-3 sm:px-4 min-w-[3rem] bg-primary text-primary-foreground flex items-center justify-center active:bg-primary/90"
+                className="shrink-0 whitespace-nowrap px-3 min-[380px]:px-4 min-h-12 bg-primary text-primary-foreground inline-flex items-center justify-center gap-1.5 text-sm font-medium active:bg-primary/90"
                 aria-label="Buscar"
               >
-                <Search className="h-5 w-5 sm:h-4 sm:w-4" />
+                <Search className="h-4 w-4 shrink-0" />
+                <span className="hidden min-[380px]:inline">Buscar</span>
               </button>
             </div>
             <AnimatePresence>
@@ -465,14 +480,14 @@ export function StoreNavbar() {
           >
             <div className="max-h-[min(72vh,calc(100dvh-7rem))] overflow-y-auto overscroll-y-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <nav className="flex flex-col gap-1">
-                <Link to="/" onClick={() => setMobileOpen(false)} className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${location.pathname === "/" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
+                <Link to={withAffiliateRef("/", refForNav)} onClick={() => setMobileOpen(false)} className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${location.pathname === "/" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
                   Inicio
                 </Link>
-                <Link to="/products" onClick={() => setMobileOpen(false)} className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${location.pathname.startsWith("/products") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
+                <Link to={withAffiliateRef("/products", refForNav)} onClick={() => setMobileOpen(false)} className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${location.pathname.startsWith("/products") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
                   Catálogo
                 </Link>
                 <Link
-                  to="/sobre-tradexpar"
+                  to={withAffiliateRef("/sobre-tradexpar", refForNav)}
                   onClick={() => setMobileOpen(false)}
                   className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${
                     location.pathname === "/sobre-tradexpar" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
@@ -481,7 +496,7 @@ export function StoreNavbar() {
                   Sobre Tradexpar
                 </Link>
                 <Link
-                  to="/afiliados"
+                  to={withAffiliateRef("/afiliados", refForNav)}
                   onClick={() => setMobileOpen(false)}
                   className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation leading-snug ${
                     location.pathname === "/afiliados" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
@@ -489,18 +504,18 @@ export function StoreNavbar() {
                 >
                   ¿Quieres trabajar con nosotros?
                 </Link>
-                <Link to="/wishlist" onClick={() => setMobileOpen(false)} className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${location.pathname === "/wishlist" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
+                <Link to={withAffiliateRef("/wishlist", refForNav)} onClick={() => setMobileOpen(false)} className={`text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors active:bg-muted/60 touch-manipulation ${location.pathname === "/wishlist" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"}`}>
                   Favoritos ({wishlistCount})
                 </Link>
                 {!user ? (
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50 active:bg-muted/60 touch-manipulation">
+                  <Link to={withAffiliateRef("/login", refForNav)} onClick={() => setMobileOpen(false)} className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50 active:bg-muted/60 touch-manipulation">
                     Ingresar / Registro
                   </Link>
                 ) : (
                   <>
                     {showAffiliateNav ? (
                       <Link
-                        to="/afiliados/panel"
+                        to={withAffiliateRef("/afiliados/panel", refForNav)}
                         onClick={() => setMobileOpen(false)}
                         className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-primary hover:bg-primary/10 active:bg-primary/15 gap-2 touch-manipulation"
                       >
@@ -508,7 +523,7 @@ export function StoreNavbar() {
                         {DDI.panelShort}
                       </Link>
                     ) : null}
-                    <Link to="/account" onClick={() => setMobileOpen(false)} className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50 active:bg-muted/60 touch-manipulation">
+                    <Link to={withAffiliateRef("/account", refForNav)} onClick={() => setMobileOpen(false)} className="text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50 active:bg-muted/60 touch-manipulation">
                       Mi cuenta
                     </Link>
                     <button type="button" onClick={() => { void logout(); setMobileOpen(false); }} className="text-left text-sm font-medium min-h-11 flex items-center px-3 rounded-lg transition-colors text-muted-foreground hover:bg-muted/50 active:bg-muted/60 touch-manipulation">

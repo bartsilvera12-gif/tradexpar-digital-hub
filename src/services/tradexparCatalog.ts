@@ -1,4 +1,5 @@
 import { getTradexparSupabase, isTradexparSupabaseConfigured } from "@/lib/supabaseTradexpar";
+import { productDescriptionForClient } from "@/lib/productDescriptionText";
 import type { Product } from "@/types";
 
 export function isCatalogSupabaseReady(): boolean {
@@ -26,7 +27,7 @@ export function mapProductRow(row: Record<string, unknown>): Product {
     image: String(row.image ?? ""),
     images: Array.isArray(imgs) ? (imgs as string[]) : undefined,
     sku: String(row.sku ?? ""),
-    description: String(row.description ?? ""),
+    description: productDescriptionForClient(String(row.description ?? "")),
     category: String(row.category ?? ""),
     created_at: row.created_at as string | undefined,
     product_source_type,

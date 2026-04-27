@@ -26,7 +26,7 @@ export default function AdminDashboardChartsLazy({
     <>
       {chartData.length > 0 && (
         <div className={ADMIN_PANEL}>
-          <h3 className="font-semibold text-foreground mb-4">Productos por categoría</h3>
+          <h3 className="font-semibold text-foreground mb-4">Productos por tipo (origen)</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(40 4% 86%)" />

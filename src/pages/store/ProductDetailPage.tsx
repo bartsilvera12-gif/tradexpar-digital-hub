@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/productHelpers";
 import { resolveProductImageSrc } from "@/lib/productImageUrl";
 import { productDescriptionPlainText } from "@/lib/productDescriptionText";
+import { withAffiliateRef } from "@/lib/affiliate";
 
 function getProductImages(product: Product): string[] {
   const raw =
@@ -33,6 +34,8 @@ function getProductImages(product: Product): string[] {
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const refForLink = searchParams.get("ref");
   useTrackAffiliateBuyerProduct(id);
   const aff = useAffiliateBuyerDiscount();
   const { data: catalog = [], isPending: loading, error: queryError, refetch, isFetched } = useStoreCatalog();
@@ -97,15 +100,18 @@ export default function ProductDetailPage() {
   const displayUnitPrice = aff.lineUnitPrice(product);
 
   return (
-    <div className="container mx-auto px-3 sm:px-4 py-8 sm:py-10 min-w-0">
-      <Link to="/products" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-6 sm:mb-8 touch-manipulation">
-        <ArrowLeft className="h-4 w-4" /> Volver al catálogo
+    <div className="container mx-auto py-6 sm:py-8 md:py-10 min-w-0 max-w-full pb-8 sm:pb-10">
+      <Link
+        to={withAffiliateRef("/products", refForLink)}
+        className="inline-flex min-h-11 -ml-1 pl-1 pr-2 sm:min-h-0 items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-5 sm:mb-7 md:mb-8 touch-manipulation"
+      >
+        <ArrowLeft className="h-4 w-4 shrink-0" /> Volver al catálogo
       </Link>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 lg:grid-cols-2 gap-12"
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 md:gap-10 lg:gap-12"
       >
         {/* Image Gallery */}
         <div className="space-y-3">
@@ -116,7 +122,7 @@ export default function ProductDetailPage() {
               onMouseEnter={() => setZooming(true)}
               onMouseLeave={() => setZooming(false)}
               onMouseMove={handleMouseMove}
-              className="relative aspect-square rounded-3xl flex items-center justify-center border overflow-hidden flex-1 max-lg:cursor-default lg:cursor-crosshair touch-pan-y"
+              className="relative aspect-square rounded-2xl sm:rounded-3xl flex items-center justify-center border overflow-hidden flex-1 max-lg:cursor-default lg:cursor-crosshair touch-pan-y"
               style={{
                 background: "linear-gradient(145deg, hsl(var(--muted) / 0.4), hsl(var(--muted) / 0.15))",
               }}
@@ -194,12 +200,13 @@ export default function ProductDetailPage() {
 
           {/* Thumbnails */}
           {images.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex gap-2.5 sm:gap-2 overflow-x-auto overflow-y-hidden pb-1 -mx-0.5 px-0.5 snap-x snap-mandatory scroll-pb-1 [scrollbar-width:thin]">
               {images.map((img, i) => (
                 <button
+                  type="button"
                   key={i}
                   onClick={() => setActiveImg(i)}
-                  className={`shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden transition-all ${
+                  className={`shrink-0 snap-center min-h-[4.25rem] min-w-[4.25rem] w-[4.25rem] h-[4.25rem] sm:min-h-0 sm:min-w-0 sm:w-16 sm:h-16 rounded-xl border-2 overflow-hidden transition-all ${
                     i === activeImg ? "border-primary ring-2 ring-primary/20" : "border-transparent opacity-60 hover:opacity-100"
                   }`}
                 >
@@ -211,22 +218,34 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Details */}
-        <div className="flex flex-col justify-center">
-          <p className="text-xs uppercase tracking-wider text-primary font-semibold mb-2">{product.category}</p>
+        <div className="flex flex-col justify-center min-w-0 pt-1 sm:pt-0">
+          <p className="text-[10px] sm:text-xs uppercase tracking-wider text-primary font-semibold mb-2 line-clamp-1">
+            {product.category}
+          </p>
           {isNewProduct(product) && (
             <span className="inline-flex w-fit mb-2 items-center rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/15 via-primary/10 to-transparent px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary shadow-sm backdrop-blur-sm">
               Nuevo
             </span>
           )}
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-4 break-words">{product.name}</h1>
+          <h1 className="text-[clamp(1.25rem,3vw+0.6rem,2.5rem)] sm:text-3xl lg:text-4xl font-bold text-foreground mb-3 sm:mb-4 break-words [text-wrap:balance]">
+            {product.name}
+          </h1>
           {descriptionText ? (
-            <p className="text-muted-foreground mb-6 leading-relaxed whitespace-pre-line">{descriptionText}</p>
+            <p className="text-muted-foreground text-sm sm:text-base mb-5 sm:mb-6 leading-relaxed whitespace-pre-line">
+              {descriptionText}
+            </p>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-sm text-muted-foreground">
-            <span className="break-all">SKU: {product.sku}</span>
-            <span className="hidden sm:inline" aria-hidden>•</span>
-            <span className={product.stock > 0 ? "text-green-600" : "text-destructive"}>{getStockLabel(product)}</span>
+          <div className="flex flex-wrap items-center gap-x-2.5 sm:gap-x-3 gap-y-1.5 mb-2 text-xs sm:text-sm text-muted-foreground">
+            <span className="break-words [overflow-wrap:anywhere] min-w-0">SKU: {product.sku}</span>
+            <span className="hidden sm:inline text-muted-foreground/50" aria-hidden>•</span>
+            <span
+              className={`shrink-0 ${
+                product.stock > 0 ? "text-green-600" : "text-destructive"
+              }`}
+            >
+              {getStockLabel(product)}
+            </span>
           </div>
 
           <div className="mb-8">
@@ -249,7 +268,9 @@ export default function ProductDetailPage() {
                 </p>
               </div>
             )}
-            <p className="text-3xl sm:text-4xl font-bold text-foreground tabular-nums break-all sm:break-normal">₲{displayUnitPrice.toLocaleString("es-PY")}</p>
+            <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground tabular-nums [overflow-wrap:anywhere] [word-break:normal] sm:break-normal">
+              ₲{displayUnitPrice.toLocaleString("es-PY")}
+            </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:gap-4">
