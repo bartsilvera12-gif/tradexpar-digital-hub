@@ -227,6 +227,9 @@ function OrderDropiCard({ o }: { o: Order }) {
         : "—";
   const dUrl = map && String(map.dropi_order_url ?? "").trim() ? String(map.dropi_order_url).trim() : null;
   const walletFlag = isWalletInsufficient(map, errDetail);
+  const dropiStatusNorm = map ? String(map.dropi_status ?? "").trim().toLowerCase() : "";
+  const retryFailedDropi =
+    Boolean(map) && !hasDropiId && dropiStatusNorm === "failed";
 
   const onCreate = () => {
     setActErr(null);
@@ -326,7 +329,7 @@ function OrderDropiCard({ o }: { o: Order }) {
           )}
           {!hasDropiId && (
             <Button type="button" size="sm" className="h-7 text-[10px]" disabled={creating} onClick={onCreate}>
-              {creating ? "Creando…" : "Crear pedido Dropi"}
+              {creating ? "Creando…" : retryFailedDropi ? "Reintentar pedido Dropi" : "Crear pedido Dropi"}
             </Button>
           )}
         </div>

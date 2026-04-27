@@ -88,6 +88,19 @@ function jsonErrorBody(orderId, e) {
   };
 }
 
+/** Impide re-crear solo si ya hay pedido en Dropi o creación exitosa registrada. Falló sin id → se puede reintentar. */
+function dropiMapBlocksRecreate(mapRow) {
+  if (!mapRow || typeof mapRow !== "object") return false;
+  const oid = /** @type {Record<string, unknown>} */ (mapRow).dropi_order_id;
+  const hasOrderId = oid != null && String(oid).trim() !== "";
+  const st = String(
+    /** @type {Record<string, unknown>} */ (mapRow).dropi_status ??
+      /** @type {Record<string, unknown>} */ (mapRow).status ??
+      ""
+  ).toLowerCase();
+  return hasOrderId || st === "succeeded";
+}
+
 /**
  * Cuerpo JSON cuando `createDropiOrderForInternalOrder` devolvió ok: false.
  * @param {string} orderId
@@ -425,10 +438,12 @@ export function registerDropiRoutes(app) {
         .eq("order_id", orderId)
         .maybeSingle();
       if (merr) throw merr;
-      if (mapEx) {
+      if (mapEx && dropiMapBlocksRecreate(mapEx)) {
         return res.json(
           jsonMapResponse(mapEx, orderId, {
-            dropiCreated: (String(mapEx?.dropi_status ?? mapEx?.status) === "succeeded" && Boolean(mapEx?.dropi_order_id)),
+            dropiCreated:
+              String(mapEx?.dropi_status ?? mapEx?.status ?? "").toLowerCase() === "succeeded" &&
+              Boolean(mapEx?.dropi_order_id),
             fromExisting: true,
             includeResponse: false,
           }, null)
