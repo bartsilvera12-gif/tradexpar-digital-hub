@@ -60,14 +60,14 @@ function SectionTitle({
   return (
     <h2
       className={cn(
-        "flex flex-wrap items-center justify-center gap-3 text-balance text-center text-3xl font-bold tracking-tight text-foreground sm:text-4xl",
+        "flex flex-wrap items-center justify-center gap-2.5 text-balance text-center text-2xl font-bold tracking-tight text-foreground sm:gap-3 sm:text-4xl",
         className
       )}
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-[0_0_24px_-4px_hsl(195_89%_47%/0.35)] ring-1 ring-primary/25">
-        <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} />
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-[0_0_24px_-4px_hsl(195_89%_47%/0.35)] ring-1 ring-primary/25 sm:h-12 sm:w-12">
+        <Icon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" strokeWidth={1.75} />
       </span>
-      <span>{children}</span>
+      <span className="min-w-0">{children}</span>
     </h2>
   );
 }
@@ -114,7 +114,7 @@ export default function AboutTradexparPage() {
   return (
     <div className="relative min-h-[50vh] overflow-x-hidden bg-background">
       {/* —— Hero —— */}
-      <section className="relative isolate min-h-[min(88vh,760px)] overflow-hidden border-b border-border/40">
+      <section className="relative isolate min-h-[min(80svh,640px)] overflow-hidden border-b border-border/40 sm:min-h-[min(88svh,720px)] lg:min-h-[min(88vh,760px)]">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_60%_at_50%_-10%,hsl(195_89%_47%_/_0.22),transparent_55%)]"
           aria-hidden
@@ -129,16 +129,18 @@ export default function AboutTradexparPage() {
         />
         <HeroOrbs reduced={Boolean(reduceMotion)} />
 
-        <div className="relative z-[1] mx-auto flex min-h-[min(88vh,760px)] max-w-5xl flex-col items-center justify-center px-4 pb-20 pt-24 text-center sm:px-8 sm:pb-24 sm:pt-28">
+        <div
+          className="relative z-[1] mx-auto flex min-h-[min(70svh,520px)] max-w-5xl flex-col items-center justify-center pb-16 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[calc(1.5rem+env(safe-area-inset-top))] text-center min-[400px]:min-h-[min(80svh,600px)] sm:min-h-[min(88vh,760px)] sm:px-8 sm:pb-24 sm:pt-28"
+        >
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, ease: easeOut }}
           >
-            <h1 className="text-[2.5rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-foreground text-balance drop-shadow-sm sm:text-6xl lg:text-[4rem]">
+            <h1 className="px-1 text-[length:clamp(1.9rem,6.5vw+0.75rem,4rem)] font-extrabold leading-[1.05] tracking-[-0.03em] text-foreground text-balance drop-shadow-sm sm:px-0 min-[480px]:text-6xl lg:text-[4rem]">
               Sobre <span className="text-gradient">Tradexpar</span>
             </h1>
-            <p className="mx-auto mt-8 max-w-2xl text-base font-medium leading-relaxed text-pretty text-muted-foreground/95 sm:text-lg sm:leading-relaxed">
+            <p className="mx-auto mt-5 max-w-2xl px-0.5 text-[15px] font-medium leading-relaxed text-pretty text-muted-foreground/95 min-[400px]:mt-8 min-[400px]:text-base sm:px-0 sm:text-lg sm:leading-relaxed">
               Distribuidora digital con visión contemporánea: orden, ejecución y flexibilidad para acercar productos de
               calidad a quienes los buscan.
             </p>
@@ -152,14 +154,14 @@ export default function AboutTradexparPage() {
           aria-hidden
         />
 
-        <div className="relative mx-auto max-w-6xl space-y-16 px-4 py-16 sm:space-y-20 sm:px-6 sm:py-20 lg:space-y-24 lg:px-10 lg:py-24">
+        <div className="relative mx-auto max-w-6xl space-y-12 py-12 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:space-y-20 sm:py-20 sm:pl-6 sm:pr-6 lg:space-y-24 lg:px-10 lg:py-24">
           {/* —— Identidad —— */}
           <motion.section {...fadeUp} className="scroll-mt-8">
             <div className="text-center">
               <SectionEyebrow>Identidad</SectionEyebrow>
               <SectionTitle icon={Compass}>Nuestra identidad</SectionTitle>
             </div>
-            <div className="mt-12 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <div className="mt-8 grid items-center gap-8 min-[400px]:mt-12 min-[400px]:gap-10 lg:grid-cols-2 lg:gap-16">
               <div className="order-2 space-y-5 text-center text-base leading-[1.75] text-pretty text-muted-foreground sm:text-[17px] sm:leading-[1.8] lg:order-1 lg:text-left">
                 <p>
                   <strong className="font-semibold text-foreground">Tradexpar</strong> es una{" "}
@@ -303,7 +305,7 @@ export default function AboutTradexparPage() {
           {/* —— Contexto —— */}
           <motion.section
             {...fadeUp}
-            className="relative overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.09] via-muted/30 to-background px-5 py-12 shadow-[0_24px_70px_-40px_hsl(195_89%_47%/0.25)] sm:px-10 sm:py-16"
+            className="relative overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/[0.09] via-muted/30 to-background px-4 py-10 shadow-[0_24px_70px_-40px_hsl(195_89%_47%/0.25)] min-[400px]:rounded-3xl min-[400px]:px-5 min-[400px]:py-12 sm:px-10 sm:py-16"
           >
             <div className="pointer-events-none absolute -right-20 top-0 h-64 w-64 rounded-full bg-primary/10 blur-3xl" aria-hidden />
             <div className="relative text-center">
@@ -466,15 +468,15 @@ export default function AboutTradexparPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.55, ease: easeOut }}
-            className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-secondary via-secondary to-secondary/95 px-6 py-14 text-center text-primary-foreground shadow-[0_28px_80px_-32px_hsl(213_63%_12%/0.55)] sm:px-10 sm:py-16"
+            className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-secondary via-secondary to-secondary/95 px-4 py-10 text-center text-primary-foreground shadow-[0_28px_80px_-32px_hsl(213_63%_12%/0.55)] min-[400px]:px-6 min-[400px]:py-12 sm:px-10 sm:py-16"
           >
             <div className="pointer-events-none absolute -left-16 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-primary/20 blur-[100px]" aria-hidden />
             <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-primary/15 blur-3xl" aria-hidden />
             <div className="relative">
               <SectionEyebrow className="text-primary-foreground/70">En síntesis</SectionEyebrow>
-              <h2 className="mx-auto mt-4 flex flex-wrap items-center justify-center gap-3 text-3xl font-extrabold tracking-tight text-balance text-primary-foreground sm:text-4xl">
-                <Sparkles className="h-8 w-8 shrink-0 text-primary" strokeWidth={1.75} />
-                Qué es Tradexpar
+              <h2 className="mx-auto mt-3 flex flex-wrap items-center justify-center gap-2 text-2xl font-extrabold tracking-tight text-balance text-primary-foreground min-[400px]:mt-4 min-[400px]:gap-3 min-[400px]:text-3xl sm:text-4xl">
+                <Sparkles className="h-6 w-6 shrink-0 text-primary min-[400px]:h-8 min-[400px]:w-8" strokeWidth={1.75} />
+                <span className="min-w-0">Qué es Tradexpar</span>
               </h2>
               <p className="mx-auto mt-8 max-w-3xl text-base font-medium leading-relaxed text-pretty text-primary-foreground/90 sm:text-lg md:text-xl">
                 <strong className="text-primary-foreground">Tradexpar</strong> es una distribuidora digital que organiza,

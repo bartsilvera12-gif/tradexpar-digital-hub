@@ -28,3 +28,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright (artefactos locales)
+test-results/
+playwright-report/

@@ -24,7 +24,7 @@ export function AboutSplitSection({
     <motion.section {...aboutFade} className={cn("scroll-mt-10", className)}>
       <div
         className={cn(
-          "grid grid-cols-1 items-stretch gap-8 lg:min-h-0 lg:items-center lg:gap-10 xl:gap-12",
+          "grid grid-cols-1 items-stretch gap-6 sm:gap-8 lg:min-h-0 lg:items-center lg:gap-10 xl:gap-12",
           reverse
             ? "lg:grid-cols-[minmax(0,0.45fr)_minmax(0,0.55fr)]"
             : "lg:grid-cols-[minmax(0,0.55fr)_minmax(0,0.45fr)]"

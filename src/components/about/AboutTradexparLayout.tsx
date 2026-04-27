@@ -62,7 +62,7 @@ export function AboutStorySection({
     <section className={cn("scroll-mt-12", className)}>
       <div
         className={cn(
-          "grid grid-cols-1 items-center gap-10 sm:gap-12 lg:gap-14 xl:gap-16",
+          "grid grid-cols-1 items-center gap-8 sm:gap-12 lg:gap-14 xl:gap-16",
           gridCols
         )}
       >
@@ -83,13 +83,13 @@ export function AboutStorySection({
           )}
         >
           <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">{eyebrow}</p>
-          <h2 className="flex flex-wrap items-center gap-3 text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-[2rem] lg:leading-snug">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/[0.12] text-primary ring-1 ring-primary/20">
-              <TitleIcon className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.75} />
+          <h2 className="flex flex-wrap items-center gap-2.5 text-balance text-xl font-bold tracking-tight text-foreground sm:gap-3 sm:text-3xl lg:text-[2rem] lg:leading-snug">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/[0.12] text-primary ring-1 ring-primary/20 sm:h-11 sm:w-11">
+              <TitleIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:h-6 sm:w-6" strokeWidth={1.75} />
             </span>
-            <span>{title}</span>
+            <span className="min-w-0 flex-1">{title}</span>
           </h2>
-          <div className="max-w-xl space-y-4 text-[15px] leading-relaxed text-muted-foreground sm:text-base lg:max-w-none">
+          <div className="max-w-xl space-y-3 text-[15px] leading-relaxed text-muted-foreground min-[400px]:space-y-4 sm:text-base lg:max-w-none">
             {children}
           </div>
         </div>

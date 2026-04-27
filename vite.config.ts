@@ -1,11 +1,25 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
+
+/** Resuelve `og:image` / `twitter:image` con dominio de producción o ruta relativa. */
+function tradexparOgImagePlugin(baseUrlFromEnv: string): Plugin {
+  const base = baseUrlFromEnv.trim().replace(/\/+$/, "");
+  const imageUrl = base
+    ? `${base}/images/tradexpar-promo-banner.png`
+    : "/images/tradexpar-promo-banner.png";
+  return {
+    name: "tradexpar-og-image",
+    transformIndexHtml(html) {
+      return html.replaceAll("__VITE_OG_IMAGE__", imageUrl);
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const publicSite = env.VITE_PUBLIC_SITE_URL || "";
   /** Destino del proxy solo en `vite` dev: `/api/*` → Node (`server/`). */
   const paymentsProxyTarget = env.PAYMENTS_API_PROXY_TARGET || "http://127.0.0.1:8787";
 
@@ -36,7 +50,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), tradexparOgImagePlugin(publicSite)],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
