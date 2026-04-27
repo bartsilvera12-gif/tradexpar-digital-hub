@@ -49,7 +49,6 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
   const [onlyStock, setOnlyStock] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<FastraxAdminListItem[]>([]);
-  const [meta, setMeta] = useState<{ count_source: number; count_filtered: number } | null>(null);
   const [importing, setImporting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [detailOpen, setDetailOpen] = useState(false);
@@ -68,15 +67,11 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
         only_stock: onlyStock,
       });
       if (r && "ok" in r && r.ok) {
-        if (r.mode === "list") {
-          setPage(r.page);
-          setRows(r.items);
-          setMeta({ count_source: r.count_source, count_filtered: r.count_filtered });
-        }
+        setPage(r.page);
+        setRows(r.items);
       } else {
         setRows([]);
-        setMeta(null);
-        const m = (r as { message?: string })?.message;
+        const m = (r as { message?: string; error?: string })?.message || (r as { error?: string })?.error;
         throw new Error(typeof m === "string" && m ? m : "Búsqueda Fastrax falló");
       }
     } catch (e) {
@@ -138,8 +133,9 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
     try {
       const r = await searchFastraxProductsForAdmin({ sku, size: 1, page: 1 });
       if (r && "ok" in r && r.ok) {
-        if (r.mode === "detail" && "data" in r) {
-          setDetailJson(JSON.stringify((r as { data?: unknown }).data, null, 2));
+        const d = (r as { data?: unknown }).data;
+        if (d != null) {
+          setDetailJson(JSON.stringify(d, null, 2));
         } else {
           setDetailJson(JSON.stringify(r, null, 2));
         }
@@ -220,11 +216,11 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
             id="fastrax-tam"
             type="number"
             min={1}
-            max={500}
+            max={20}
             className={cn(ADMIN_FORM_CONTROL, "tabular-nums")}
             value={String(size)}
             onChange={(e) => {
-              const n = Math.max(1, Math.min(500, Number(e.target.value) || 20));
+              const n = Math.max(1, Math.min(20, Number(e.target.value) || 20));
               setSize(n);
             }}
           />
@@ -237,9 +233,7 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          {meta
-            ? `Fila(s) ope=4: ${meta.count_source} → tras filtro: ${meta.count_filtered}`
-            : "—"}
+          Pág. {page} · {rows.length} fila(s) en esta vista (máx. 20 por pág., ope=4+ope=2)
         </p>
         <div className="flex items-center gap-1">
           <Button

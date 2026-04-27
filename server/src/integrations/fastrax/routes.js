@@ -3,13 +3,28 @@ import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
 import { fastraxConfigured, fastraxEnabled, getVersion, listProductsPage } from "./client.js";
 import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
-import { importFastraxSkusToProducts, searchFastraxAdmin } from "./controlledCatalog.js";
+import { importFastraxSkusToProducts, searchFastraxReadonlyOpe4Ope2 } from "./controlledCatalog.js";
 import { runFastraxProductSync } from "./sync-products.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
 
 const requireAdmin = createRequireAdminMiddleware();
 const requireApiKey = createApiKeyMiddleware();
+
+const RESOLVED_API_KEY = String(
+  process.env.API_PUBLIC_KEY || process.env.API_KEY || ""
+).trim();
+/**
+ * Acepta `x-api-key` o sesión admin (JWT) para herramientas híbridas.
+ */
+function requireApiKeyOrAdmin(req, res, next) {
+  const k = String(req.headers["x-api-key"] ?? "")
+    .trim();
+  if (RESOLVED_API_KEY && k && k === RESOLVED_API_KEY) {
+    return next();
+  }
+  return requireAdmin(req, res, next);
+}
 
 /**
  * @param {import('express').Express} app
@@ -51,24 +66,32 @@ export function registerFastraxRoutes(app) {
     return res.json({ ok: true, ope: 4, page: p, data: r.parsed });
   });
 
-  app.get("/api/admin/fastrax/products/search", requireAdmin, async (req, res) => {
+  /**
+   * Solo lectura: ope=4 (una página, tam ≤20) + ope=2 por fila. Auth: `x-api-key` o admin JWT.
+   * Query: q, page, size, only_stock, opc. sku (solo detalle ope=2).
+   */
+  app.get("/api/admin/fastrax/products/search", requireApiKeyOrAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
+    const q = req.query.q != null && String(req.query.q).trim() ? String(req.query.q) : undefined;
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
-    const size = Math.max(1, Math.min(500, Math.floor(Number(req.query.size) || 20)));
+    const size = Math.max(1, Math.min(20, Math.floor(Number(req.query.size) || 20)));
     const sku = req.query.sku != null && String(req.query.sku).trim() ? String(req.query.sku).trim() : undefined;
-    const search = req.query.search != null && String(req.query.search).trim() ? String(req.query.search) : undefined;
     const onlyQ = String(req.query.only_stock ?? "").toLowerCase();
-    const only_stock = onlyQ === "1" || onlyQ === "true" || onlyQ === "yes";
-    const r = await searchFastraxAdmin({ page, size, sku, search, only_stock });
+    const only_stock = onlyQ === "1" || onlyQ === "true" || onlyQ === "yes" || onlyQ === "y";
+    const r = await searchFastraxReadonlyOpe4Ope2({
+      q: q || (req.query.search != null && String(req.query.search).trim() ? String(req.query.search) : undefined),
+      page,
+      size,
+      only_stock,
+      sku,
+    });
     if (r && r.ok) {
       return res.json(r);
     }
     return res.status(502).json(
-      r && typeof r === "object"
-        ? r
-        : { ok: false, error: "fastrax_search_failed" }
+      r && typeof r === "object" ? { ...r, ok: false } : { ok: false, error: "fastrax_search_failed" }
     );
   });
 

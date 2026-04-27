@@ -1,6 +1,8 @@
 /** Fastrax → API Node `server/`: búsqueda ope=4/2 e import selectivo (Bearer admin). */
 
 const RAW_PAYMENTS_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
+/** Misma clave pública que `server` (`API_PUBLIC_KEY` / `API_KEY`); usada con rutas que aceptan `x-api-key`. */
+const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
 
 function adminBearer(): string {
   if (typeof sessionStorage === "undefined") return "";
@@ -29,6 +31,7 @@ async function fastraxAdminJson<T>(path: string, init?: RequestInit): Promise<T>
     headers: {
       Accept: "application/json",
       ...(init?.headers ?? {}),
+      ...(API_KEY ? { "x-api-key": API_KEY } : {}),
       Authorization: `Bearer ${token}`,
       ...(init?.method === "POST" || init?.method === "PUT" || init?.method === "PATCH"
         ? { "Content-Type": "application/json" }
@@ -62,29 +65,16 @@ export type FastraxAdminListItem = {
   state: string;
 };
 
-export type FastraxSearchOk =
-  | {
-      ok: true;
-      mode: "list";
-      ope: 4;
-      page: number;
-      size: number;
-      count_source: number;
-      count_filtered: number;
-      items: FastraxAdminListItem[];
-      data?: unknown;
-    }
-  | {
-      ok: true;
-      mode: "detail";
-      ope: 2;
-      page: number;
-      size: number;
-      item: FastraxAdminListItem;
-      data?: unknown;
-    };
+/** Solo lectura: ope=4 + ope=2 por fila, o con `sku` solo ope=2. */
+export type FastraxSearchOk = {
+  ok: true;
+  page: number;
+  items: FastraxAdminListItem[];
+  /** Presente p. ej. con `?sku=` (detalle ope=2, respuesta cruda). */
+  data?: unknown;
+};
 
-export type FastraxSearchResult = FastraxSearchOk | { ok: false; ope?: number; message?: string; parsed?: unknown };
+export type FastraxSearchResult = FastraxSearchOk | { ok: false; ope?: number; message?: string; error?: string; parsed?: unknown };
 
 export type FastraxImportResult = {
   ok: boolean;
@@ -112,14 +102,17 @@ const searchParams = (o: {
   page?: number;
   size?: number;
   sku?: string;
+  q?: string;
   search?: string;
   only_stock?: boolean;
 }) => {
   const s = new URLSearchParams();
   if (o.page != null) s.set("page", String(o.page));
-  if (o.size != null) s.set("size", String(o.size));
+  const size = Math.max(1, Math.min(20, Math.floor(Number(o.size) || 20)));
+  s.set("size", String(size));
   if (o.sku?.trim()) s.set("sku", o.sku.trim());
-  if (o.search?.trim()) s.set("search", o.search.trim());
+  const q = (o.q?.trim() || o.search?.trim()) ?? "";
+  if (q) s.set("q", q);
   if (o.only_stock === true) s.set("only_stock", "1");
   return s.toString();
 };
@@ -131,6 +124,8 @@ export async function searchFastraxProductsForAdmin(args: {
   page?: number;
   size?: number;
   sku?: string;
+  /** Texto; también se acepta `search` (alias). */
+  q?: string;
   search?: string;
   only_stock?: boolean;
 }): Promise<FastraxSearchResult> {

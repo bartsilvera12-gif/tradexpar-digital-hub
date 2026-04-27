@@ -187,3 +187,125 @@ export async function importFastraxSkusToProducts(sb, skus) {
     results,
   };
 }
+
+/**
+ * Nombre con URL-encoding típico de PHP.
+ * @param {string | null | undefined} raw
+ * @returns {string}
+ */
+function decodeFastraxDisplayName(raw) {
+  if (raw == null) return "";
+  const withSpaces = String(raw).replace(/\+/g, " ");
+  try {
+    return decodeURIComponent(withSpaces).trim();
+  } catch {
+    return withSpaces.trim();
+  }
+}
+
+/**
+ * Solo lectura: ope=4 (una página, tam ≤ 20) + ope=2 por SKU. Sin tocar la DB.
+ * @param {object} p
+ * @param {string} [p.q] — o alias `search`
+ * @param {number} [p.page] — default 1
+ * @param {number} [p.size] — default 20, max 20
+ * @param {boolean} [p.only_stock]
+ * @param {string} [p.sku] — si viene solo, solo ope=2 (p. ej. detalle)
+ */
+export async function searchFastraxReadonlyOpe4Ope2(p) {
+  const onlySku = p.sku != null && String(p.sku).trim() ? String(p.sku).trim() : "";
+  const q = (p.q && String(p.q).trim()) || (p.search && String(p.search).trim()) || "";
+  const onlyStock =
+    p.only_stock === true ||
+    p.only_stock === 1 ||
+    String(p.only_stock ?? "")
+      .toLowerCase() === "true" ||
+    String(p.only_stock) === "1";
+  const page = Math.max(1, Math.floor(Number(p.page) || 1));
+  const size = Math.max(1, Math.min(20, Math.floor(Number(p.size) || 20)));
+  const qn = q.toLowerCase();
+
+  /**
+   * @param {Record<string, unknown> | null} raw0
+   * @param {string} [skuCtx]
+   */
+  const itemFromOpe2 = (raw0, skuCtx) => {
+    if (!raw0) return null;
+    const m = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (raw0));
+    if (!m) return null;
+    const name = decodeFastraxDisplayName(m.name);
+    const it = toListItem({ ...m, name, external_sku: skuCtx || m.external_sku });
+    if (q) {
+      if (!name.toLowerCase().includes(qn) && !String(it.sku).toLowerCase().includes(qn)) return null;
+    }
+    if (onlyStock && (it.stock ?? 0) <= 0) return null;
+    return { sku: it.sku, name, price: it.price, stock: it.stock, state: it.state };
+  };
+
+  if (onlySku) {
+    const r2 = await getProductDetails(onlySku);
+    if (!r2 || r2.ok === false) {
+      return {
+        ok: false,
+        page: 1,
+        items: [],
+        message: r2 && r2.message ? String(r2.message) : "ope=2",
+        data: r2 && r2.parsed,
+      };
+    }
+    const drows = extractProductRows(/** @type {unknown} */ (r2.parsed));
+    const raw0 =
+      drows[0] ||
+      (r2.parsed && typeof r2.parsed === "object" && !Array.isArray(r2.parsed) ? r2.parsed : null);
+    const row = itemFromOpe2(
+      raw0 && typeof raw0 === "object" ? /** @type {Record<string, unknown>} */ (raw0) : null,
+      onlySku
+    );
+    if (!row) {
+      return { ok: true, page: 1, items: [], data: r2.parsed };
+    }
+    return {
+      ok: true,
+      page: 1,
+      items: [row],
+      data: r2.parsed,
+    };
+  }
+
+  const r4 = await listFastraxProductsOpe4(page, size);
+  if (!r4 || r4.ok === false) {
+    return {
+      ok: false,
+      page,
+      items: [],
+      message: r4 && r4.message ? String(r4.message) : "ope=4",
+    };
+  }
+  const listRows = extractProductRows(/** @type {unknown} */ (r4.parsed));
+  const skus = [];
+  const seen = new Set();
+  for (const raw of listRows) {
+    if (!raw || typeof raw !== "object") continue;
+    const m0 = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (raw));
+    if (!m0) continue;
+    const s = m0.external_sku;
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    skus.push(s);
+    if (skus.length >= 20) break;
+  }
+
+  const items = [];
+  for (const sku of skus) {
+    const r2 = await getProductDetails(sku);
+    if (!r2 || r2.ok === false) continue;
+    const drows = extractProductRows(/** @type {unknown} */ (r2.parsed));
+    const raw0 =
+      drows[0] ||
+      (r2.parsed && typeof r2.parsed === "object" && !Array.isArray(r2.parsed) ? r2.parsed : null);
+    if (!raw0) continue;
+    const row = itemFromOpe2(/** @type {Record<string, unknown>} */ (raw0), sku);
+    if (row) items.push(row);
+  }
+  return { ok: true, page, items };
+}
