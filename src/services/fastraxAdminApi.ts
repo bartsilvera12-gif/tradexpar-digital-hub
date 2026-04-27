@@ -1,9 +1,8 @@
 /** Fastrax → API Node `server/`: búsqueda ope=4/2 e import selectivo (Bearer admin). */
 
 const RAW_PAYMENTS_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
-/** Misma clave pública que `server` (`API_PUBLIC_KEY` / `API_KEY`); usada con rutas que aceptan `x-api-key`. */
-const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
 
+/** Mismo criterio que `dropiCatalog` / `tradexpar` admin (AdminLoginPage guarda el token aquí). */
 function adminBearer(): string {
   if (typeof sessionStorage === "undefined") return "";
   return sessionStorage.getItem("tradexpar_admin_token")?.trim() ?? "";
@@ -22,20 +21,28 @@ function buildAdminApiUrl(path: string): string {
 
 async function fastraxAdminJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = adminBearer();
-  if (!token) {
-    throw new Error("No hay sesión de administrador. Iniciá sesión en el panel.");
+  const apiKey = (import.meta.env.VITE_API_KEY || "").trim();
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log("[fastrax-api] headers", { hasToken: !!token, hasApiKey: !!apiKey });
+  }
+  if (!token && !apiKey) {
+    throw new Error("No hay sesión de administrador. Iniciá sesión en el panel o definí VITE_API_KEY en el build.");
   }
   const url = buildAdminApiUrl(path);
   const res = await fetch(url, {
     ...init,
     headers: {
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-      ...(API_KEY ? { "x-api-key": API_KEY } : {}),
-      Authorization: `Bearer ${token}`,
-      ...(init?.method === "POST" || init?.method === "PUT" || init?.method === "PATCH"
-        ? { "Content-Type": "application/json" }
+      ...(init?.headers &&
+      typeof init.headers === "object" &&
+      !Array.isArray(init.headers) &&
+      !(init.headers instanceof Headers)
+        ? (init.headers as Record<string, string>)
         : {}),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(apiKey ? { "x-api-key": apiKey } : {}),
     },
   });
   const text = await res.text().catch(() => "");
