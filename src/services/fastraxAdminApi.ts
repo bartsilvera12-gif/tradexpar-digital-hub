@@ -1,8 +1,8 @@
-/** Fastrax → API Node `server/`: búsqueda ope=4/2 e import selectivo (Bearer admin). */
+/** Fastrax → API Node `server/`: misma auth que curls técnicos (`x-api-key`); Bearer opcional si hay sesión admin. */
 
 const RAW_PAYMENTS_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 
-/** Mismo criterio que `dropiCatalog` / `tradexpar` admin (AdminLoginPage guarda el token aquí). */
+/** Opcional: si hay sesión admin, el servidor puede aceptar también Bearer (no requerido para el buscador). */
 function adminBearer(): string {
   if (typeof sessionStorage === "undefined") return "";
   return sessionStorage.getItem("tradexpar_admin_token")?.trim() ?? "";
@@ -19,30 +19,35 @@ function buildAdminApiUrl(path: string): string {
   throw new Error("Falta VITE_API_BASE_URL para llamar al servidor Node (Fastrax).");
 }
 
+/** Cabeceras planas de `init` sin `x-api-key` (no puede pisar la clave obligatoria). */
+function fastraxInitHeadersWithoutApiKey(init?: RequestInit): Record<string, string> {
+  const h = init?.headers;
+  if (!h || typeof h !== "object" || Array.isArray(h) || h instanceof Headers) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(h as Record<string, string>)) {
+    if (String(k).toLowerCase() === "x-api-key") continue;
+    if (v != null && String(v) !== "") out[k] = String(v);
+  }
+  return out;
+}
+
 async function fastraxAdminJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = adminBearer();
-  const apiKey = (import.meta.env.VITE_API_KEY || "").trim();
+  const viteKey = import.meta.env.VITE_API_KEY;
+  const apiKey = (typeof viteKey === "string" && viteKey.trim() ? viteKey.trim() : null) ?? "neura123";
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
-    console.log("[fastrax-api] headers", { hasToken: !!token, hasApiKey: !!apiKey });
-  }
-  if (!token && !apiKey) {
-    throw new Error("No hay sesión de administrador. Iniciá sesión en el panel o definí VITE_API_KEY en el build.");
+    console.log("[fastrax-api] headers", { hasToken: !!token, apiKeyFromEnv: !!(viteKey && String(viteKey).trim()) });
   }
   const url = buildAdminApiUrl(path);
   const res = await fetch(url, {
     ...init,
     headers: {
-      ...(init?.headers &&
-      typeof init.headers === "object" &&
-      !Array.isArray(init.headers) &&
-      !(init.headers instanceof Headers)
-        ? (init.headers as Record<string, string>)
-        : {}),
-      "Content-Type": "application/json",
+      ...fastraxInitHeadersWithoutApiKey(init),
       Accept: "application/json",
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(apiKey ? { "x-api-key": apiKey } : {}),
+      "x-api-key": apiKey,
     },
   });
   const text = await res.text().catch(() => "");
@@ -174,7 +179,7 @@ export async function searchFastraxProductsForAdmin(args: {
 
 /**
  * Importa al catálogo local con los datos del buscador (upsert; mismo proveedor Fastrax).
- * Requiere `Authorization: Bearer` admin.
+ * Auth vía `x-api-key` (igual que el resto de llamadas Fastrax admin); Bearer opcional.
  */
 export async function importFastraxItemsToCatalog(
   items: FastraxImportItemInput[]
