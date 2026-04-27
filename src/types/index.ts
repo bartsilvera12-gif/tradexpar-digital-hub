@@ -60,7 +60,7 @@ export interface OrderLineItem extends OrderItem {
   external_url?: string | null;
 }
 
-export type OrderKindComputed = "internal" | "dropi" | "mixed";
+export type OrderKindComputed = "internal" | "dropi" | "fastrax" | "mixed";
 
 export interface CreateOrderPayload {
   items: OrderItem[];

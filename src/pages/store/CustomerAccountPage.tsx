@@ -200,6 +200,23 @@ function AccountContent({
         <p className="text-sm text-muted-foreground mt-3">Email</p>
         <p className="font-semibold text-foreground">{user.email}</p>
 
+        {allowsPasswordSection === null && (
+          <p className="text-sm text-muted-foreground border-t border-border pt-6 mt-6">
+            Comprobando si podés usar contraseña en esta cuenta…
+          </p>
+        )}
+
+        {allowsPasswordSection === false && (
+          <div className="border-t border-border pt-6 mt-6 space-y-2">
+            <h2 className="text-lg font-semibold text-foreground">Contraseña</h2>
+            <p className="text-sm text-muted-foreground">
+              Esta cuenta inició sesión con <span className="font-medium text-foreground">Google o Facebook</span> (o no
+              tiene contraseña propia en la tienda). El cambio de clave se hace desde la seguridad de esa cuenta (Google /
+              Meta), no desde esta página.
+            </p>
+          </div>
+        )}
+
         {allowsPasswordSection === true && (
           <div className="border-t border-border pt-6 mt-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Contraseña</h2>

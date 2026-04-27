@@ -49,7 +49,9 @@ function OrderKindBadge({ kind }: { kind: ReturnType<typeof deriveOrderKind> }) 
       ? "border-sky-500/55 bg-sky-500/12 text-sky-900 dark:text-sky-100 dark:border-sky-400/45"
       : kind === "dropi"
         ? "border-orange-500/55 bg-orange-500/12 text-orange-950 dark:text-orange-100 dark:border-orange-400/45"
-        : "border-violet-500/55 bg-violet-500/12 text-violet-950 dark:text-violet-100 dark:border-violet-400/45";
+        : kind === "fastrax"
+          ? "border-cyan-500/55 bg-cyan-500/12 text-cyan-950 dark:text-cyan-100 dark:border-cyan-400/45"
+          : "border-violet-500/55 bg-violet-500/12 text-violet-950 dark:text-violet-100 dark:border-violet-400/45";
   return (
     <Badge
       variant="outline"
@@ -76,11 +78,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/** Colores alineados al reporte principal: Tradexpar celeste, Dropi naranja. */
-function lineOriginBadgeClass(dropi: boolean) {
-  return dropi
-    ? "border-orange-500/55 text-orange-950 dark:text-orange-100 bg-orange-500/10 shadow-sm"
-    : "border-sky-500/55 text-sky-950 dark:text-sky-100 bg-sky-500/10 shadow-sm";
+/** Colores alineados al reporte: Tradexpar celeste, Dropi naranja, Fastrax cian. */
+function lineOriginBadgeForItem(it: OrderLineItem) {
+  if (isDropiLine(it)) {
+    return "border-orange-500/55 text-orange-950 dark:text-orange-100 bg-orange-500/10 shadow-sm";
+  }
+  if (isFastraxLine(it)) {
+    return "border-cyan-500/55 text-cyan-950 dark:text-cyan-100 bg-cyan-500/10 shadow-sm";
+  }
+  return "border-sky-500/55 text-sky-950 dark:text-sky-100 bg-sky-500/10 shadow-sm";
 }
 
 function LineStatusSelect({
@@ -909,7 +915,7 @@ export default function AdminOrdersPage() {
                       variant="outline"
                       className={cn(
                         "inline-flex items-center justify-center shrink-0 text-[10px] px-2.5 py-1 min-h-[1.625rem] whitespace-nowrap leading-none",
-                        lineOriginBadgeClass(dropi)
+                        lineOriginBadgeForItem(rep)
                       )}
                     >
                       {productTypeLabel(rep.product_source_type)}
@@ -1027,7 +1033,7 @@ export default function AdminOrdersPage() {
                             variant="outline"
                             className={cn(
                               "inline-flex items-center justify-center text-[10px] px-2.5 py-1 min-h-[1.625rem] whitespace-nowrap leading-none",
-                              lineOriginBadgeClass(dropi)
+                              lineOriginBadgeForItem(rep)
                             )}
                           >
                             {productTypeLabel(rep.product_source_type)}

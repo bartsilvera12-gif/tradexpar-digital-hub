@@ -32,18 +32,40 @@ export const ITEM_STATUSES_DROPI = [
   "cancelled",
 ] as const;
 
+export function isDropiLine(it: OrderLineItem): boolean {
+  return it.product_source_type === "dropi" || it.external_provider === "dropi";
+}
+
+export function isFastraxLine(it: OrderLineItem): boolean {
+  if (it.product_source_type === "fastrax") return true;
+  const p = (it.external_provider || "").toString().toLowerCase();
+  return p === "fastrax";
+}
+
+function lineItemOriginKind(
+  it: OrderLineItem
+): Extract<OrderKindComputed, "dropi" | "fastrax" | "internal"> {
+  if (isDropiLine(it)) return "dropi";
+  if (isFastraxLine(it)) return "fastrax";
+  return "internal";
+}
+
 export function deriveOrderKind(items: OrderLineItem[]): OrderKindComputed {
   if (!items.length) return "internal";
-  const set = new Set(
-    items.map((i) => (i.product_source_type === "dropi" ? "dropi" : "internal"))
-  );
-  if (set.size === 1) return set.has("dropi") ? "dropi" : "internal";
+  const set = new Set(items.map(lineItemOriginKind));
+  if (set.size === 1) {
+    const k = set.values().next().value;
+    if (k === "dropi") return "dropi";
+    if (k === "fastrax") return "fastrax";
+    return "internal";
+  }
   return "mixed";
 }
 
 export function orderKindLabel(k: OrderKindComputed): string {
   if (k === "internal") return "Tradexpar";
   if (k === "dropi") return "Dropi";
+  if (k === "fastrax") return "Fastrax";
   return "Mixto";
 }
 
@@ -57,16 +79,6 @@ export function sourceLabel(src: OrderLineItem["product_source_type"]): string {
   if (src === "dropi") return "Dropi";
   if (src === "fastrax") return "Fastrax";
   return "Tradexpar";
-}
-
-export function isDropiLine(it: OrderLineItem): boolean {
-  return it.product_source_type === "dropi" || it.external_provider === "dropi";
-}
-
-export function isFastraxLine(it: OrderLineItem): boolean {
-  if (it.product_source_type === "fastrax") return true;
-  const p = (it.external_provider || "").toString().toLowerCase();
-  return p === "fastrax";
 }
 
 export function dropiLinkForLine(

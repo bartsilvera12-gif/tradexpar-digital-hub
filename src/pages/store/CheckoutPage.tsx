@@ -285,7 +285,20 @@ export default function CheckoutPage() {
         void finalizeAffiliateAttribution(order.id);
       }
 
-      setPendingOrderId(order.id);
+      const orderId = order.id;
+      setPendingOrderId(orderId);
+
+      /** Ir directo a PagoPar con el primer medio disponible (mismo comportamiento por defecto que el modal). */
+      try {
+        const r = await api.getPagoparPaymentMethods();
+        if (r.ok && Array.isArray(r.methods) && r.methods.length > 0) {
+          const started = await runCreatePaymentAndRedirect(r.methods[0].id, orderId);
+          if (started) return;
+        }
+      } catch {
+        /* Siguiente paso: modal para elegir medio o reintentar */
+      }
+
       setShowPaymentMethodDialog(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al procesar el pedido");
@@ -294,9 +307,10 @@ export default function CheckoutPage() {
     }
   };
 
-  const runCreatePaymentAndRedirect = async (formaPago: number) => {
-    const oid = pendingOrderId;
-    if (!oid) return;
+  /** Devuelve true si el pago se inició (redirect o navegación a éxito). False si hubo error (p. ej. para abrir el modal). */
+  const runCreatePaymentAndRedirect = async (formaPago: number, explicitOrderId?: string): Promise<boolean> => {
+    const oid = explicitOrderId ?? pendingOrderId;
+    if (!oid) return false;
     setPaying(true);
     setError(null);
     try {
@@ -309,11 +323,13 @@ export default function CheckoutPage() {
         sessionStorage.setItem("tradexpar_order_id", oid);
         sessionStorage.setItem("tradexpar_payment_ref", payment.ref);
         window.location.href = payment.paymentLink;
-      } else {
-        navigate(`/success?order_id=${oid}&ref=${payment.ref}`);
+        return true;
       }
+      navigate(`/success?order_id=${oid}&ref=${payment.ref}`);
+      return true;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar el pago con PagoPar");
+      return false;
     } finally {
       setPaying(false);
     }
