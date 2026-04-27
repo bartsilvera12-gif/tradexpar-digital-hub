@@ -5,6 +5,7 @@ import processStep1 from "@/assets/process-step1.jpg";
 import processStep2 from "@/assets/process-step2.jpg";
 import processStep3 from "@/assets/process-step3.jpg";
 import { ProductCard } from "@/components/store/ProductCard";
+import { ViralProductRotatingSection } from "@/components/store/ViralProductRotatingSection";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
@@ -30,7 +31,7 @@ export default function HomePage() {
     categoryMap.get(p.category)!.push(p);
   });
   const allCategories = [...categoryMap.entries()];
-  const viralDropi = products.filter((p) => p.product_source_type === "dropi").slice(0, 4);
+  const viralDropiAll = products.filter((p) => p.product_source_type === "dropi");
 
   return (
     <>
@@ -89,12 +90,12 @@ export default function HomePage() {
         )}
 
         {/* Los más virales */}
-        {!loading && !error && viralDropi.length > 0 && (
-          <ProductSection
+        {!loading && !error && viralDropiAll.length > 0 && (
+          <ViralProductRotatingSection
             title="Los más virales"
             subtitle="Tendencias del momento"
             linkTo="/products?source=dropi"
-            products={viralDropi}
+            products={viralDropiAll}
           />
         )}
 
