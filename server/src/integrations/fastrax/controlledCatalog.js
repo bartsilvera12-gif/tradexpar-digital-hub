@@ -189,22 +189,148 @@ export async function importFastraxSkusToProducts(sb, skus) {
 }
 
 /**
- * Nombre con URL-encoding típico de PHP.
- * @param {string | null | undefined} raw
+ * Nombre ope=2: campo `nom` con URL encoding (misma idea que en PHP).
+ * @param {unknown} nom
  * @returns {string}
  */
-function decodeFastraxDisplayName(raw) {
-  if (raw == null) return "";
-  const withSpaces = String(raw).replace(/\+/g, " ");
+function decodeFastraxNom(nom) {
+  if (nom == null) return "";
+  const s = String(nom).replace(/\+/g, " ");
   try {
-    return decodeURIComponent(withSpaces).trim();
+    return decodeURIComponent(s).trim();
   } catch {
-    return withSpaces.trim();
+    return s.trim();
   }
 }
 
 /**
+ * @param {unknown} v
+ * @returns {number}
+ */
+function numF(v) {
+  if (v == null || v === "") return 0;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Fastrax suele poner en `img` un número; si es ruta, contamos 1.
+ * @param {Record<string, unknown>} row
+ * @returns {number}
+ */
+function pickImagesCountFromOpe2(row) {
+  const v = row.img ?? row.Img;
+  if (v == null || v === "") return 0;
+  if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, Math.floor(v));
+  const t = String(v).trim();
+  if (!t) return 0;
+  if (/^-?\d+([.,]\d+)?$/.test(t)) return Math.max(0, Math.floor(numF(t)));
+  return 1;
+}
+
+/**
+ * @param {Record<string, unknown> | null} row
+ * @param {string} sku
+ * @param {boolean} ope2Failed
+ * @param {string} [errMsg]
+ */
+function ope2RowToSearchItem(row, sku, ope2Failed, errMsg) {
+  if (ope2Failed || !row) {
+    return {
+      sku: String(sku).trim(),
+      name: `Producto ${String(sku).trim()}`,
+      price: 0,
+      stock: 0,
+      images_count: 0,
+      status: 0,
+      raw_detail: ope2Failed
+        ? { _ope2_error: true, ...(errMsg ? { message: errMsg } : {}) }
+        : null,
+    };
+  }
+  const nRaw = row.nom ?? row.Nom ?? row.nombre ?? row.Nombre;
+  const name = nRaw != null && String(nRaw) !== "" ? decodeFastraxNom(nRaw) : "";
+  const price = Math.max(0, numF(row.pre));
+  const stock = Math.max(0, Math.floor(numF(row.sal)));
+  return {
+    sku: String(sku).trim(),
+    name,
+    price,
+    stock,
+    images_count: pickImagesCountFromOpe2(row),
+    status: (() => {
+      const st = [row.sit, row.Sit, row.est, row.Est, row.status, row.Status].find(
+        (x) => x != null && String(x) !== ""
+      );
+      return Math.floor(numF(st));
+    })(),
+    /** Copia plana; seguro en JSON. */
+    raw_detail: { ...row },
+  };
+}
+
+/**
+ * @param {unknown} root
+ * @param {string[]} keys
+ * @param {number} [depth]
+ * @returns {number | null}
+ */
+function findPositiveNumberByKeysDeep(root, keys, depth = 0) {
+  if (depth > 12) return null;
+  const set = new Set(keys.map((k) => k.toLowerCase()));
+  if (root == null) return null;
+  if (Array.isArray(root)) {
+    for (const e of root) {
+      const f = findPositiveNumberByKeysDeep(e, keys, depth + 1);
+      if (f != null) return f;
+    }
+    return null;
+  }
+  if (typeof root !== "object") return null;
+  for (const [k, v] of Object.entries(/** @type {Record<string, unknown>} */(root))) {
+    if (set.has(k.toLowerCase()) && v != null && v !== "") {
+      const n = Number(String(v).replace(/,/g, "."));
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  for (const v of Object.values(/** @type {Record<string, unknown>} */(root))) {
+    const f = findPositiveNumberByKeysDeep(v, keys, depth + 1);
+    if (f != null) return f;
+  }
+  return null;
+}
+
+/**
+ * @param {unknown} parsedOpe4
+ * @param {number} pageSize
+ */
+function inferTotalPagesFromOpe4(parsedOpe4, pageSize) {
+  const s = pageSize > 0 ? pageSize : 1;
+  const pags = findPositiveNumberByKeysDeep(parsedOpe4, [
+    "pags",
+    "totpag",
+    "tot_pag",
+    "paginas",
+    "total_pag",
+    "totpages",
+    "totpags",
+  ]);
+  if (pags != null && pags >= 1) return Math.min(1_000_000, Math.floor(pags));
+  const tot = findPositiveNumberByKeysDeep(parsedOpe4, [
+    "tot",
+    "total",
+    "registros",
+    "totreg",
+    "totregistros",
+    "treg",
+  ]);
+  if (tot != null && tot > 0) return Math.max(1, Math.min(1_000_000, Math.ceil(tot / s)));
+  return 1;
+}
+
+/**
  * Solo lectura: ope=4 (una página, tam ≤ 20) + ope=2 por SKU. Sin tocar la DB.
+ * Nombres: solo desde ope=2, campo `nom` decodificado; `pre` / `sal` en detalle.
  * @param {object} p
  * @param {string} [p.q] — o alias `search`
  * @param {number} [p.page] — default 1
@@ -225,50 +351,51 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
   const size = Math.max(1, Math.min(20, Math.floor(Number(p.size) || 20)));
   const qn = q.toLowerCase();
 
-  /**
-   * @param {Record<string, unknown> | null} raw0
-   * @param {string} [skuCtx]
-   */
-  const itemFromOpe2 = (raw0, skuCtx) => {
-    if (!raw0) return null;
-    const m = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (raw0));
-    if (!m) return null;
-    const name = decodeFastraxDisplayName(m.name);
-    const it = toListItem({ ...m, name, external_sku: skuCtx || m.external_sku });
+  const matches = (it) => {
     if (q) {
-      if (!name.toLowerCase().includes(qn) && !String(it.sku).toLowerCase().includes(qn)) return null;
+      const inName = (it.name || "").toLowerCase().includes(qn);
+      const inSku = String(it.sku).toLowerCase().includes(qn);
+      if (!inName && !inSku) return false;
     }
-    if (onlyStock && (it.stock ?? 0) <= 0) return null;
-    return { sku: it.sku, name, price: it.price, stock: it.stock, state: it.state };
+    if (onlyStock && (it.stock ?? 0) <= 0) return false;
+    return true;
   };
 
   if (onlySku) {
     const r2 = await getProductDetails(onlySku);
     if (!r2 || r2.ok === false) {
+      console.log(`[fastrax/search] page=1 size=${size} sku_count=1 detail_ok=0 detail_failed=1`);
       return {
         ok: false,
         page: 1,
+        size,
+        total_pages: 1,
+        source_count: 1,
         items: [],
         message: r2 && r2.message ? String(r2.message) : "ope=2",
-        data: r2 && r2.parsed,
       };
     }
     const drows = extractProductRows(/** @type {unknown} */ (r2.parsed));
     const raw0 =
       drows[0] ||
       (r2.parsed && typeof r2.parsed === "object" && !Array.isArray(r2.parsed) ? r2.parsed : null);
-    const row = itemFromOpe2(
-      raw0 && typeof raw0 === "object" ? /** @type {Record<string, unknown>} */ (raw0) : null,
-      onlySku
+    const row = raw0 && typeof raw0 === "object" ? /** @type {Record<string, unknown>} */(raw0) : null;
+    const detailFailed = !row ? 1 : 0;
+    const detailOk = row ? 1 : 0;
+    console.log(
+      `[fastrax/search] page=1 size=${size} sku_count=1 detail_ok=${detailOk} detail_failed=${detailFailed}`
     );
     if (!row) {
-      return { ok: true, page: 1, items: [], data: r2.parsed };
+      return { ok: true, page: 1, size, total_pages: 1, source_count: 1, items: [] };
     }
+    const item = ope2RowToSearchItem(row, onlySku, false);
     return {
       ok: true,
       page: 1,
-      items: [row],
-      data: r2.parsed,
+      size,
+      total_pages: 1,
+      source_count: 1,
+      items: matches(item) ? [item] : [],
     };
   }
 
@@ -277,16 +404,20 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
     return {
       ok: false,
       page,
+      size,
+      total_pages: 1,
+      source_count: 0,
       items: [],
       message: r4 && r4.message ? String(r4.message) : "ope=4",
     };
   }
-  const listRows = extractProductRows(/** @type {unknown} */ (r4.parsed));
+  const totalPages = inferTotalPagesFromOpe4(r4.parsed, size);
+  const listRows = extractProductRows(/** @type {unknown} */(r4.parsed));
   const skus = [];
   const seen = new Set();
   for (const raw of listRows) {
     if (!raw || typeof raw !== "object") continue;
-    const m0 = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (raw));
+    const m0 = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */(raw));
     if (!m0) continue;
     const s = m0.external_sku;
     if (!s || seen.has(s)) continue;
@@ -295,17 +426,34 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
     if (skus.length >= 20) break;
   }
 
+  const source_count = skus.length;
+  let detailOk = 0;
+  let detailFailed = 0;
   const items = [];
   for (const sku of skus) {
     const r2 = await getProductDetails(sku);
-    if (!r2 || r2.ok === false) continue;
-    const drows = extractProductRows(/** @type {unknown} */ (r2.parsed));
+    if (!r2 || r2.ok === false) {
+      detailFailed += 1;
+      const fall = ope2RowToSearchItem(null, sku, true, r2 && r2.message ? String(r2.message) : "ope=2");
+      if (matches(fall)) items.push(fall);
+      continue;
+    }
+    const drows = extractProductRows(/** @type {unknown} */(r2.parsed));
     const raw0 =
       drows[0] ||
       (r2.parsed && typeof r2.parsed === "object" && !Array.isArray(r2.parsed) ? r2.parsed : null);
-    if (!raw0) continue;
-    const row = itemFromOpe2(/** @type {Record<string, unknown>} */ (raw0), sku);
-    if (row) items.push(row);
+    if (!raw0 || typeof raw0 !== "object") {
+      detailFailed += 1;
+      const fall = ope2RowToSearchItem(null, sku, true, "sin_fila");
+      if (matches(fall)) items.push(fall);
+      continue;
+    }
+    detailOk += 1;
+    const it = ope2RowToSearchItem(/** @type {Record<string, unknown>} */(raw0), sku, false);
+    if (matches(it)) items.push(it);
   }
-  return { ok: true, page, items };
+  console.log(
+    `[fastrax/search] page=${page} size=${size} sku_count=${source_count} detail_ok=${detailOk} detail_failed=${detailFailed}`
+  );
+  return { ok: true, page, size, total_pages: totalPages, source_count, items };
 }

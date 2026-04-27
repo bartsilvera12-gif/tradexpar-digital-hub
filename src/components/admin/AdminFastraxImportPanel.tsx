@@ -133,9 +133,9 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
     try {
       const r = await searchFastraxProductsForAdmin({ sku, size: 1, page: 1 });
       if (r && "ok" in r && r.ok) {
-        const d = (r as { data?: unknown }).data;
-        if (d != null) {
-          setDetailJson(JSON.stringify(d, null, 2));
+        const raw = r.items[0]?.raw_detail;
+        if (raw != null) {
+          setDetailJson(JSON.stringify(raw, null, 2));
         } else {
           setDetailJson(JSON.stringify(r, null, 2));
         }
@@ -328,7 +328,7 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
                           : "bg-muted text-muted-foreground"
                       )}
                     >
-                      {row.state}
+                      {row.price > 0 ? (row.stock > 0 ? "Vendible" : "Sin stock") : "Precio 0"}
                     </span>
                   </td>
                   <td className={`${ADMIN_TD} text-right`}>

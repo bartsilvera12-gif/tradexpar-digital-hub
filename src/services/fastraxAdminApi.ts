@@ -62,16 +62,22 @@ export type FastraxAdminListItem = {
   name: string;
   price: number;
   stock: number;
-  state: string;
+  /** ope=2: cantidad o equivalente. */
+  images_count: number;
+  /** p. ej. Fastrax `sit`. */
+  status: number;
+  /** Fila ope=2 (sin tocar), o `_ope2_error` si falló ope=2. */
+  raw_detail?: Record<string, unknown> | null;
 };
 
 /** Solo lectura: ope=4 + ope=2 por fila, o con `sku` solo ope=2. */
 export type FastraxSearchOk = {
   ok: true;
   page: number;
+  size: number;
+  total_pages: number;
+  source_count: number;
   items: FastraxAdminListItem[];
-  /** Presente p. ej. con `?sku=` (detalle ope=2, respuesta cruda). */
-  data?: unknown;
 };
 
 export type FastraxSearchResult = FastraxSearchOk | { ok: false; ope?: number; message?: string; error?: string; parsed?: unknown };
