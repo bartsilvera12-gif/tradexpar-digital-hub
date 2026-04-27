@@ -783,6 +783,28 @@ export default function AdminOrdersPage() {
     const canFinalize = canFinalizeOrderFromItems(merged) && !closed;
     const busy = savingLinesOrderId === o.id || finalizingOrderId === o.id;
 
+    const shippingLabel = (o.shipping_option && o.shipping_option.trim()) || "";
+    const shippingFeeNum =
+      typeof o.shipping_fee === "number" && Number.isFinite(o.shipping_fee) ? o.shipping_fee : null;
+
+    const orderShippingSection = (
+      <div className="rounded-lg border border-border/80 bg-card/60 px-3 py-3 mb-4 text-xs sm:text-sm">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          Opción de envío
+        </p>
+        <div className="space-y-1">
+          <p className="text-foreground font-medium">
+            {shippingLabel || <span className="text-muted-foreground font-normal">No registrado</span>}
+          </p>
+          {shippingFeeNum != null && shippingFeeNum > 0 && (
+            <p className="text-muted-foreground tabular-nums">
+              Cargo envío: ₲{shippingFeeNum.toLocaleString("es-PY")}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+
     const sectionTitle = (
       <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
         Líneas del pedido
@@ -872,6 +894,7 @@ export default function AdminOrdersPage() {
     if (o.items.length === 0) {
       return (
         <>
+          {orderShippingSection}
           {sectionTitle}
           <p className="py-4 text-center text-sm text-muted-foreground">Sin líneas en este pedido.</p>
           <OrderDropiCard o={o} />
@@ -882,6 +905,7 @@ export default function AdminOrdersPage() {
 
     return (
       <>
+        {orderShippingSection}
         {sectionTitle}
         <div className="grid gap-2 lg:hidden">
           {lineGroups.map((g) => {

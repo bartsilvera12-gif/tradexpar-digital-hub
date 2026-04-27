@@ -233,8 +233,8 @@ function AccountContent({
               </p>
             ) : pwStatus?.reason === "not_authenticated" ? (
               <p className="text-sm text-muted-foreground">
-                La sesión de acceso no llegó al servidor. Cerrá sesión y volvé a iniciar sesión; si usás otra pestaña del
-                panel admin, probá en una ventana privada solo para la tienda.
+                La sesión de acceso no llegó al servidor. Cerrá sesión y volvé a iniciar sesión. Si sigue igual, probá en
+                una ventana privada solo para este sitio.
               </p>
             ) : pwStatus?.reason === "load_error" ? (
               <p className="text-sm text-muted-foreground">

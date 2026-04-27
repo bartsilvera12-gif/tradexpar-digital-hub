@@ -22,6 +22,9 @@ import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/af
 import type { CustomerLocation, ParaguayCity } from "@/types";
 import { PAGOPAR_CIUDADES_PY } from "@/config/pagoparCiudadesPy";
 
+/** Costo envío 24 h (debe coincidir con la RPC `create_checkout_order` en Supabase). */
+const SHIPPING_24H_PYG = 25_000;
+
 const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
 
@@ -53,6 +56,9 @@ export default function CheckoutPage() {
   const { items, clearCart } = useCart();
   const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
   const totalPrice = cartTotal(items);
+  const [shippingOption, setShippingOption] = useState<"24h" | "48h">("48h");
+  const shippingFee = shippingOption === "24h" ? SHIPPING_24H_PYG : 0;
+  const orderGrandTotal = totalPrice + shippingFee;
   const { user } = useCustomerAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -260,6 +266,7 @@ export default function CheckoutPage() {
             if (fromUrl) return fromUrl;
             return getActiveAffiliateRef() || undefined;
           })(),
+        shipping_option: shippingOption,
       });
 
       if (affiliatesAvailable()) {
@@ -443,6 +450,21 @@ export default function CheckoutPage() {
                 />
               </div>
 
+              <div className="min-w-0">
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Envío <span className="text-destructive">*</span>
+                </label>
+                <Select value={shippingOption} onValueChange={(v) => setShippingOption(v as "24h" | "48h")}>
+                  <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
+                    <SelectValue placeholder="Seleccioná el envío" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(22rem,50vh)]">
+                    <SelectItem value="48h">Entrega en 48 horas – Gratis</SelectItem>
+                    <SelectItem value="24h">Entrega en 24 horas – Gs. 25.000</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {user && locations.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -513,6 +535,9 @@ export default function CheckoutPage() {
                 {items.reduce((n, i) => n + i.quantity, 0)} producto
                 {items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"} en el carrito
               </p>
+              <p className="text-xs text-muted-foreground leading-snug rounded-lg border border-border/80 bg-muted/40 px-3 py-2.5 [text-wrap:balance]">
+                Envíos solo a Asunción y Gran Asunción – Departamento Central.
+              </p>
 
               <div className="space-y-3">
                 {items.map((item) => (
@@ -525,9 +550,21 @@ export default function CheckoutPage() {
                     </span>
                   </div>
                 ))}
+                <div className="border-t pt-3 space-y-2 text-sm">
+                  <div className="flex justify-between gap-3 text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="shrink-0">₲{totalPrice.toLocaleString("es-PY")}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-muted-foreground">
+                    <span>Envío</span>
+                    <span className="shrink-0">
+                      {shippingFee === 0 ? "Gratis" : `₲${shippingFee.toLocaleString("es-PY")}`}
+                    </span>
+                  </div>
+                </div>
                 <div className="border-t pt-3 flex justify-between font-semibold text-lg">
                   <span>Total</span>
-                  <span>₲{totalPrice.toLocaleString("es-PY")}</span>
+                  <span>₲{orderGrandTotal.toLocaleString("es-PY")}</span>
                 </div>
               </div>
             </div>

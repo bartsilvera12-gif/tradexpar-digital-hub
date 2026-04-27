@@ -52,6 +52,7 @@ export async function createCheckoutOrder(payload: CreateOrderPayload): Promise<
     p_customer_address: payload.customer.address?.trim() || null,
     p_customer_city_code: payload.customer.city_code?.trim() || null,
     p_customer_address_reference: payload.customer.address_reference?.trim() || null,
+    p_shipping_option: payload.shipping_option ?? "48h",
   });
 
   if (error) throw error;

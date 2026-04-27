@@ -1,5 +1,17 @@
+import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  AlertCircle,
+  Ban,
+  CheckCircle2,
+  Clock,
+  Eye,
+  Percent,
+  RefreshCw,
+  ShoppingBag,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +43,7 @@ import type {
 } from "@/types/affiliatesPro";
 import {
   ADMIN_CARD,
+  ADMIN_PANEL,
   ADMIN_FORM_CONTROL,
   ADMIN_FORM_FIELD,
   ADMIN_FORM_LABEL,
@@ -350,13 +363,43 @@ export function AssetsTab() {
   );
 }
 
-function MetricCard({ title, value }: { title: string; value: string }) {
+/** Misma tarjeta KPI que el dashboard principal (`AdminDashboardPage`). */
+function DashboardStatCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  index = 0,
+}: {
+  label: string;
+  value: string;
+  hint?: string | null;
+  icon: LucideIcon;
+  index?: number;
+}) {
   return (
-    <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
-      <p className="text-xs text-muted-foreground">{title}</p>
-      <p className="text-lg font-semibold text-foreground mt-1">{value}</p>
-    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+      className="bg-card rounded-2xl border border-border/80 shadow-card p-5"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="text-xl font-bold text-foreground mt-1 break-words">{value}</p>
+          {hint ? <p className="text-[11px] text-muted-foreground mt-2 leading-snug">{hint}</p> : null}
+        </div>
+        <div className="w-10 h-10 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
+          <Icon className="h-5 w-5 text-primary" strokeWidth={1.75} aria-hidden />
+        </div>
+      </div>
+    </motion.div>
   );
+}
+
+function formatGs(n: number) {
+  return `Gs. ${Number(n).toLocaleString("es-PY")}`;
 }
 
 export function AnalyticsTab() {
@@ -375,124 +418,186 @@ export function AnalyticsTab() {
     load();
   }, [load]);
 
-  if (loading) return <Loader text="Cargando analytics…" />;
+  if (loading) return <Loader text="Cargando analítica…" />;
   if (!data) return <p className="text-muted-foreground">Sin datos.</p>;
 
   const c = data.commissions_by_status;
   const f = data.funnel_30d;
+  const conversionPct =
+    f.visits_30d > 0 ? ((f.attributions_30d / f.visits_30d) * 100).toFixed(2) : null;
+
+  const commissionCards: { label: string; amount: number; icon: LucideIcon }[] = [
+    { label: "Pendiente", amount: c.pending, icon: Clock },
+    { label: "Aprobada", amount: c.approved, icon: CheckCircle2 },
+    { label: "Pagada", amount: c.paid, icon: Wallet },
+    { label: "Cancelada", amount: c.cancelled, icon: Ban },
+    { label: "Rechazada", amount: c.rejected, icon: AlertCircle },
+  ];
 
   return (
-    <div className="w-full min-w-0 space-y-6">
-      <div className="flex justify-end">
-        <Button type="button" variant="outline" size="sm" onClick={load}>
+    <div className="w-full min-w-0 space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
+          Mismo estilo de resumen que el dashboard: embudo a 30 días, montos de comisiones por estado y tablas de
+          desempeño.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 rounded-xl border-border/80 shadow-sm"
+          onClick={load}
+        >
           <RefreshCw className="h-4 w-4 mr-2" />
           Actualizar
         </Button>
       </div>
 
-      <div>
-        <h3 className="font-semibold text-foreground mb-3">Embudo 30 días</h3>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <MetricCard title="Visitas" value={String(f.visits_30d)} />
-          <MetricCard title="Atribuciones (ventas)" value={String(f.attributions_30d)} />
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Embudo 30 días</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <DashboardStatCard
+            index={0}
+            label="Visitas"
+            value={String(f.visits_30d)}
+            icon={Eye}
+            hint="Interacciones con enlace de afiliado en los últimos 30 días."
+          />
+          <DashboardStatCard
+            index={1}
+            label="Atribuciones (ventas)"
+            value={String(f.attributions_30d)}
+            icon={ShoppingBag}
+            hint="Ventas contabilizadas con referido en el período."
+          />
+          <DashboardStatCard
+            index={2}
+            label="Conversión aprox."
+            value={conversionPct != null ? `${conversionPct}%` : "—"}
+            icon={Percent}
+            hint={
+              f.visits_30d > 0
+                ? "Atribuciones ÷ visitas del embudo."
+                : "Sin visitas en el período; no hay tasa."
+            }
+          />
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Conversión aprox.:{" "}
-          {f.visits_30d > 0 ? `${((f.attributions_30d / f.visits_30d) * 100).toFixed(2)}%` : "—"}
-        </p>
-      </div>
+      </section>
 
-      <div>
-        <h3 className="font-semibold text-foreground mb-3">Comisiones por estado</h3>
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-          <MetricCard title="Pendiente" value={`₲ ${Number(c.pending).toLocaleString("es-PY")}`} />
-          <MetricCard title="Aprobada" value={`₲ ${Number(c.approved).toLocaleString("es-PY")}`} />
-          <MetricCard title="Pagada" value={`₲ ${Number(c.paid).toLocaleString("es-PY")}`} />
-          <MetricCard title="Cancelada" value={`₲ ${Number(c.cancelled).toLocaleString("es-PY")}`} />
-          <MetricCard title="Rechazada" value={`₲ ${Number(c.rejected).toLocaleString("es-PY")}`} />
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Comisiones por estado</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+          {commissionCards.map((row, i) => (
+            <DashboardStatCard
+              key={row.label}
+              index={i}
+              label={row.label}
+              value={formatGs(row.amount)}
+              icon={row.icon}
+            />
+          ))}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h3 className="font-semibold text-foreground mb-2">{`Top ${DDI.pluralLower}`}</h3>
-        <div className={ADMIN_CARD}>
-          <div className={ADMIN_TABLE_SCROLL}>
-            <table className={ADMIN_TABLE}>
-              <thead>
-                <tr className={ADMIN_THEAD_ROW}>
-                  <th className={ADMIN_TH}>Nombre</th>
-                  <th className={ADMIN_TH}>Código</th>
-                  <th className={ADMIN_TH}>Ventas</th>
-                  <th className={ADMIN_TH}>Comisión Σ</th>
-                </tr>
-              </thead>
-              <tbody className={ADMIN_TBODY}>
-                {(data.top_affiliates ?? []).map((x) => (
-                  <tr key={x.affiliate_id} className={ADMIN_TR}>
-                    <td className={ADMIN_TD}>{x.name}</td>
-                    <td className={`${ADMIN_TD} font-mono text-xs`}>{x.code}</td>
-                    <td className={ADMIN_TD}>{x.sales}</td>
-                    <td className={ADMIN_TD}>₲ {Number(x.commission_sum).toLocaleString("es-PY")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <section className="space-y-4">
+        <div className={ADMIN_PANEL}>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-semibold text-foreground">{`Top ${DDI.pluralLower}`}</h3>
           </div>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-semibold text-foreground mb-2">{`Productos más vendidos vía ${DDI.pluralLower}`}</h3>
-        <div className={ADMIN_CARD}>
-          <div className={ADMIN_TABLE_SCROLL}>
-            <table className={ADMIN_TABLE}>
-              <thead>
-                <tr className={ADMIN_THEAD_ROW}>
-                  <th className={ADMIN_TH}>Producto</th>
-                  <th className={ADMIN_TH}>Cant.</th>
-                  <th className={ADMIN_TH}>Ingresos</th>
-                </tr>
-              </thead>
-              <tbody className={ADMIN_TBODY}>
-                {(data.top_products ?? []).map((x) => (
-                  <tr key={String(x.product_id)} className={ADMIN_TR}>
-                    <td className={ADMIN_TD}>{x.product_name || x.product_id}</td>
-                    <td className={ADMIN_TD}>{x.qty}</td>
-                    <td className={ADMIN_TD}>₲ {Number(x.revenue).toLocaleString("es-PY")}</td>
+          {(data.top_affiliates ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Sin datos de ranking.</p>
+          ) : (
+            <div className={ADMIN_TABLE_SCROLL}>
+              <table className={ADMIN_TABLE}>
+                <thead>
+                  <tr className={ADMIN_THEAD_ROW}>
+                    <th className={ADMIN_TH}>Nombre</th>
+                    <th className={ADMIN_TH}>Código</th>
+                    <th className={ADMIN_TH}>Ventas</th>
+                    <th className={ADMIN_TH}>Comisión Σ</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className={ADMIN_TBODY}>
+                  {(data.top_affiliates ?? []).map((x) => (
+                    <tr key={x.affiliate_id} className={ADMIN_TR}>
+                      <td className={ADMIN_TD}>{x.name}</td>
+                      <td className={`${ADMIN_TD} font-mono text-xs`}>{x.code}</td>
+                      <td className={ADMIN_TD}>{x.sales}</td>
+                      <td className={`${ADMIN_TD} font-semibold tabular-nums`}>
+                        {formatGs(Number(x.commission_sum))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h3 className="font-semibold text-foreground mb-2">{`Devoluciones por ${DDI.singularLower}`}</h3>
-        <div className={ADMIN_CARD}>
-          <div className={ADMIN_TABLE_SCROLL}>
-            <table className={ADMIN_TABLE}>
-              <thead>
-                <tr className={ADMIN_THEAD_ROW}>
-                  <th className={ADMIN_TH}>{DDI.columnHeader}</th>
-                  <th className={ADMIN_TH}>Pedidos atrib.</th>
-                  <th className={ADMIN_TH}>Reembolsos</th>
-                </tr>
-              </thead>
-              <tbody className={ADMIN_TBODY}>
-                {(data.refunds_by_affiliate ?? []).map((x) => (
-                  <tr key={x.affiliate_id} className={ADMIN_TR}>
-                    <td className={ADMIN_TD}>{x.name}</td>
-                    <td className={ADMIN_TD}>{x.orders}</td>
-                    <td className={ADMIN_TD}>{x.refunds}</td>
+      <section className="space-y-4">
+        <div className={ADMIN_PANEL}>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-semibold text-foreground">{`Productos más vendidos vía ${DDI.pluralLower}`}</h3>
+          </div>
+          {(data.top_products ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Sin productos en el período.</p>
+          ) : (
+            <div className={ADMIN_TABLE_SCROLL}>
+              <table className={ADMIN_TABLE}>
+                <thead>
+                  <tr className={ADMIN_THEAD_ROW}>
+                    <th className={ADMIN_TH}>Producto</th>
+                    <th className={ADMIN_TH}>Cant.</th>
+                    <th className={ADMIN_TH}>Ingresos</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className={ADMIN_TBODY}>
+                  {(data.top_products ?? []).map((x) => (
+                    <tr key={String(x.product_id)} className={ADMIN_TR}>
+                      <td className={ADMIN_TD}>{x.product_name || x.product_id}</td>
+                      <td className={ADMIN_TD}>{x.qty}</td>
+                      <td className={`${ADMIN_TD} font-semibold tabular-nums`}>{formatGs(Number(x.revenue))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
 
+      <section className="space-y-4">
+        <div className={ADMIN_PANEL}>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-semibold text-foreground">{`Devoluciones por ${DDI.singularLower}`}</h3>
+          </div>
+          {(data.refunds_by_affiliate ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Sin devoluciones registradas.</p>
+          ) : (
+            <div className={ADMIN_TABLE_SCROLL}>
+              <table className={ADMIN_TABLE}>
+                <thead>
+                  <tr className={ADMIN_THEAD_ROW}>
+                    <th className={ADMIN_TH}>{DDI.columnHeader}</th>
+                    <th className={ADMIN_TH}>Pedidos atrib.</th>
+                    <th className={ADMIN_TH}>Reembolsos</th>
+                  </tr>
+                </thead>
+                <tbody className={ADMIN_TBODY}>
+                  {(data.refunds_by_affiliate ?? []).map((x) => (
+                    <tr key={x.affiliate_id} className={ADMIN_TR}>
+                      <td className={ADMIN_TD}>{x.name}</td>
+                      <td className={ADMIN_TD}>{x.orders}</td>
+                      <td className={ADMIN_TD}>{x.refunds}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

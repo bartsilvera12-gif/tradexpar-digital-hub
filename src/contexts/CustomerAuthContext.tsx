@@ -23,6 +23,9 @@ interface CustomerAuthContextType {
 
 const STORAGE_KEY = "tradexpar_customer_user";
 
+/** Login/registro en la tienda (cliente): redes lentas u operaciones de Auth encoladas en el mismo navegador. No es el acceso al panel administrador. */
+const CUSTOMER_CREDENTIAL_FLOW_TIMEOUT_MS = 45_000;
+
 const CustomerAuthContext = createContext<CustomerAuthContextType | undefined>(undefined);
 
 function loadStoredUser(): CustomerUser | null {
@@ -125,7 +128,6 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const login = async (email: string, password: string) => {
     credentialAuthInProgressRef.current = true;
     setLoading(true);
-    const LOGIN_TIMEOUT_MS = 25_000;
     try {
       const response = await Promise.race([
         tradexpar.customerLogin({ email, password }),
@@ -134,10 +136,10 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
             () =>
               reject(
                 new Error(
-                  "El inicio de sesión tardó demasiado. Revisá tu conexión o intentá de nuevo."
+                  "El inicio de sesión tardó demasiado. Revisá tu conexión; si tenés esta tienda abierta en varias pestañas, cerrá las demás y volvé a intentar."
                 )
               ),
-            LOGIN_TIMEOUT_MS
+            CUSTOMER_CREDENTIAL_FLOW_TIMEOUT_MS
           );
         }),
       ]);
@@ -154,7 +156,6 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const register = async (name: string, email: string, password: string) => {
     credentialAuthInProgressRef.current = true;
     setLoading(true);
-    const REGISTER_TIMEOUT_MS = 25_000;
     try {
       const response = await Promise.race([
         tradexpar.customerRegister({ name, email, password }),
@@ -163,10 +164,10 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
             () =>
               reject(
                 new Error(
-                  "El registro tardó demasiado. Revisá tu conexión o intentá de nuevo."
+                  "El registro tardó demasiado. Revisá tu conexión; si tenés esta tienda abierta en varias pestañas, cerrá las demás y volvé a intentar."
                 )
               ),
-            REGISTER_TIMEOUT_MS
+            CUSTOMER_CREDENTIAL_FLOW_TIMEOUT_MS
           );
         }),
       ]);

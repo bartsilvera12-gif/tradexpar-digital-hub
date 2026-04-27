@@ -2,9 +2,11 @@ import { motion } from "framer-motion";
 import {
   Bell,
   CheckCheck,
+  Cpu,
   DollarSign,
   Package,
   ShoppingCart,
+  Truck,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -154,6 +156,17 @@ export default function AdminDashboardPage() {
   const monthRevenue = ordersThisMonth.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const totalRevenue = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
 
+  /** Por `order_kind` (líneas homogéneas Dropi / Fastrax). Los mixtos no suman aquí. */
+  const ordersByOriginKind = useMemo(() => {
+    let dropi = 0;
+    let fastrax = 0;
+    for (const o of orders) {
+      if (o.order_kind === "dropi") dropi += 1;
+      else if (o.order_kind === "fastrax") fastrax += 1;
+    }
+    return { dropi, fastrax };
+  }, [orders]);
+
   const chartData = useMemo(() => {
     if (products.length === 0) return [];
     const byType: Record<NonNullable<Product["product_source_type"]>, number> = {
@@ -227,6 +240,18 @@ export default function AdminDashboardPage() {
       value: totalStock.toLocaleString("es-PY"),
       icon: ShoppingCart,
       hint: "Unidades disponibles sumando el inventario de todos los productos.",
+    },
+    {
+      label: "Pedidos Dropi",
+      value: String(ordersByOriginKind.dropi),
+      icon: Truck,
+      hint: "Pedidos con todas las líneas de origen Dropi.",
+    },
+    {
+      label: "Pedidos Fastrax",
+      value: String(ordersByOriginKind.fastrax),
+      icon: Cpu,
+      hint: "Pedidos con todas las líneas de origen Fastrax.",
     },
   ];
 
@@ -375,7 +400,7 @@ export default function AdminDashboardPage() {
         <Loader text="Cargando datos..." />
       ) : (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-5">
             {stats.map((s, i) => (
               <motion.div
                 key={s.label}

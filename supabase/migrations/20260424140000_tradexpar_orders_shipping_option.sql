@@ -1,6 +1,5 @@
--- Datos de envío / facturación para checkout (PagoPar: documento, dirección, ciudad).
--- Opción de envío (24 h / 48 h) y columnas shipping_fee / shipping_option.
--- Ejecutar en SQL Editor (Neura / Supabase) después de tradexpar_catalog_orders o tradexpar_affiliates_pro.
+-- Opción de envío en checkout (24 h con costo / 48 h gratis).
+-- Amplía create_checkout_order con p_shipping_option y persiste shipping_fee + shipping_option en orders.
 
 alter table tradexpar.orders
   add column if not exists customer_document text,
@@ -12,8 +11,6 @@ alter table tradexpar.orders
   add column if not exists shipping_fee numeric(14, 2) not null default 0,
   add column if not exists shipping_option text;
 
-comment on column tradexpar.orders.customer_address_reference is
-  'Referencia de dirección (opcional): entre calles, piso, timbre, etc.';
 comment on column tradexpar.orders.shipping_fee is 'Costo de envío en PYG incluido en orders.total.';
 comment on column tradexpar.orders.shipping_option is 'Etiqueta legible de la opción elegida (24 h / 48 h).';
 

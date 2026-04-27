@@ -67,11 +67,25 @@
     overflow-x: clip;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /**
+     * Radix Select bloquea scroll en `body` al abrir; al desaparecer la barra vertical el ancho del
+     * viewport cambia y el layout salta (sidebar admin, etc.). Reservamos siempre el canal del scrollbar.
+     */
+    scrollbar-gutter: stable;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: clip;
     min-width: 280px;
+  }
+  /**
+   * react-remove-scroll añade padding/margin por la barra; con scrollbar-gutter: stable sobra y sigue
+   * habiendo salto. Anulamos la compensación para que no se mueva el lienzo al abrir selectores/dialogs.
+   */
+  html body[data-scroll-locked] {
+    --removed-body-scroll-bar-size: 0 !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
   #root {
     min-height: 100dvh;
