@@ -45,7 +45,8 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<FastraxAdminListItem[]>([]);
   const [importing, setImporting] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  /** Selección global por SKU (persiste al cambiar de página o filtro). */
+  const [selectedItemsBySku, setSelectedItemsBySku] = useState<Record<string, FastraxAdminListItem>>({});
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailJson, setDetailJson] = useState<string>("");
 
@@ -91,17 +92,22 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
     e.preventDefault();
     setAppliedSearch(textFilter.trim());
     setPage(1);
-    setSelected(new Set());
   };
 
-  const toggle = (sku: string) => {
-    setSelected((prev) => {
-      const n = new Set(prev);
-      if (n.has(sku)) n.delete(sku);
-      else n.add(sku);
-      return n;
+  const toggleRow = (row: FastraxAdminListItem) => {
+    const sku = String(row.sku ?? "").trim();
+    if (!sku) return;
+    setSelectedItemsBySku((prev) => {
+      const next = { ...prev };
+      if (next[sku]) delete next[sku];
+      else next[sku] = row;
+      return next;
     });
   };
+
+  const clearSelection = () => setSelectedItemsBySku({});
+
+  const selectedCount = Object.keys(selectedItemsBySku).length;
 
   const doImport = async (items: FastraxAdminListItem[]) => {
     if (items.length === 0) {
@@ -124,6 +130,9 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
         toast({ title: "Importación con errores", description: line, variant: "default" });
       } else {
         toast({ title: "Importado", description: line });
+      }
+      if (r.failed === 0) {
+        setSelectedItemsBySku({});
       }
       onLocalCatalogRefresh?.();
     } catch (e) {
@@ -213,9 +222,12 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
       </form>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Pág. {page} · {rows.length} fila(s) en esta vista (máx. 20 por pág., ope=4+ope=2)
-        </p>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <p>
+            Pág. {page} · {rows.length} fila(s) en esta vista (máx. 20 por pág., ope=4+ope=2)
+          </p>
+          <p className="font-medium text-foreground tabular-nums">Seleccionados: {selectedCount}</p>
+        </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"
@@ -244,15 +256,18 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         <Button
           type="button"
-          onClick={() => void doImport(rows.filter((r) => selected.has(r.sku)))}
-          disabled={importing || selected.size === 0}
+          onClick={() => void doImport(Object.values(selectedItemsBySku))}
+          disabled={importing || selectedCount === 0}
           className="gap-2"
         >
           {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Importar seleccionados{selected.size > 0 ? ` (${selected.size})` : ""}
+          Importar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
+        </Button>
+        <Button type="button" variant="outline" onClick={clearSelection} disabled={selectedCount === 0}>
+          Limpiar selección
         </Button>
       </div>
 
@@ -289,8 +304,8 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
                 <tr key={row.sku} className={ADMIN_TR}>
                   <td className={ADMIN_TD}>
                     <Checkbox
-                      checked={selected.has(row.sku)}
-                      onCheckedChange={() => toggle(row.sku)}
+                      checked={Boolean(selectedItemsBySku[row.sku])}
+                      onCheckedChange={() => toggleRow(row)}
                       aria-label={`Seleccionar ${row.sku}`}
                     />
                   </td>
