@@ -1,5 +1,22 @@
 import type { PaymentResponse, PaymentStatus } from "@/types";
 
+/** Panel pedidos: estado Fastrax (GET /api/admin/orders/:id/fastrax/status). */
+export type AdminFastraxStatusResponse = {
+  ok: boolean;
+  provider?: "fastrax";
+  order_id: string;
+  has_map: boolean;
+  map: Record<string, unknown> | null;
+  tracking: {
+    fastrax_ped: string | null;
+    fastrax_pdc: string | null;
+    status_code: number | null;
+    status_label: string;
+    last_sync_at: string | null;
+    error: string | null;
+  };
+};
+
 /** Base pública del servidor Node de pagos (sin barra final). Vacío en dev → URLs relativas `/api/...` (proxy Vite). */
 const RAW_PAYMENTS_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 /** Debe coincidir con API_PUBLIC_KEY del server de pagos (definir en .env como VITE_API_KEY). */
@@ -199,6 +216,34 @@ export const api = {
   postAdminOrderDropiCreate: (orderId: string) =>
     apiFetch<Record<string, unknown>>(
       `/api/admin/orders/${encodeURIComponent(orderId)}/dropi/create`,
+      { method: "POST", body: "{}" }
+    ),
+
+  /** Fastrax: lee `fastrax_order_map`; con `live` llama ope=13. */
+  getAdminOrderFastraxStatus: (orderId: string, live?: boolean) => {
+    const q = new URLSearchParams();
+    if (live) q.set("live", "1");
+    const qs = q.toString();
+    return apiFetch<AdminFastraxStatusResponse>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/status${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  postAdminOrderFastraxSyncStatus: (orderId: string) =>
+    apiFetch<AdminFastraxStatusResponse>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/sync-status`,
+      { method: "POST", body: "{}" }
+    ),
+
+  postAdminOrderFastraxCreate: (orderId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/create`,
+      { method: "POST", body: "{}" }
+    ),
+
+  postAdminOrderFastraxInvoice: (orderId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/invoice`,
       { method: "POST", body: "{}" }
     ),
 };

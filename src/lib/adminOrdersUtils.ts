@@ -63,6 +63,12 @@ export function isDropiLine(it: OrderLineItem): boolean {
   return it.product_source_type === "dropi" || it.external_provider === "dropi";
 }
 
+export function isFastraxLine(it: OrderLineItem): boolean {
+  if (it.product_source_type === "fastrax") return true;
+  const p = (it.external_provider || "").toString().toLowerCase();
+  return p === "fastrax";
+}
+
 export function dropiLinkForLine(
   it: OrderLineItem,
   orderExternalUrl?: string | null

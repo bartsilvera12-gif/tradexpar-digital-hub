@@ -18,6 +18,7 @@ import {
   groupOrderLinesForDisplay,
   hasLineDraftChanges,
   isDropiLine,
+  isFastraxLine,
   isOrderClosed,
   itemSummaryGrouped,
   orderKindLabel,
@@ -35,8 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ADMIN_CARD, ADMIN_FORM_CONTROL, ADMIN_TABLE_SCROLL } from "@/lib/adminModuleLayout";
-import { api } from "@/services/api";
-import { ChevronDown, ExternalLink, Loader2, Package, RefreshCw, CheckCircle2, Save } from "lucide-react";
+import { api, type AdminFastraxStatusResponse } from "@/services/api";
+import { ChevronDown, ExternalLink, Loader2, Package, RefreshCw, CheckCircle2, Save, Truck } from "lucide-react";
 
 function shortId(id: string) {
   return id.length > 10 ? `${id.slice(0, 8)}…` : id;
@@ -350,6 +351,241 @@ function OrderDropiCard({ o }: { o: Order }) {
   );
 }
 
+function formatFastraxMapSyncAt(iso: string | null | undefined): string {
+  if (iso == null || iso === "") return "—";
+  const d = new Date(String(iso));
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" });
+}
+
+function fastraxStateBadgeClass(code: number | null, err: string | null) {
+  if (err) return "border-rose-500/50 bg-rose-500/10 text-rose-900 dark:text-rose-100";
+  if (code === 7) return "border-emerald-500/50 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100";
+  return "border-cyan-500/50 bg-cyan-500/10 text-cyan-900 dark:text-cyan-100";
+}
+
+function shouldShowFastraxTrackingCard(o: Order) {
+  return o.items?.some((it) => isFastraxLine(it)) ?? false;
+}
+
+function fstrError(r: Record<string, unknown>, k: string): string {
+  const v = r[k];
+  return typeof v === "string" ? v : "";
+}
+
+function OrderFastraxCard({ o }: { o: Order }) {
+  if (!shouldShowFastraxTrackingCard(o)) return null;
+
+  const [st, setSt] = useState<AdminFastraxStatusResponse | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
+  const [actErr, setActErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadErr(null);
+    void (async () => {
+      try {
+        const r = await api.getAdminOrderFastraxStatus(o.id, false);
+        if (!r.ok) throw new Error("Respuesta inesperada");
+        setSt(r);
+      } catch (e) {
+        setLoadErr(e instanceof Error ? e.message : String(e));
+        setSt(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [o.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-4" data-testid="order-fastrax-block">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Cargando tracking Fastrax…
+      </div>
+    );
+  }
+
+  if (loadErr) {
+    return (
+      <div
+        className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 mt-4 text-xs text-amber-900 dark:text-amber-100"
+        data-testid="order-fastrax-block"
+      >
+        <p className="font-medium mb-1">Fastrax</p>
+        <p>{loadErr}</p>
+        <Button type="button" size="sm" variant="outline" className="mt-2 h-7 text-[10px]" onClick={() => void load()}>
+          Reintentar
+        </Button>
+      </div>
+    );
+  }
+
+  if (!st) return null;
+  const trk = st.tracking;
+  const hasPdc = Boolean(trk?.fastrax_pdc);
+  const hasMap = st.has_map;
+  const errDetail = (trk?.error || "").trim() || (st.map && mapErrorDetail(st.map as Record<string, unknown>));
+  const m = st.map as Record<string, unknown> | null;
+  const canInvoice = hasPdc;
+  const invoiceTried = m != null && m.invoice_response != null;
+  const showCreate = !hasPdc;
+  const showSync = hasMap;
+  const showInvoice = canInvoice;
+  const facturarLabel = invoiceTried ? "Reintentar facturación" : "Facturar Fastrax";
+
+  const onCreate = () => {
+    setActErr(null);
+    setCreating(true);
+    void (async () => {
+      try {
+        const r = (await api.postAdminOrderFastraxCreate(o.id)) as Record<string, unknown>;
+        if (r && (r as Record<string, unknown>).ok === false) {
+          const msg =
+            fstrError(r, "message") || fstrError(r, "error") || "No se pudo crear en Fastrax";
+          throw new Error(msg);
+        }
+        await load();
+      } catch (e) {
+        setActErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setCreating(false);
+      }
+    })();
+  };
+
+  const onSync = () => {
+    setActErr(null);
+    setSyncing(true);
+    void (async () => {
+      try {
+        const r = await api.postAdminOrderFastraxSyncStatus(o.id);
+        if (!r.ok) throw new Error("Sincronización Fastrax no ok");
+        setSt(r);
+      } catch (e) {
+        setActErr(e instanceof Error ? e.message : String(e));
+        try {
+          const r2 = await api.getAdminOrderFastraxStatus(o.id, true);
+          if (r2.ok) setSt(r2);
+        } catch {
+          /* */
+        }
+      } finally {
+        setSyncing(false);
+      }
+    })();
+  };
+
+  const onInvoice = () => {
+    setActErr(null);
+    setInvoicing(true);
+    void (async () => {
+      try {
+        const r = (await api.postAdminOrderFastraxInvoice(o.id)) as Record<string, unknown>;
+        if (r && (r as Record<string, unknown>).ok === false) {
+          const msg = fstrError(r, "message") || fstrError(r, "error") || "Facturación Fastrax falló";
+          throw new Error(String(msg));
+        }
+        await load();
+      } catch (e) {
+        setActErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setInvoicing(false);
+      }
+    })();
+  };
+
+  const stateLabel = (trk?.status_label || "").trim() || "—";
+
+  return (
+    <div
+      className="rounded-lg border border-border/80 bg-card p-3 sm:p-3.5 mt-4 space-y-2"
+      data-testid="order-fastrax-block"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center flex-wrap gap-2">
+          <Truck className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-300 shrink-0" />
+          <p className="text-xs font-semibold text-foreground">Fastrax</p>
+          <Badge
+            variant="outline"
+            className={cn("text-[9px] max-w-full whitespace-normal", fastraxStateBadgeClass(trk?.status_code ?? null, errDetail || null))}
+          >
+            {stateLabel}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {showSync && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[10px] gap-0.5"
+              disabled={syncing}
+              onClick={onSync}
+            >
+              {syncing ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Sincronizando…
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-3 w-3" />
+                  Sincronizar Fastrax
+                </>
+              )}
+            </Button>
+          )}
+          {showCreate && (
+            <Button type="button" size="sm" className="h-7 text-[10px]" disabled={creating} onClick={onCreate}>
+              {creating ? "Creando…" : "Crear pedido Fastrax"}
+            </Button>
+          )}
+          {showInvoice && (
+            <Button type="button" variant="outline" size="sm" className="h-7 text-[10px]" disabled={invoicing} onClick={onInvoice}>
+              {invoicing ? (invoiceTried ? "Reintentando…" : "Facturando…") : facturarLabel}
+            </Button>
+          )}
+        </div>
+      </div>
+      {actErr && <p className="text-[10px] text-rose-600 dark:text-rose-300">{actErr}</p>}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] sm:text-xs text-muted-foreground pt-1 border-t border-border/50">
+        <div>
+          <span className="block font-medium text-foreground/80">Código</span>
+          <span className="font-mono text-foreground">{trk?.status_code != null ? String(trk.status_code) : "—"}</span>
+        </div>
+        <div>
+          <span className="block font-medium text-foreground/80">Pedido ecommerce (ped)</span>
+          <span className="font-mono text-foreground break-all">{trk?.fastrax_ped || "—"}</span>
+        </div>
+        <div>
+          <span className="block font-medium text-foreground/80">Pedido Fastrax (pdc)</span>
+          <span className="font-mono text-foreground break-all">{trk?.fastrax_pdc || "—"}</span>
+        </div>
+        {errDetail && (
+          <div className="sm:col-span-2">
+            <span className="block font-medium text-foreground/80">Error</span>
+            <span className="text-rose-700 dark:text-rose-200 break-words">{errDetail}</span>
+          </div>
+        )}
+        <div className="sm:col-span-2">
+          <span className="block font-medium text-foreground/80">Última sincronización</span>
+          <span>{formatFastraxMapSyncAt(trk?.last_sync_at)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type LifecycleFilter = "all" | "open" | "closed";
 
 export default function AdminOrdersPage() {
@@ -633,6 +869,7 @@ export default function AdminOrdersPage() {
           {sectionTitle}
           <p className="py-4 text-center text-sm text-muted-foreground">Sin líneas en este pedido.</p>
           <OrderDropiCard o={o} />
+          <OrderFastraxCard o={o} />
         </>
       );
     }
@@ -828,6 +1065,7 @@ export default function AdminOrdersPage() {
         </div>
         {footerActions}
         <OrderDropiCard o={o} />
+        <OrderFastraxCard o={o} />
       </>
     );
   };

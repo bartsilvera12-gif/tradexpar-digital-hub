@@ -9,6 +9,7 @@ import {
   searchFastraxReadonlyOpe4Ope2,
 } from "./controlledCatalog.js";
 import { runFastraxProductSync } from "./sync-products.js";
+import { sitToLabel } from "./mapper.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
 
@@ -28,6 +29,104 @@ function requireApiKeyOrAdmin(req, res, next) {
     return next();
   }
   return requireAdmin(req, res, next);
+}
+
+function fstr(x) {
+  if (x == null) return "";
+  return String(x);
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} map
+ * @returns {{
+ *   fastrax_ped: string | null;
+ *   fastrax_pdc: string | null;
+ *   status_code: number | null;
+ *   status_label: string;
+ *   last_sync_at: string | null;
+ *   error: string | null;
+ * }}
+ */
+function buildFastraxTrackingFromMap(map) {
+  if (!map || typeof map !== "object") {
+    return {
+      fastrax_ped: null,
+      fastrax_pdc: null,
+      status_code: null,
+      status_label: "",
+      last_sync_at: null,
+      error: null,
+    };
+  }
+  const pdcRaw = map.fastrax_pdc != null && fstr(map.fastrax_pdc).trim() ? fstr(map.fastrax_pdc).trim() : null;
+  const pdc =
+    pdcRaw || (map.fastrax_order_id && fstr(map.fastrax_order_id).trim() ? fstr(map.fastrax_order_id).trim() : null);
+  const ped = map.fastrax_ped != null && fstr(map.fastrax_ped).trim() ? fstr(map.fastrax_ped).trim() : null;
+  let codeNum = null;
+  if (map.fastrax_status_code != null && !Number.isNaN(Number(map.fastrax_status_code))) {
+    codeNum = Math.floor(Number(map.fastrax_status_code));
+  } else if (map.fastrax_sit != null) {
+    const s = fstr(map.fastrax_sit).replace(/^0+/, "") || fstr(map.fastrax_sit);
+    if (s && !Number.isNaN(Number(s))) codeNum = Math.floor(Number(s));
+  }
+  const labelFrom = fstr(map.fastrax_status_label).trim();
+  const label = labelFrom || (codeNum != null ? sitToLabel(codeNum, "Desconocido") : "");
+  const e1 = fstr(map.error).trim();
+  const e2 = fstr(map.last_error).trim();
+  return {
+    fastrax_ped: ped,
+    fastrax_pdc: pdc,
+    status_code: codeNum,
+    status_label: label,
+    last_sync_at: map.last_sync_at != null && fstr(map.last_sync_at) ? fstr(map.last_sync_at) : null,
+    error: e1 || e2 || null,
+  };
+}
+
+/**
+ * @param {string} orderId
+ * @param {Record<string, unknown> | null} map
+ */
+function buildFastraxAdminStatusPayload(orderId, map) {
+  return {
+    ok: true,
+    provider: "fastrax",
+    order_id: orderId,
+    has_map: Boolean(map && (map.id != null || map.order_id != null)),
+    map,
+    tracking: buildFastraxTrackingFromMap(map),
+  };
+}
+
+/**
+ * ope=13, persiste y devuelve payload unificado.
+ * @param {import("express").Response} res
+ * @param {string} orderId
+ */
+async function sendFastraxStatusAfterSync(res, orderId) {
+  const sb = supabaseService();
+  const r = await syncFastraxOrderStatusForOrderId(orderId, sb);
+  if (r && (r.reason === "not_configured" || r.reason === "fastrax_disabled")) {
+    return res.status(503).json({ ok: false, reason: r.reason, order_id: orderId });
+  }
+  if (r && r.reason === "load_error") {
+    return res.status(500).json({ ok: false, order_id: orderId, error: r.error || "load_error" });
+  }
+  if (r && r.reason === "no_map") {
+    return res.status(404).json({ ok: false, order_id: orderId, reason: "no_map" });
+  }
+  const { data: map, error: me2 } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
+  if (me2) {
+    return res.status(500).json({ ok: false, order_id: orderId, error: me2.message });
+  }
+  if (!map) {
+    return res.status(404).json({ ok: false, order_id: orderId, reason: "no_map" });
+  }
+  const body = buildFastraxAdminStatusPayload(orderId, map);
+  if (r && r.ok === false && r.error) {
+    body.tracking = { ...body.tracking, error: fstr(r.error) };
+  }
+  return res.json(body);
 }
 
 /**
@@ -193,31 +292,30 @@ export function registerFastraxRoutes(app) {
 
   /**
    * GET /api/admin/orders/:orderId/fastrax/status
-   * - Sin query `live`: lee `fastrax_order_map` (como Dropi GET status).
-   * - Con `?live=1`: ope=13 y actualiza mapa.
+   * - Sin `?live=1`: lee `fastrax_order_map` + `tracking` unificado.
+   * - Con `?live=1`: ope=13, actualiza mapa, mismo JSON que POST /fastrax/sync-status.
    */
   app.get("/api/admin/orders/:orderId/fastrax/status", requireApiKey, async (req, res) => {
     const orderId = String(req.params.orderId || "").trim();
-    const live = String(req.query?.live ?? "").trim() === "1" || String(req.query?.live ?? "").toLowerCase() === "true";
+    const live =
+      String(req.query?.live ?? "").trim() === "1" || String(req.query?.live ?? "").toLowerCase() === "true";
     if (!orderId) {
       return res.status(400).json({ ok: false, error: "orderId inválido" });
     }
     try {
-      const sb = supabaseService();
       if (live) {
-        const r = await syncFastraxOrderStatusForOrderId(orderId, sb);
-        if (r?.ok === true) {
-          return res.json({ ok: true, order_id: orderId, source: "fastrax", live: true, ...r });
+        if (!fastraxEnabled() || !fastraxConfigured()) {
+          return res.status(503).json({ ok: false, error: "Fastrax no disponible" });
         }
-        if (r?.reason === "no_map") {
-          return res.status(404).json(r);
+        const sb0 = supabaseService();
+        const { data: orderRow, error: oe } = await sb0.from("orders").select("id").eq("id", orderId).maybeSingle();
+        if (oe) throw oe;
+        if (!orderRow?.id) {
+          return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
         }
-        if (r?.reason === "not_configured" || r?.reason === "fastrax_disabled") {
-          return res.status(503).json(r);
-        }
-        return res.status(502).json(r);
+        return await sendFastraxStatusAfterSync(res, orderId);
       }
-
+      const sb = supabaseService();
       const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
       if (oe) throw oe;
       if (!orderRow?.id) {
@@ -229,14 +327,34 @@ export function registerFastraxRoutes(app) {
         .eq("order_id", orderId)
         .maybeSingle();
       if (me) throw me;
-      if (!map) {
-        return res.json({ ok: true, order_id: orderId, has_map: false, map: null });
-      }
-      const st = String(map.fastrax_status ?? map.status ?? "");
-      const m = { ...map };
-      return res.json({ ok: true, order_id: orderId, has_map: true, map: m, status: st || null });
+      return res.json(buildFastraxAdminStatusPayload(orderId, map));
     } catch (e) {
       console.error("[fastrax/status]", e);
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /**
+   * POST /api/admin/orders/:orderId/fastrax/sync-status — ope=13 y respuesta unificada (mismo cuerpo que GET ?live=1).
+   */
+  app.post("/api/admin/orders/:orderId/fastrax/sync-status", requireApiKey, async (req, res) => {
+    const orderId = String(req.params.orderId || "").trim();
+    if (!orderId) {
+      return res.status(400).json({ ok: false, error: "orderId inválido" });
+    }
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no disponible" });
+    }
+    try {
+      const sb = supabaseService();
+      const { data: orderRow, error: oe } = await sb.from("orders").select("id").eq("id", orderId).maybeSingle();
+      if (oe) throw oe;
+      if (!orderRow?.id) {
+        return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
+      }
+      return await sendFastraxStatusAfterSync(res, orderId);
+    } catch (e) {
+      console.error("[fastrax/sync-status]", e);
       return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
   });
@@ -265,7 +383,11 @@ export function registerFastraxRoutes(app) {
         });
       }
       const { data: mapEx } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
-      if (mapEx && (mapEx.fastrax_pdc || mapEx.fastrax_order_id)) {
+      const hasPdc =
+        mapEx &&
+        ((mapEx.fastrax_pdc != null && fstr(mapEx.fastrax_pdc).trim()) ||
+          (mapEx.fastrax_order_id != null && fstr(mapEx.fastrax_order_id).trim()));
+      if (hasPdc) {
         return res.json({ ok: true, order_id: orderId, skipped: true, map: mapEx });
       }
       const r = await createFastraxOrderForInternalOrder(sb, orderId, { context: "admin" });
