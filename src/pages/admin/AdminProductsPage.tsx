@@ -460,16 +460,19 @@ export default function AdminProductsPage() {
       )}
       {!loading && !error && filtered.length > 0 && (
         <div className={ADMIN_CARD}>
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 p-3 border-b border-border">
-            <p className="text-sm text-muted-foreground order-2 sm:order-1">
+          <div className="flex flex-col gap-3 p-3 border-b border-border">
+            <p className="text-sm text-muted-foreground">
               {filtered.length} producto(s) · Página {currentCatalogPage} de {totalPages}
               {filtered.length > 0
                 ? ` · Mostrando ${showFrom}–${showTo} en esta hoja${selectedProductIds.size > 0 ? ` · ${selectedProductIds.size} seleccionado(s)` : ""}`
                 : ""}
             </p>
-            <div className="flex flex-wrap items-center gap-2 order-1 sm:order-2">
-              <div className="flex items-center gap-1.5">
-                <Label htmlFor="admin-catalog-page-size" className="text-xs text-muted-foreground sr-only sm:not-sr-only sm:inline">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <div className="flex w-fit max-w-full shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5 pr-3">
+                <Label
+                  htmlFor="admin-catalog-page-size"
+                  className="whitespace-nowrap text-xs text-muted-foreground"
+                >
                   Por página
                 </Label>
                 <Select
@@ -479,10 +482,25 @@ export default function AdminProductsPage() {
                     setCatalogPage(1);
                   }}
                 >
-                  <SelectTrigger id="admin-catalog-page-size" className={cn(ADMIN_FORM_CONTROL, "h-9 w-[4.5rem] text-sm")}>
+                  <SelectTrigger
+                    id="admin-catalog-page-size"
+                    className={cn(ADMIN_FORM_CONTROL, "h-9 w-[4.5rem] text-sm bg-background")}
+                  >
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  {/*
+                    align="end": alinea el ancho mín. del listado con el borde derecho del trigger, para
+                    que el desplegable no invada la fila hacia el botón rojo (el menú gana a la izquierda).
+                  */}
+                  <SelectContent
+                    position="popper"
+                    side="bottom"
+                    align="end"
+                    sideOffset={6}
+                    className="min-w-[4.5rem] z-[200]"
+                    avoidCollisions
+                    collisionPadding={8}
+                  >
                     <SelectItem value="10">10</SelectItem>
                     <SelectItem value="20">20</SelectItem>
                     <SelectItem value="50">50</SelectItem>
@@ -490,23 +508,31 @@ export default function AdminProductsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {selectedProductIds.size > 0 && (
-                <Button type="button" variant="ghost" size="sm" className="h-9 text-xs" onClick={clearSelection}>
-                  Quitar selección
+              <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2 sm:ml-auto sm:w-auto sm:justify-end sm:pl-2">
+                {selectedProductIds.size > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 shrink-0 text-xs"
+                    onClick={clearSelection}
+                  >
+                    Quitar selección
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-9 shrink-0 gap-1.5"
+                  disabled={selectedProductIds.size === 0 || bulkDeleting}
+                  onClick={() => void handleDeleteSelected()}
+                >
+                  {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  Eliminar seleccionados
+                  {selectedProductIds.size > 0 ? ` (${selectedProductIds.size})` : ""}
                 </Button>
-              )}
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="h-9 gap-1.5"
-                disabled={selectedProductIds.size === 0 || bulkDeleting}
-                onClick={() => void handleDeleteSelected()}
-              >
-                {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Eliminar seleccionados
-                {selectedProductIds.size > 0 ? ` (${selectedProductIds.size})` : ""}
-              </Button>
+              </div>
             </div>
           </div>
           <div className={ADMIN_TABLE_SCROLL}>
