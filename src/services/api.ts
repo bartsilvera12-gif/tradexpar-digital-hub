@@ -171,6 +171,13 @@ export const api = {
   },
 
   /**
+   * Consulta el estado en la API PagoPar (1.1/traer) y actualiza `orders` por `pagopar_hash`.
+   * Misma clave pública `x-api-key` que el resto de `/api/public/*`.
+   */
+  getPagoparStatus: (hash: string) =>
+    apiFetch<PaymentStatus>(`/api/public/pagopar/status?${new URLSearchParams({ hash }).toString()}`),
+
+  /**
    * Panel pedidos: estado Dropi en `dropi_order_map` (mismo `x-api-key` que otras APIs Node).
    */
   getAdminOrderDropiStatus: (orderId: string) =>

@@ -219,3 +219,120 @@ export function checkoutUrlFromHash(hashPedido) {
   const h = String(hashPedido || "").replace(/^\/+/, "");
   return `${checkoutBase.replace(/\/+$/, "")}/${h}`;
 }
+
+/** Path oficial: POST …/api/pedidos/1.1/traer (mismo host base que `iniciar-transaccion`). */
+export const PAGOPAR_PEDIDOS_TRAER_PATH = "/api/pedidos/1.1/traer";
+
+/**
+ * PagoPar envía a veces `resultado` como string JSON, array u objeto; devuelve el primer ítem
+ * o el objeto, para mapear `pagado` / `cancelado` como en el webhook.
+ * @param {unknown} resultado
+ * @returns {object | null}
+ */
+export function getFirstItemFromResultadoValue(resultado) {
+  let r = resultado;
+  if (typeof r === "string") {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return null;
+    }
+  }
+  if (r == null) return null;
+  if (Array.isArray(r)) {
+    return r[0] && typeof r[0] === "object" ? r[0] : null;
+  }
+  if (typeof r === "object") {
+    return r;
+  }
+  return null;
+}
+
+/**
+ * Misma lógica que el webhook: `first` = ítem de `resultado` o cuerpo de respuesta.
+ * @param {object | null} first
+ * @param {object} body
+ * @returns {"paid" | "failed" | "pending"}
+ */
+export function mapPagoparItemToOrderPaymentStatus(first, body) {
+  const f = first && typeof first === "object" ? first : {};
+  const b = body && typeof body === "object" ? body : {};
+  const pagado =
+    f.pagado === true ||
+    f.pagado === "t" ||
+    f.pagado === "true" ||
+    String(f.estado_transaccion) === "1" ||
+    String(b.pagado) === "true";
+  const cancelado =
+    f.cancelado === true ||
+    f.cancelado === "t" ||
+    f.cancelado === "true" ||
+    String(b.cancelado) === "true";
+  if (pagado) return "paid";
+  if (cancelado) return "failed";
+  return "pending";
+}
+
+/**
+ * 200 al webhook: JSON debe ser un **array** (PagoPar reenvía/valida `resultado`).
+ * @param {object} body - req.body
+ * @returns {object[]}
+ */
+export function buildWebhookResponseResultadoArray(body) {
+  if (!body || typeof body !== "object") return [];
+  let r = body.resultado;
+  if (typeof r === "string") {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return [];
+    }
+  }
+  if (r == null) return [];
+  if (Array.isArray(r)) return r;
+  if (typeof r === "object") return [r];
+  return [];
+}
+
+/**
+ * @param {string} hashPedido
+ * @param {{ privateKey: string, publicKey: string }} keys
+ */
+export async function consultarPedidoPagopar(hashPedido, keys) {
+  const h = String(hashPedido || "").trim();
+  if (!h) throw new Error("hash_pedido requerido");
+  const { apiBase } = getPagoparEndpoints();
+  const base = String(apiBase || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const url = `${base}${PAGOPAR_PEDIDOS_TRAER_PATH}`;
+  const privateKey = stripPagoparSecret(keys.privateKey);
+  const publicKey = stripPagoparSecret(keys.publicKey);
+  if (!privateKey || !publicKey) {
+    throw new Error("Faltan claves PagoPar (pública / privada)");
+  }
+  const token = buildGenericToken(keys.privateKey, "CONSULTA");
+  const payload = {
+    hash_pedido: h,
+    token,
+    token_publico: publicKey,
+  };
+  console.info("[pagopar/consulta] POST", url, { hash_prefix: h.slice(0, 6) + "…" });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    console.warn("[pagopar/consulta] HTTP", res.status, text.slice(0, 800));
+    throw new Error(`PagoPar traer HTTP ${res.status}: ${text.slice(0, 300)}`);
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`PagoPar traer: no es JSON: ${text.slice(0, 200)}`);
+  }
+  return data;
+}

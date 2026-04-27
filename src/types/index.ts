@@ -157,6 +157,8 @@ export interface PaymentStatus {
   status: string;
   ref: string;
   order_id: string;
+  /** Presente si el estado vino de `GET /api/public/pagopar/status` (consulta API PagoPar + sync DB). */
+  source?: "pagopar" | string;
 }
 
 // Admin types

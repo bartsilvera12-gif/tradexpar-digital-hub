@@ -27,11 +27,15 @@ function syncSupabaseEnvFromViteFallbacks() {
 syncSupabaseEnvFromViteFallbacks();
 import { createClient } from "@supabase/supabase-js";
 import {
+  buildWebhookResponseResultadoArray,
   checkoutUrlFromHash,
+  consultarPedidoPagopar,
+  getFirstItemFromResultadoValue,
   getPagoparEndpoints,
   getPagoparIniciarTransaccionTokenInputParts,
   iniciarTransaccion,
   isPagoparRespuestaOk,
+  mapPagoparItemToOrderPaymentStatus,
   maskPagoparCredential,
   phpStrvalFloatval,
   sha1Hex,
@@ -1061,6 +1065,67 @@ app.get("/api/public/payment-status", apiKeyMiddleware, async (req, res) => {
 });
 
 /**
+ * GET /api/public/pagopar/status?hash=  (consulta API PagoPar 1.1/traer + sincroniza `orders` por `pagopar_hash`)
+ */
+app.get("/api/public/pagopar/status", apiKeyMiddleware, async (req, res) => {
+  try {
+    const hash = String(req.query.hash || "").trim();
+    if (!hash) {
+      return res.status(400).json({ error: "Indicá hash" });
+    }
+    if (!PAGOPAR_PRIVATE_KEY || !PAGOPAR_PUBLIC_KEY) {
+      console.error("[pagopar/status] Faltan PAGOPAR_PRIVATE_KEY o PAGOPAR_PUBLIC_KEY");
+      return res.status(500).json({ error: "PagoPar no configurado" });
+    }
+
+    console.info("[pagopar/status] consulta", { hash: hash.slice(0, 6) + "…" });
+    const data = await consultarPedidoPagopar(hash, {
+      privateKey: PAGOPAR_PRIVATE_KEY,
+      publicKey: PAGOPAR_PUBLIC_KEY,
+    });
+
+    const tr = getFirstItemFromResultadoValue(data?.resultado);
+    if (!tr) {
+      console.warn("[pagopar/status] sin ítem en resultado PagoPar", JSON.stringify(data).slice(0, 600));
+      if (!isPagoparRespuestaOk(data.respuesta)) {
+        return res.status(404).json({ error: "Pedido no hallado o respuesta PagoPar no ok" });
+      }
+      return res.status(502).json({ error: "PagoPar no devolvió detalle del pedido" });
+    }
+
+    const payment_status = mapPagoparItemToOrderPaymentStatus(tr, data);
+    const sb = supabaseAdmin();
+    const { data: row, error: findErr } = await orders(sb)
+      .select("id, payment_reference, payment_status, pagopar_hash")
+      .eq("pagopar_hash", hash)
+      .maybeSingle();
+
+    if (findErr) throw findErr;
+    if (!row) {
+      console.warn("[pagopar/status] ningún `orders` con pagopar_hash", hash.slice(0, 8) + "…");
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const { error: updErr } = await orders(sb)
+      .update({ payment_status })
+      .eq("id", row.id);
+    if (updErr) throw updErr;
+
+    const status = mapDbPaymentStatusToFrontend({ ...row, payment_status });
+    return res.json({
+      status,
+      ref: row.payment_reference || "",
+      order_id: row.id,
+      source: "pagopar",
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error interno";
+    console.error("[pagopar/status]", e);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+/**
  * POST /api/pagopar/webhook  (sin x-api-key; validación por token PagoPar)
  */
 app.post("/api/pagopar/webhook", async (req, res) => {
@@ -1087,7 +1152,7 @@ app.post("/api/pagopar/webhook", async (req, res) => {
     const tokenNotif = first.token || body.token || "";
 
     if (!hashPedido) {
-      console.warn("[webhook] Sin hash_pedido", JSON.stringify(body).slice(0, 500));
+      console.warn("[pagopar/webhook] sin hash_pedido", JSON.stringify(body).slice(0, 500));
       return res.status(400).json({ ok: false, error: "missing hash" });
     }
 
@@ -1096,26 +1161,12 @@ app.post("/api/pagopar/webhook", async (req, res) => {
       verifyWebhookToken(PAGOPAR_PRIVATE_KEY, String(hashPedido), String(tokenNotif));
 
     if (!okToken) {
-      console.warn("[webhook] Token inválido para hash", hashPedido);
+      console.warn("[pagopar/webhook] token inválido", { hash: String(hashPedido).slice(0, 8) + "…" });
       return res.status(401).json({ ok: false, error: "invalid token" });
     }
 
-    const pagado =
-      first.pagado === true ||
-      first.pagado === "t" ||
-      first.pagado === "true" ||
-      String(first.estado_transaccion) === "1" ||
-      String(body.pagado) === "true";
-
-    const cancelado =
-      first.cancelado === true ||
-      first.cancelado === "t" ||
-      first.cancelado === "true" ||
-      String(body.cancelado) === "true";
-
-    let payment_status = "pending";
-    if (pagado) payment_status = "paid";
-    else if (cancelado) payment_status = "failed";
+    const payment_status = mapPagoparItemToOrderPaymentStatus(first, body);
+    const pagado = payment_status === "paid";
 
     const sb = supabaseAdmin();
     const { data: updated, error } = await orders(sb)
@@ -1126,7 +1177,7 @@ app.post("/api/pagopar/webhook", async (req, res) => {
 
     if (error) throw error;
     if (!updated) {
-      console.warn("[webhook] Ningún pedido con pagopar_hash=", hashPedido);
+      console.warn("[pagopar/webhook] ningún pedido con pagopar_hash=", hashPedido);
     } else if (pagado && payment_status === "paid" && updated.id) {
       // Dropi: solo tras pago confirmado; fallos se guardan en dropi_order_map (no revierte PagoPar).
       setImmediate(() => {
@@ -1134,32 +1185,34 @@ app.post("/api/pagopar/webhook", async (req, res) => {
           try {
             const r = await createDropiOrderForInternalOrder(supabaseAdmin(), updated.id, { context: "webhook" });
             if (r && r.ok === true && r.skipped === true) {
-              console.info("[webhook][dropi-order] omitido", { order_id: updated.id, reason: r.reason });
+              console.info("[pagopar/webhook][dropi-order] omitido", { order_id: updated.id, reason: r.reason });
             } else if (r && r.ok === false && r.error) {
-              console.warn("[webhook][dropi-order] no creado en Dropi", { order_id: updated.id, error: r.error });
+              console.warn("[pagopar/webhook][dropi-order] no creado en Dropi", { order_id: updated.id, error: r.error });
             }
           } catch (e) {
-            console.error("[webhook][dropi-order] excepción", e instanceof Error ? e.message : e);
+            console.error("[pagopar/webhook][dropi-order] excepción", e instanceof Error ? e.message : e);
           }
         })();
         void (async () => {
           try {
             const r = await createFastraxOrderForInternalOrder(supabaseAdmin(), updated.id, { context: "webhook" });
             if (r && r.ok === true && r.skipped === true) {
-              console.info("[webhook][fastrax-order] omitido", { order_id: updated.id, reason: r.reason });
+              console.info("[pagopar/webhook][fastrax-order] omitido", { order_id: updated.id, reason: r.reason });
             } else if (r && r.ok === false && r.error) {
-              console.warn("[webhook][fastrax-order] no creado en Fastrax", { order_id: updated.id, error: r.error });
+              console.warn("[pagopar/webhook][fastrax-order] no creado en Fastrax", { order_id: updated.id, error: r.error });
             }
           } catch (e) {
-            console.error("[webhook][fastrax-order] excepción", e instanceof Error ? e.message : e);
+            console.error("[pagopar/webhook][fastrax-order] excepción", e instanceof Error ? e.message : e);
           }
         })();
       });
     }
 
-    return res.status(200).json({ ok: true, order_id: updated?.id ?? null, payment_status });
+    const respArray = buildWebhookResponseResultadoArray(body);
+    console.info("[pagopar/webhook] 200 con resultado (items)", { count: respArray.length, hash: String(hashPedido).slice(0, 8) + "…" });
+    return res.status(200).json(respArray);
   } catch (e) {
-    console.error("[webhook]", e);
+    console.error("[pagopar/webhook]", e);
     return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : "error" });
   }
 });

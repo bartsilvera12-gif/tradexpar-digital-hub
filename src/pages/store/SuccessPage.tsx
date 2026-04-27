@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle, Clock, XCircle } from "lucide-react";
 import { api } from "@/services/api";
+import type { PaymentStatus } from "@/types";
 
 export default function SuccessPage() {
   const [searchParams] = useSearchParams();
@@ -18,33 +19,60 @@ export default function SuccessPage() {
     if (orderId && !ref && !hash) return;
     let active = true;
 
+    const mapStatus = (s: string) => {
+      if (s === "approved" || s === "completed" || s === "paid") {
+        return "approved" as const;
+      }
+      if (s === "rejected" || s === "failed") {
+        return "rejected" as const;
+      }
+      return "pending" as const;
+    };
+
+    const applyPaymentPayload = (data: PaymentStatus) => {
+      if (data.order_id) {
+        if (!sessionStorage.getItem("tradexpar_order_id")) {
+          sessionStorage.setItem("tradexpar_order_id", data.order_id);
+        }
+        setDisplayOrderId(data.order_id);
+      }
+      if (data.ref && !sessionStorage.getItem("tradexpar_payment_ref")) {
+        sessionStorage.setItem("tradexpar_payment_ref", data.ref);
+      }
+      return mapStatus(data.status);
+    };
+
     const poll = async () => {
       for (let i = 0; i < 30; i++) {
         if (!active) return;
         try {
+          if (hash && i === 0) {
+            try {
+              const sync = await api.getPagoparStatus(hash);
+              if (!active) return;
+              const s = applyPaymentPayload(sync);
+              if (s === "approved" || s === "rejected") {
+                setStatus(s);
+                return;
+              }
+            } catch {
+              /* luego: lectura vía payment-status (Supabase) */
+            }
+          }
+
           const data = orderId
             ? await api.getPaymentStatus(orderId, ref, hash || undefined)
             : await api.getPaymentStatusByHash(hash, ref || undefined);
 
-          if (data.order_id) {
-            if (!sessionStorage.getItem("tradexpar_order_id")) {
-              sessionStorage.setItem("tradexpar_order_id", data.order_id);
-            }
-            setDisplayOrderId(data.order_id);
-          }
-          if (data.ref && !sessionStorage.getItem("tradexpar_payment_ref")) {
-            sessionStorage.setItem("tradexpar_payment_ref", data.ref);
-          }
-
-          if (data.status === "approved" || data.status === "completed" || data.status === "paid") {
-            setStatus("approved");
+          if (!active) return;
+          const s = applyPaymentPayload(data);
+          if (s === "approved" || s === "rejected") {
+            setStatus(s);
             return;
           }
-          if (data.status === "rejected" || data.status === "failed") {
-            setStatus("rejected");
-            return;
-          }
-        } catch { /* continue polling */ }
+        } catch {
+          /* continuar */
+        }
         await new Promise((r) => setTimeout(r, 3000));
       }
       setStatus("timeout");
