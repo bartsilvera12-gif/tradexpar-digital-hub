@@ -4,7 +4,7 @@
 
 import { getProductDetails, listFastraxProductsOpe4 } from "./client.js";
 import { extractProductRows, mapFastraxRowToProduct } from "./mapper.js";
-import { upsertFastraxFromRawRow } from "./fastraxProductUpsert.js";
+import { upsertFastraxFromImportItem, upsertFastraxFromRawRow } from "./fastraxProductUpsert.js";
 
 /**
  * @param {Record<string, unknown>} raw
@@ -186,6 +186,58 @@ export async function importFastraxSkusToProducts(sb, skus) {
     failed: results.filter((r) => !r.ok).length,
     results,
   };
+}
+
+/**
+ * Importa al catálogo local desde el buscador (sin volver a llamar ope=2).
+ * @param {import('@supabase/supabase-js').SupabaseClient} sb
+ * @param {Array<{ sku?: unknown, name?: unknown, price?: unknown, stock?: unknown, raw_detail?: unknown }>} items
+ * @returns {Promise<{ ok: boolean, inserted: number, updated: number, failed: number }>}
+ */
+export async function importFastraxItemsToProducts(sb, items) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) {
+    return { ok: true, inserted: 0, updated: 0, failed: 0 };
+  }
+  let inserted = 0;
+  let updated = 0;
+  let failed = 0;
+  for (const it of list) {
+    if (!it || typeof it !== "object") {
+      failed += 1;
+      continue;
+    }
+    const sku = String(/** @type {Record<string, unknown>} */(it).sku ?? "").trim();
+    if (!sku) {
+      failed += 1;
+      continue;
+    }
+    const raw = /** @type {Record<string, unknown> | null | undefined} */(
+      (/** @type {Record<string, unknown>} */(it)).raw_detail
+    );
+    if (raw && typeof raw === "object" && !Array.isArray(raw) && Object.prototype.hasOwnProperty.call(raw, "_ope2_error")) {
+      failed += 1;
+      continue;
+    }
+    const { data: block } = await sb
+      .from("products")
+      .select("id")
+      .eq("sku", sku)
+      .in("product_source_type", ["tradexpar", "dropi"])
+      .maybeSingle();
+    if (block?.id) {
+      failed += 1;
+      continue;
+    }
+    const u = await upsertFastraxFromImportItem(sb, it);
+    if (u.ok) {
+      if (u.action === "inserted") inserted += 1;
+      if (u.action === "updated") updated += 1;
+    } else {
+      failed += 1;
+    }
+  }
+  return { ok: true, inserted, updated, failed };
 }
 
 /**

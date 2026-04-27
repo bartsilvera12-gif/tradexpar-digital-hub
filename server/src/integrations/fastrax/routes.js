@@ -3,7 +3,11 @@ import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
 import { fastraxConfigured, fastraxEnabled, getVersion, listProductsPage } from "./client.js";
 import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
-import { importFastraxSkusToProducts, searchFastraxReadonlyOpe4Ope2 } from "./controlledCatalog.js";
+import {
+  importFastraxItemsToProducts,
+  importFastraxSkusToProducts,
+  searchFastraxReadonlyOpe4Ope2,
+} from "./controlledCatalog.js";
 import { runFastraxProductSync } from "./sync-products.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
@@ -93,6 +97,28 @@ export function registerFastraxRoutes(app) {
     return res.status(502).json(
       r && typeof r === "object" ? { ...r, ok: false } : { ok: false, error: "fastrax_search_failed" }
     );
+  });
+
+  /** Buscador → `tradexpar.products` (items con datos y raw_detail; Bearer admin). */
+  app.post("/api/admin/fastrax/import", requireAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (items.length === 0) {
+      return res.status(400).json({ ok: false, error: "items requerido (array no vacío)" });
+    }
+    try {
+      const sb = supabaseService();
+      const result = await importFastraxItemsToProducts(sb, items);
+      return res.json(result);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   });
 
   app.post("/api/admin/fastrax/products/import", requireAdmin, async (req, res) => {

@@ -91,6 +91,22 @@ export type FastraxImportResult = {
   results: { sku: string; ok: boolean; action?: string; id?: string; error?: string }[];
 };
 
+/** `POST /api/admin/fastrax/import` (desde el buscador, sin re-ope=2). */
+export type FastraxImportByItemsResult = {
+  ok: boolean;
+  inserted: number;
+  updated: number;
+  failed: number;
+};
+
+export type FastraxImportItemInput = {
+  sku: string;
+  name: string;
+  price: number;
+  stock: number;
+  raw_detail?: Record<string, unknown> | null;
+};
+
 export type FastraxSyncMassiveResult = {
   ok: boolean;
   products_seen?: number;
@@ -140,7 +156,20 @@ export async function searchFastraxProductsForAdmin(args: {
 }
 
 /**
- * Importa solo los SKUs indicados (ope=2 + upsert en `products` como fastrax).
+ * Importa al catálogo local con los datos del buscador (upsert; mismo proveedor Fastrax).
+ * Requiere `Authorization: Bearer` admin.
+ */
+export async function importFastraxItemsToCatalog(
+  items: FastraxImportItemInput[]
+): Promise<FastraxImportByItemsResult> {
+  return fastraxAdminJson<FastraxImportByItemsResult>("/api/admin/fastrax/import", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+}
+
+/**
+ * Vía ope=2 en servidor por cada SKU (legacy / compat).
  */
 export async function importFastraxSkusToCatalog(skus: string[]): Promise<FastraxImportResult> {
   return fastraxAdminJson<FastraxImportResult>("/api/admin/fastrax/products/import", {

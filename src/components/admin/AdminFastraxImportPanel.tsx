@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   Download,
   ExternalLink,
   Loader2,
-  RefreshCw,
   Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "@/hooks/use-toast";
 import {
   ADMIN_FORM_CONTROL,
@@ -29,9 +25,8 @@ import {
   ADMIN_TR,
 } from "@/lib/adminModuleLayout";
 import {
-  importFastraxSkusToCatalog,
+  importFastraxItemsToCatalog,
   searchFastraxProductsForAdmin,
-  syncFastraxAllProductsOnServer,
   type FastraxAdminListItem,
 } from "@/services/fastraxAdminApi";
 import { cn } from "@/lib/utils";
@@ -53,8 +48,6 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailJson, setDetailJson] = useState<string>("");
-  const [massOpen, setMassOpen] = useState(false);
-  const [massSyncing, setMassSyncing] = useState(false);
 
   const load = useCallback(
     async (p: number) => {
@@ -104,14 +97,22 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
     });
   };
 
-  const doImport = async (skus: string[]) => {
-    if (skus.length === 0) {
-      toast({ title: "Elegí al menos un SKU" });
+  const doImport = async (items: FastraxAdminListItem[]) => {
+    if (items.length === 0) {
+      toast({ title: "Elegí al menos un producto" });
       return;
     }
     setImporting(true);
     try {
-      const r = await importFastraxSkusToCatalog(skus);
+      const r = await importFastraxItemsToCatalog(
+        items.map((it) => ({
+          sku: it.sku,
+          name: it.name,
+          price: it.price,
+          stock: it.stock,
+          raw_detail: it.raw_detail ?? null,
+        }))
+      );
       const line = `Nuevos ${r.inserted}, actualizados ${r.updated}, fallos ${r.failed}`;
       if (r.failed) {
         toast({ title: "Importación con errores", description: line, variant: "default" });
@@ -144,32 +145,6 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
       }
     } catch (e) {
       setDetailJson(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const handleMassSync = async () => {
-    if (massSyncing) return;
-    if (!window.confirm("Sincronizará el catálogo Fastrax completo en varias rondas (puede ser lento). ¿Continuar?")) {
-      return;
-    }
-    setMassSyncing(true);
-    try {
-      const r = await syncFastraxAllProductsOnServer();
-      if (r?.ok) {
-        const s = r.stats;
-        const desc = s
-          ? `Vistos: ${r.products_seen} · Nuevos ${s.inserted}, act. ${s.updated}, fail ${s.failed}`
-          : (r as { error?: string }).error || "ok";
-        toast({ title: "Sincronización Fastrax", description: String(desc) });
-        onLocalCatalogRefresh?.();
-      } else {
-        throw new Error((r as { error?: string })?.error || "sync");
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ variant: "destructive", title: "Sync masivo Fastrax", description: msg });
-    } finally {
-      setMassSyncing(false);
     }
   };
 
@@ -266,7 +241,7 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          onClick={() => void doImport([...selected])}
+          onClick={() => void doImport(rows.filter((r) => selected.has(r.sku)))}
           disabled={importing || selected.size === 0}
           className="gap-2"
         >
@@ -340,7 +315,7 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => void doImport([row.sku])}
+                        onClick={() => void doImport([row])}
                         disabled={importing}
                         className="h-8"
                       >
@@ -354,33 +329,6 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
           </tbody>
         </table>
       </div>
-
-      <Collapsible open={massOpen} onOpenChange={setMassOpen} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="ghost" className="gap-2 text-amber-900/90 p-0 h-auto hover:bg-transparent">
-              {massOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              Sincronización completa (avanzado, técnico)
-            </Button>
-          </CollapsibleTrigger>
-        </div>
-        <CollapsibleContent className="pt-3 text-sm text-muted-foreground">
-          <p>
-            Sube todo el listado vía ope=4/98 en múltiples rondas. Uso consciente: puede importar cientos o miles de
-            filas. Preferible importar solo con las acciones de arriba.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-3"
-            onClick={() => void handleMassSync()}
-            disabled={massSyncing}
-          >
-            {massSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Sincronizar catálogo completo
-          </Button>
-        </CollapsibleContent>
-      </Collapsible>
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
