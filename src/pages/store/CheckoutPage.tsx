@@ -450,21 +450,6 @@ export default function CheckoutPage() {
                 />
               </div>
 
-              <div className="min-w-0">
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Envío <span className="text-destructive">*</span>
-                </label>
-                <Select value={shippingOption} onValueChange={(v) => setShippingOption(v as "24h" | "48h")}>
-                  <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
-                    <SelectValue placeholder="Seleccioná el envío" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="48h">Entrega en 48 horas – Gratis</SelectItem>
-                    <SelectItem value="24h">Entrega en 24 horas – Gs. 25.000</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {user && locations.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -535,9 +520,6 @@ export default function CheckoutPage() {
                 {items.reduce((n, i) => n + i.quantity, 0)} producto
                 {items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"} en el carrito
               </p>
-              <p className="text-xs text-muted-foreground leading-snug rounded-lg border border-border/80 bg-muted/40 px-3 py-2.5 [text-wrap:balance]">
-                Envíos solo a Asunción y Gran Asunción – Departamento Central.
-              </p>
 
               <div className="space-y-3">
                 {items.map((item) => (
@@ -566,6 +548,33 @@ export default function CheckoutPage() {
                   <span>Total</span>
                   <span>₲{orderGrandTotal.toLocaleString("es-PY")}</span>
                 </div>
+              </div>
+
+              <div className="mt-5 pt-4 border-t border-border/50 space-y-3">
+                <div className="rounded-xl border border-border/80 bg-background px-3.5 py-3 shadow-sm">
+                  <span className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                    Entrega
+                  </span>
+                  <Select value={shippingOption} onValueChange={(v) => setShippingOption(v as "24h" | "48h")}>
+                    <SelectTrigger
+                      aria-label="Tipo de entrega"
+                      className="w-full h-10 rounded-lg border-border/70 bg-muted/30 text-foreground text-sm font-medium shadow-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      <SelectValue placeholder="Elegí una opción" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg" position="popper">
+                      <SelectItem value="48h" className="text-sm">
+                        Entrega en 48 horas — Gratis
+                      </SelectItem>
+                      <SelectItem value="24h" className="text-sm">
+                        Entrega en 24 horas — Gs. 25.000
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground leading-snug rounded-xl border border-border/80 bg-muted/35 px-3 py-2.5 [text-wrap:balance]">
+                  Envíos solo a Asunción y Gran Asunción – Departamento Central.
+                </p>
               </div>
             </div>
           </div>
