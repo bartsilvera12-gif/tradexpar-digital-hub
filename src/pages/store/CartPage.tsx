@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 import { withAffiliateRef } from "@/lib/affiliate";
+import { getWhatsAppDigits } from "@/config/whatsapp";
 
 export default function CartPage() {
   const [searchParams] = useSearchParams();
@@ -47,7 +48,7 @@ export default function CartPage() {
       waForm.message ? `\nMensaje: ${waForm.message}` : "",
     ].filter(Boolean).join("\n");
 
-    const waNumber = import.meta.env.VITE_WHATSAPP_NUMBER || "595982487844";
+    const waNumber = getWhatsAppDigits();
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`, "_blank");
     setShowWhatsApp(false);
   };

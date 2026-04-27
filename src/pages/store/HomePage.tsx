@@ -11,6 +11,10 @@ import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 import { withAffiliateRef } from "@/lib/affiliate";
 
+/** Hero principal inicio — Cloudinary (ancho completo, altura natural: se ve el encuadre completo). */
+const HERO_IMAGE_URL =
+  "https://res.cloudinary.com/drupicep5/image/upload/v1777298367/f56bf9d5-0a1f-45e9-94a4-868d74c98f5d.png";
+
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
   { icon: Shield, title: "100% Seguro", desc: "Pagos protegidos y verificados" },
@@ -38,17 +42,21 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Hero — untouched */}
-      <section className="relative overflow-hidden isolate">
+      {/* Hero: imagen completa (sin recorte); el alto sigue la proporción real del PNG. */}
+      <section className="relative isolate w-full max-w-[100vw] overflow-hidden">
         <img
-          src="https://res.cloudinary.com/drupicep5/image/upload/v1774384987/6b7b8009-8b0c-4d66-8b6e-7c4393582258.png"
-          alt="Tradexpar Hero"
-          className="w-full h-auto max-w-full block"
+          src={HERO_IMAGE_URL}
+          alt="Tradexpar — Distribuidora digital"
+          className="relative z-0 block h-auto w-full max-w-full"
+          sizes="100vw"
           fetchPriority="high"
           decoding="async"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/25 sm:from-black/80 sm:via-black/30 sm:to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 z-10 max-w-screen-xl mx-auto px-3 sm:px-4 pb-[max(2.25rem,env(safe-area-inset-bottom))] sm:pb-10 lg:pb-16">
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/90 via-black/45 to-black/25 sm:from-black/80 sm:via-black/30 sm:to-transparent"
+          aria-hidden
+        />
+        <div className="absolute bottom-0 left-0 right-0 z-10 max-w-screen-xl mx-auto px-3 sm:px-4 pb-[max(2.25rem,env(safe-area-inset-bottom))] sm:pb-10 lg:pb-16 pointer-events-none [&_a]:pointer-events-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -74,11 +82,12 @@ export default function HomePage() {
       </section>
 
       {/* Banner promocional */}
-      <section className="w-full">
+      <section className="w-full max-w-[100vw] overflow-hidden">
         <img
           src="https://res.cloudinary.com/drupicep5/image/upload/v1776343515/tradexpar_enhanced_v2_i5vlxm.png"
           alt="Promoción Tradexpar"
           className="w-full h-auto max-w-full block"
+          sizes="100vw"
           loading="lazy"
           decoding="async"
         />

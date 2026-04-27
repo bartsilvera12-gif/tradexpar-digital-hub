@@ -1,5 +1,6 @@
 import logoIcon from "@/assets/logo-x-flat.png";
 import paymentMethods from "@/assets/payment-methods.png";
+import { WHATSAPP_DISPLAY, getWhatsAppDigits } from "@/config/whatsapp";
 import { Mail, Phone, MapPin, Truck, ShieldCheck, Headphones, CheckCircle } from "lucide-react";
 
 const trustItems = [
@@ -56,7 +57,14 @@ export function StoreFooter() {
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2.5">
                 <Phone className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-sm text-secondary-foreground/60">+595 XXX XXX XXX</span>
+                <a
+                  href={`https://wa.me/${getWhatsAppDigits()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-secondary-foreground/60 transition-colors hover:text-primary"
+                >
+                  {WHATSAPP_DISPLAY}
+                </a>
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2.5">
                 <MapPin className="h-4 w-4 text-primary shrink-0" />

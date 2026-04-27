@@ -2,7 +2,7 @@
 export function allowsPasswordFromCustomerProvider(provider: string | undefined): boolean | null {
   const p = (provider ?? "").toLowerCase();
   if (p === "google" || p === "facebook") return false;
-  if (p === "manual") return true;
+  if (p === "manual" || p === "email" || p === "credentials") return true;
   return null;
 }
 

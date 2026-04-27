@@ -1,3 +1,4 @@
+import { getWhatsAppDigits } from "@/config/whatsapp";
 import type { CartItem, Product } from "@/types";
 
 /**
@@ -78,7 +79,7 @@ export function getStockLabel(product: Product): "En Stock" | "Agotado" {
 }
 
 export function buildWhatsAppProductLink(product: Product): string {
-  const number = import.meta.env.VITE_WHATSAPP_NUMBER || "595982487844";
+  const number = getWhatsAppDigits();
   const price = getEffectivePrice(product).toLocaleString("es-PY");
   const baseUrl =
     import.meta.env.VITE_PUBLIC_SITE_URL ||

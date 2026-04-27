@@ -7,7 +7,7 @@ import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSupabaseAuth } from "@/lib/supabaseClient";
+import { getSupabaseAuth, runAuthExclusive } from "@/lib/supabaseClient";
 import { isOAuthCallbackUrl, isOAuthReturnPending, tradexpar } from "@/services/tradexpar";
 
 import type { CustomerUser } from "@/types";
@@ -106,22 +106,37 @@ function AccountContent({
     allowsPasswordFromCustomerProvider(user.provider)
   );
 
+  /** Sin `provider` en customers (o valor desconocido): inferir desde JWT. Usa cola exclusiva + getSession (evita getUser colgado por lock de GoTrue). */
   useEffect(() => {
     if (allowsPasswordSection !== null) return;
     let cancelled = false;
-    void getSupabaseAuth()
-      .auth.getUser()
-      .then(({ data }) => {
+    const SESSION_TIMEOUT_MS = 12_000;
+
+    void runAuthExclusive(async () => {
+      try {
+        const { data, error } = await Promise.race([
+          getSupabaseAuth().auth.getSession(),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("session_timeout")), SESSION_TIMEOUT_MS)
+          ),
+        ]);
         if (cancelled) return;
-        setAllowsPasswordSection(allowsPasswordFromAuthIdentities(data.user));
-      })
-      .catch(() => {
-        if (!cancelled) setAllowsPasswordSection(true);
-      });
+        if (error) {
+          setAllowsPasswordSection(allowsPasswordFromCustomerProvider(user.provider) ?? true);
+          return;
+        }
+        setAllowsPasswordSection(allowsPasswordFromAuthIdentities(data.session?.user ?? null));
+      } catch {
+        if (!cancelled) {
+          setAllowsPasswordSection(allowsPasswordFromCustomerProvider(user.provider) ?? true);
+        }
+      }
+    });
+
     return () => {
       cancelled = true;
     };
-  }, [allowsPasswordSection, user.id]);
+  }, [allowsPasswordSection, user.id, user.provider]);
 
   const loadPwStatus = useCallback(() => {
     setPwLoading(true);

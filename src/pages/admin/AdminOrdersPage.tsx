@@ -598,7 +598,7 @@ function OrderFastraxCard({ o }: { o: Order }) {
 type LifecycleFilter = "all" | "open" | "closed";
 
 export default function AdminOrdersPage() {
-  const [orderType, setOrderType] = useState<"all" | "tradexpar" | "dropi">("all");
+  const [orderType, setOrderType] = useState<"all" | "tradexpar" | "dropi" | "fastrax">("all");
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("open");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -646,7 +646,12 @@ export default function AdminOrdersPage() {
   const filtered = useMemo(
     () =>
       orders.filter((o) => {
-        const typeOk = orderType === "all" || (o.checkout_type || "tradexpar") === orderType;
+        const kind = o.order_kind ?? deriveOrderKind(o.items);
+        const typeOk =
+          orderType === "all" ||
+          (orderType === "tradexpar" && kind === "internal") ||
+          (orderType === "dropi" && kind === "dropi") ||
+          (orderType === "fastrax" && kind === "fastrax");
         const closed = isOrderClosed(o.status);
         const lifeOk =
           lifecycle === "all" ||
@@ -1144,7 +1149,7 @@ export default function AdminOrdersPage() {
               Origen del pedido
             </p>
             <div className="flex flex-wrap gap-2 w-full">
-              {(["tradexpar", "dropi", "all"] as const).map((type) => {
+              {(["tradexpar", "dropi", "fastrax", "all"] as const).map((type) => {
                 const active = orderType === type;
                 const ring =
                   type === "tradexpar"
@@ -1153,8 +1158,11 @@ export default function AdminOrdersPage() {
                     : type === "dropi"
                       ? active &&
                         "ring-2 ring-orange-500/50 ring-offset-2 ring-offset-background bg-orange-500/10 border-orange-500/40 text-orange-950 dark:text-orange-50"
-                      : active &&
-                        "ring-2 ring-muted-foreground/25 ring-offset-2 ring-offset-background bg-muted/50 border-border";
+                      : type === "fastrax"
+                        ? active &&
+                          "ring-2 ring-cyan-500/50 ring-offset-2 ring-offset-background bg-cyan-500/10 border-cyan-500/40 text-cyan-950 dark:text-cyan-50"
+                        : active &&
+                          "ring-2 ring-muted-foreground/25 ring-offset-2 ring-offset-background bg-muted/50 border-border";
                 return (
                   <button
                     key={type}
@@ -1174,8 +1182,17 @@ export default function AdminOrdersPage() {
                       {type === "dropi" && (
                         <span className="h-2 w-2 rounded-full bg-orange-500 shrink-0" aria-hidden />
                       )}
+                      {type === "fastrax" && (
+                        <span className="h-2 w-2 rounded-full bg-cyan-500 shrink-0" aria-hidden />
+                      )}
                       {type === "all" && <span className="h-2 w-2 rounded-full bg-muted-foreground/50 shrink-0" aria-hidden />}
-                      {type === "tradexpar" ? "Tradexpar" : type === "dropi" ? "Dropi" : "Todos los orígenes"}
+                      {type === "tradexpar"
+                        ? "Tradexpar"
+                        : type === "dropi"
+                          ? "Dropi"
+                          : type === "fastrax"
+                            ? "Fastrax"
+                            : "Todos los orígenes"}
                     </span>
                   </button>
                 );

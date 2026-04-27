@@ -24,6 +24,8 @@ import WishlistPage from "@/pages/store/WishlistPage";
 import AffiliateApplyPage from "@/pages/store/AffiliateApplyPage";
 import AffiliatePortalPage from "@/pages/store/AffiliatePortalPage";
 import AboutTradexparPage from "@/pages/store/AboutTradexparPage";
+import PrivacyPage from "@/pages/store/PrivacyPage";
+import DataDeletionPage from "@/pages/store/DataDeletionPage";
 
 const AdminLoginPage = lazy(() => import("@/pages/admin/AdminLoginPage"));
 const AdminDashboardPage = lazy(() => import("@/pages/admin/AdminDashboardPage"));
@@ -76,6 +78,8 @@ const App = () => (
                   <Route path="/" element={<HomePage />} />
                   <Route path="/products" element={<ProductsPage />} />
                   <Route path="/sobre-tradexpar" element={<AboutTradexparPage />} />
+                  <Route path="/privacidad" element={<PrivacyPage />} />
+                  <Route path="/eliminar-datos" element={<DataDeletionPage />} />
                   <Route path="/products/:id" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />

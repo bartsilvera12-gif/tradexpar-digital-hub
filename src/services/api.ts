@@ -60,6 +60,38 @@ function looksLikeHtml(body: string): boolean {
   return lower.includes("<!doctype html") || lower.includes("<html");
 }
 
+/** Mensaje legible desde JSON de error del servidor Node (Dropi/Fastrax/etc.). Sin JSON crudo en la UI. */
+function extractApiErrorMessage(body: string): string | null {
+  const raw = body.trim();
+  if (!raw || raw.startsWith("<")) return null;
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    const pick = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() ? v.trim() : null;
+    const fromNested = (): string | null => {
+      const err = o.error;
+      if (err && typeof err === "object" && !Array.isArray(err)) {
+        const msg = pick((err as Record<string, unknown>).message);
+        if (msg) return msg;
+      }
+      const rawErr = o.raw_error;
+      if (rawErr && typeof rawErr === "object" && !Array.isArray(rawErr)) {
+        const msg = pick((rawErr as Record<string, unknown>).message);
+        if (msg) return msg;
+      }
+      return null;
+    };
+    return (
+      pick(o.error_message) ??
+      pick(o.message) ??
+      (typeof o.error === "string" ? pick(o.error) : null) ??
+      fromNested()
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = buildPaymentsUrl(path);
   if (import.meta.env.DEV) {
@@ -74,7 +106,11 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
   const text = await res.text().catch(() => "");
   if (!res.ok) {
-    throw new Error(`API Error ${res.status}: ${text.slice(0, 500)}`);
+    const friendly = extractApiErrorMessage(text);
+    if (friendly) throw new Error(friendly);
+    const t = text.trim();
+    if (t && !t.startsWith("{")) throw new Error(t.slice(0, 500));
+    throw new Error(`La petición falló (${res.status}).`);
   }
   const trimmed = text.trim();
   if (looksLikeHtml(trimmed)) {
