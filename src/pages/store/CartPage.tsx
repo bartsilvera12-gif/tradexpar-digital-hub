@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
+import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity } = useCart();
@@ -71,7 +72,9 @@ export default function CartPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
-          {items.map((item) => (
+          {items.map((item) => {
+            const lineImg = resolveProductPrimaryImageSrc(item.product);
+            return (
             <motion.div
               key={item.product.id}
               layout
@@ -81,8 +84,8 @@ export default function CartPage() {
               className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 bg-card rounded-2xl border shadow-card"
             >
               <div className="flex gap-3 flex-1 min-w-0">
-                {(item.product.images?.[0] || item.product.image) ? (
-                  <img src={item.product.images?.[0] || item.product.image} alt={item.product.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
+                {lineImg ? (
+                  <img src={lineImg} alt={item.product.name} className="w-20 h-20 rounded-xl object-cover shrink-0" />
                 ) : (
                   <div className="w-20 h-20 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
                     <span className="text-[10px] text-muted-foreground text-center">[imagen producto]</span>
@@ -111,7 +114,8 @@ export default function CartPage() {
                 </button>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Summary */}

@@ -18,11 +18,16 @@ import {
   buildWhatsAppProductLink,
   isNewProduct,
 } from "@/lib/productHelpers";
+import { resolveProductImageSrc } from "@/lib/productImageUrl";
 
 function getProductImages(product: Product): string[] {
-  if (product.images && product.images.length > 0) return product.images;
-  if (product.image) return [product.image];
-  return [];
+  const raw =
+    product.images && product.images.length > 0
+      ? product.images
+      : product.image
+        ? [product.image]
+        : [];
+  return raw.map((u) => resolveProductImageSrc(u)).filter(Boolean);
 }
 
 export default function ProductDetailPage() {

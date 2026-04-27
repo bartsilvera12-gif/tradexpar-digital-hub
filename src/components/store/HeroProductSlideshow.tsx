@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Product } from "@/types";
+import { resolveProductImageSrc } from "@/lib/productImageUrl";
 
 interface Props {
   products: Product[];
@@ -11,9 +12,8 @@ export function HeroProductSlideshow({ products }: Props) {
   const [index, setIndex] = useState(0);
 
   const allImages = products.flatMap((p) => {
-    if (p.images && p.images.length > 0) return p.images;
-    if (p.image) return [p.image];
-    return [];
+    const raw = p.images && p.images.length > 0 ? p.images : p.image ? [p.image] : [];
+    return raw.map((u) => resolveProductImageSrc(u)).filter(Boolean);
   });
 
   const advance = useCallback(() => {

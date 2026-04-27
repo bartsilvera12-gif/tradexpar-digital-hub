@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Trash2, Minus, Plus } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
+import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 
 const PANEL_W = 320;
 const GAP = 8;
@@ -106,13 +107,21 @@ export function CartDropdown({ open, onClose, anchorRef }: CartDropdownProps) {
           {items.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">Tu carrito está vacío</p>
           )}
-          {items.map((item) => (
+          {items.map((item) => {
+            const thumb = resolveProductPrimaryImageSrc(item.product);
+            return (
             <div key={item.product.id} className="flex items-center gap-3 px-4 py-3">
-              <img
-                src={item.product.images?.[0] || item.product.image}
-                alt={item.product.name}
-                className="w-12 h-12 rounded-lg object-contain bg-muted/20 shrink-0"
-              />
+              {thumb ? (
+                <img
+                  src={thumb}
+                  alt={item.product.name}
+                  className="w-12 h-12 rounded-lg object-contain bg-muted/20 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-muted/30 flex items-center justify-center shrink-0">
+                  <span className="text-[8px] text-muted-foreground">[img]</span>
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground truncate">{item.product.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -147,7 +156,8 @@ export function CartDropdown({ open, onClose, anchorRef }: CartDropdownProps) {
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {items.length > 0 && (

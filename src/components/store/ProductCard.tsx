@@ -19,6 +19,7 @@ import {
   buildWhatsAppProductLink,
 } from "@/lib/productHelpers";
 import { ProductPromoBadge } from "@/components/store/ProductPromoBadge";
+import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 
 interface ProductCardProps {
   product: Product;
@@ -46,6 +47,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   };
 
   const soldOut = product.stock !== undefined && product.stock <= 0;
+  const primaryImageSrc = resolveProductPrimaryImageSrc(product);
 
   return (
     <motion.div
@@ -87,9 +89,9 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             <Heart className={`h-4 w-4 ${has(product.id) ? "fill-current" : ""}`} />
           </button>
 
-          {(product.images?.[0] || product.image) ? (
+          {primaryImageSrc ? (
             <img
-              src={product.images?.[0] || product.image}
+              src={primaryImageSrc}
               alt={product.name}
               className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
               loading="lazy"

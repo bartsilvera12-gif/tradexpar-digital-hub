@@ -31,6 +31,7 @@ import {
   ADMIN_TR,
 } from "@/lib/adminModuleLayout";
 import { formatGuaraniesInteger, parseGuaraniesInput } from "@/lib/paraguayNumberFormat";
+import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 import { tradexpar } from "@/services/tradexpar";
 import { syncDropiTest } from "@/services/dropiCatalog";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
@@ -439,11 +440,18 @@ export default function AdminProductsPage() {
             <Label htmlFor="prod-source-filter" className={ADMIN_FORM_LABEL}>
               Origen
             </Label>
-            <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as typeof sourceFilter)}>
+            <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as typeof sourceFilter)} modal={false}>
               <SelectTrigger id="prod-source-filter" className={cn(ADMIN_FORM_CONTROL, "w-full sm:w-[200px]")}>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="start"
+                sideOffset={8}
+                avoidCollisions
+                collisionPadding={16}
+              >
                 <SelectItem value="all">Todos los orígenes</SelectItem>
                 <SelectItem value="tradexpar">Tradexpar / manual</SelectItem>
                 <SelectItem value="dropi">Dropi</SelectItem>
@@ -564,7 +572,9 @@ export default function AdminProductsPage() {
                 </tr>
               </thead>
               <tbody className={ADMIN_TBODY}>
-                {pagedProducts.map((p) => (
+                {pagedProducts.map((p) => {
+                  const rowImg = resolveProductPrimaryImageSrc(p);
+                  return (
                   <tr key={p.id} className={ADMIN_TR}>
                     <td className={cn(ADMIN_TD, "w-10 pl-2")}>
                       <Checkbox
@@ -575,9 +585,9 @@ export default function AdminProductsPage() {
                     </td>
                     <td className={ADMIN_TD}>
                       <div className="flex items-center gap-3">
-                        {p.images?.[0] || p.image ? (
+                        {rowImg ? (
                           <img
-                            src={p.images?.[0] || p.image}
+                            src={rowImg}
                             alt={p.name}
                             className="w-10 h-10 rounded-lg object-cover"
                           />
@@ -639,7 +649,8 @@ export default function AdminProductsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -13,6 +13,7 @@ import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 import { affiliatesAvailable } from "@/services/affiliateTradexparService";
 import { DDI } from "@/lib/ddiLabels";
 import { cn } from "@/lib/utils";
+import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 
 const VIRAL_DROPI_LABEL = "Los más virales";
 /** Naranja fuego: solo texto, sin fondo */
@@ -146,13 +147,25 @@ export function StoreNavbar() {
                   transition={{ duration: 0.15 }}
                   className="absolute top-full left-0 right-0 mt-1 bg-card border rounded-xl shadow-lg overflow-hidden z-50"
                 >
-                  {results.map((p) => (
+                  {results.map((p) => {
+                    const imgSrc = resolveProductPrimaryImageSrc(p);
+                    return (
                     <button
                       key={p.id}
                       onClick={() => handleSelect(p)}
                       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                     >
-                      <img src={p.images?.[0] || p.image} alt={p.name} className="w-12 h-12 rounded-lg object-contain bg-muted/20 shrink-0" />
+                      {imgSrc ? (
+                        <img
+                          src={imgSrc}
+                          alt={p.name}
+                          className="w-12 h-12 rounded-lg object-contain bg-muted/20 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-muted/30 flex items-center justify-center shrink-0">
+                          <span className="text-[8px] text-muted-foreground">[img]</span>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                         <p className="text-xs text-muted-foreground">{p.category}</p>
@@ -161,7 +174,8 @@ export function StoreNavbar() {
                         ₲{(Number(p.price) || 0).toLocaleString("es-PY")}
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -403,14 +417,26 @@ export function StoreNavbar() {
                   exit={{ opacity: 0, y: -4 }}
                   className="absolute top-full left-0 right-0 mt-1 max-h-[min(50vh,20rem)] overflow-y-auto overscroll-contain bg-card border rounded-xl shadow-lg z-[60]"
                 >
-                  {results.map((p) => (
+                  {results.map((p) => {
+                    const imgSrc = resolveProductPrimaryImageSrc(p);
+                    return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => handleSelect(p)}
                       className="w-full flex items-center gap-3 min-h-[3.25rem] px-3 sm:px-4 py-2.5 hover:bg-muted/40 active:bg-muted/60 transition-colors text-left border-b border-border/40 last:border-0"
                     >
-                      <img src={p.images?.[0] || p.image} alt={p.name} className="w-11 h-11 rounded-lg object-contain bg-muted/20 shrink-0" />
+                      {imgSrc ? (
+                        <img
+                          src={imgSrc}
+                          alt={p.name}
+                          className="w-11 h-11 rounded-lg object-contain bg-muted/20 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-lg bg-muted/30 flex items-center justify-center shrink-0">
+                          <span className="text-[8px] text-muted-foreground">[img]</span>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground line-clamp-2">{p.name}</p>
                         <p className="text-xs text-muted-foreground truncate">{p.category}</p>
@@ -419,7 +445,8 @@ export function StoreNavbar() {
                         ₲{(Number(p.price) || 0).toLocaleString("es-PY")}
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </motion.div>
               )}
             </AnimatePresence>
