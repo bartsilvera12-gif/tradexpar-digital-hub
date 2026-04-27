@@ -223,8 +223,32 @@ export async function listProductsPage(page = 1) {
   return listFastraxProductsOpe4(page, tam);
 }
 
-export async function getProductDetails(sku) {
-  return fastraxPost(2, { pro: String(sku) });
+/**
+ * ope=2: Fastrax espera el parámetro de forma `sku=185` (no `pro`, no `sk`).
+ * Acepta string, número o array de SKUs (se unen con coma).
+ * @param {string | number | (string | number)[] | null | undefined} skus
+ */
+export async function getProductDetails(skus) {
+  if (skus == null) {
+    return { ok: false, status: 0, message: "Fastrax ope=2: sku requerido", parsed: null };
+  }
+  let normalized = "";
+  if (Array.isArray(skus)) {
+    normalized = skus
+      .map((x) => (x == null ? "" : String(x).trim()))
+      .filter(Boolean)
+      .join(",");
+  } else if (typeof skus === "number" && Number.isFinite(skus)) {
+    normalized = String(skus);
+  } else {
+    normalized = String(skus).trim();
+  }
+  if (!normalized) {
+    return { ok: false, status: 0, message: "Fastrax ope=2: sku vacío", parsed: null };
+  }
+  const show = normalized.length > 200 ? `${normalized.slice(0, 200)}…` : normalized;
+  console.log(`[fastrax/client] ope=2 sku=${show}`);
+  return fastraxPost(2, { sku: normalized });
 }
 
 export async function getStockPrice(extra = {}) {

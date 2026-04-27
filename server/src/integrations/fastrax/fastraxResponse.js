@@ -66,15 +66,20 @@ export function parseFastraxVectorHeader(head) {
     return { businessOk: true, estatus: 0, cestatus: "" };
   }
   const o = /** @type {Record<string, unknown>} */ (head);
-  const rawE =
-    o.estatus ?? o.Estatus ?? o.status ?? o.Status ?? o.st ?? o.ST ?? o.cest ?? o.codigo ?? o.cEst;
-  if (rawE === undefined || rawE === null || rawE === "") {
-    return { businessOk: true, estatus: 0, cestatus: str(o.cestatus || o.cEst || o.mensaje || o.msg) };
-  }
-  const n = Number(rawE);
   const cest = str(
     o.cestatus ?? o.CEstatus ?? o.cEst ?? o.mensaje ?? o.Mensaje ?? o.msg ?? o.Msg ?? o.motivo ?? o.error
   );
+  const rawE =
+    o.estatus ?? o.Estatus ?? o.status ?? o.Status ?? o.st ?? o.ST ?? o.cest ?? o.codigo ?? o.cEst;
+  if (rawE === undefined || rawE === null || rawE === "") {
+    return { businessOk: true, estatus: 0, cestatus: cest };
+  }
+  // ope=2/4: a veces `estatus` viene como "0" (string); nunca tratarlo como error.
+  const rawStr = str(rawE);
+  if (rawStr === "0") {
+    return { businessOk: true, estatus: 0, cestatus: cest };
+  }
+  const n = Number(rawE);
   if (Number.isFinite(n)) {
     if (n === 0) {
       return { businessOk: true, estatus: 0, cestatus: cest };

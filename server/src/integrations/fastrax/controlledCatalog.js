@@ -329,6 +329,44 @@ function inferTotalPagesFromOpe4(parsedOpe4, pageSize) {
 }
 
 /**
+ * Log temporal: primer nodo o objeto raíz con `estatus` (respuesta ope=2).
+ * @param {unknown} parsed
+ */
+function logFastraxSearchOpe2DetailResponse(parsed) {
+  let e = "?";
+  let c = "?";
+  let el = "?";
+  try {
+    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object" && !Array.isArray(parsed[0])) {
+      const h = /** @type {Record<string, unknown>} */(parsed[0]);
+      if (h.estatus != null || h.Estatus != null || h.cestatus != null) {
+        e = String(h.estatus ?? h.Estatus ?? h.status ?? "?");
+        c = String(h.cestatus ?? h.cEst ?? "?");
+        if (h.element != null) el = String(h.element);
+        else if (h.Element != null) el = String(h.Element);
+        else if (h.el != null) el = String(h.el);
+      }
+    } else if (
+      parsed != null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      (Object.prototype.hasOwnProperty.call(/** @type {object} */(parsed), "estatus") ||
+        Object.prototype.hasOwnProperty.call(/** @type {object} */(parsed), "Estatus"))
+    ) {
+      const o = /** @type {Record<string, unknown>} */(parsed);
+      e = String(o.estatus ?? o.Estatus ?? "?");
+      c = String(o.cestatus ?? o.cEst ?? "?");
+      if (o.element != null) el = String(o.element);
+    }
+  } catch {
+    /* */
+  }
+  console.log(
+    `[fastrax/search] detail response header estatus=${e} cestatus=${c} element=${el}`
+  );
+}
+
+/**
  * Solo lectura: ope=4 (una página, tam ≤ 20) + ope=2 por SKU. Sin tocar la DB.
  * Nombres: solo desde ope=2, campo `nom` decodificado; `pre` / `sal` en detalle.
  * @param {object} p
@@ -362,6 +400,7 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
   };
 
   if (onlySku) {
+    console.log(`[fastrax/search] detail request sku=${onlySku}`);
     const r2 = await getProductDetails(onlySku);
     if (!r2 || r2.ok === false) {
       console.log(`[fastrax/search] page=1 size=${size} sku_count=1 detail_ok=0 detail_failed=1`);
@@ -375,6 +414,7 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
         message: r2 && r2.message ? String(r2.message) : "ope=2",
       };
     }
+    logFastraxSearchOpe2DetailResponse(r2.parsed);
     const drows = extractProductRows(/** @type {unknown} */ (r2.parsed));
     const raw0 =
       drows[0] ||
@@ -417,9 +457,8 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
   const seen = new Set();
   for (const raw of listRows) {
     if (!raw || typeof raw !== "object") continue;
-    const m0 = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */(raw));
-    if (!m0) continue;
-    const s = m0.external_sku;
+    const row = /** @type {Record<string, unknown>} */(raw);
+    const s = String(row.sku ?? row.sk ?? "").trim();
     if (!s || seen.has(s)) continue;
     seen.add(s);
     skus.push(s);
@@ -431,6 +470,7 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
   let detailFailed = 0;
   const items = [];
   for (const sku of skus) {
+    console.log(`[fastrax/search] detail request sku=${sku}`);
     const r2 = await getProductDetails(sku);
     if (!r2 || r2.ok === false) {
       detailFailed += 1;
@@ -438,6 +478,7 @@ export async function searchFastraxReadonlyOpe4Ope2(p) {
       if (matches(fall)) items.push(fall);
       continue;
     }
+    logFastraxSearchOpe2DetailResponse(r2.parsed);
     const drows = extractProductRows(/** @type {unknown} */(r2.parsed));
     const raw0 =
       drows[0] ||
