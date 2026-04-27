@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { Plus, Search, Edit, Trash2, Loader2, Package } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Loader2, Package, Plus, Search, Edit, Trash2 } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminFastraxImportPanel } from "@/components/admin/AdminFastraxImportPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -95,6 +96,10 @@ export default function AdminProductsPage() {
   const [dropiImportId, setDropiImportId] = useState("");
   const [dropiImportLoading, setDropiImportLoading] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "tradexpar" | "dropi" | "fastrax">("all");
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogPageSize, setCatalogPageSize] = useState(20);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const fetchProducts = () => {
     setLoading(true);
@@ -129,6 +134,34 @@ export default function AdminProductsPage() {
     const sku = (p.sku ?? "").toLowerCase();
     return name.includes(searchNorm) || sku.includes(searchNorm);
   });
+
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [search, sourceFilter]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filtered.length / catalogPageSize) || 1),
+    [filtered.length, catalogPageSize]
+  );
+
+  useEffect(() => {
+    if (catalogPage > totalPages) setCatalogPage(totalPages);
+  }, [catalogPage, totalPages]);
+
+  const currentCatalogPage = Math.min(catalogPage, totalPages);
+
+  const pagedProducts = useMemo(() => {
+    const start = (currentCatalogPage - 1) * catalogPageSize;
+    return filtered.slice(start, start + catalogPageSize);
+  }, [filtered, currentCatalogPage, catalogPageSize]);
+
+  const showFrom = filtered.length === 0 ? 0 : (currentCatalogPage - 1) * catalogPageSize + 1;
+  const showTo = Math.min(currentCatalogPage * catalogPageSize, filtered.length);
+  const pageIdList = pagedProducts.map((p) => p.id);
+  const allOnPageSelected =
+    pageIdList.length > 0 && pageIdList.every((id) => selectedProductIds.has(id));
+  const someOnPageSelected =
+    pageIdList.some((id) => selectedProductIds.has(id)) && !allOnPageSelected;
 
   const handleDropiImportById = async () => {
     if (dropiImportLoading) return;
@@ -233,10 +266,75 @@ export default function AdminProductsPage() {
   const handleDelete = async (productId: string) => {
     try {
       await tradexpar.adminDeleteProduct(productId);
+      setSelectedProductIds((prev) => {
+        const n = new Set(prev);
+        n.delete(productId);
+        return n;
+      });
       toast({ title: "Producto eliminado" });
       fetchProducts();
     } catch (err: any) {
       toast({ title: "No se pudo eliminar", description: err.message });
+    }
+  };
+
+  const toggleSelectProduct = (id: string) => {
+    setSelectedProductIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedProductIds((prev) => {
+      const n = new Set(prev);
+      if (allOnPageSelected) {
+        pageIdList.forEach((id) => n.delete(id));
+      } else {
+        pageIdList.forEach((id) => n.add(id));
+      }
+      return n;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedProductIds(new Set());
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedProductIds.size === 0) {
+      toast({ title: "No hay productos seleccionados" });
+      return;
+    }
+    const n = selectedProductIds.size;
+    if (!window.confirm(`¿Eliminar ${n} producto(s) del catálogo? No se puede deshacer.`)) {
+      return;
+    }
+    setBulkDeleting(true);
+    const ids = [...selectedProductIds];
+    let ok = 0;
+    let err = 0;
+    for (const id of ids) {
+      try {
+        await tradexpar.adminDeleteProduct(id);
+        ok += 1;
+      } catch {
+        err += 1;
+      }
+    }
+    setSelectedProductIds(new Set());
+    setBulkDeleting(false);
+    void fetchProducts();
+    if (err) {
+      toast({
+        variant: "destructive",
+        title: "Eliminación parcial",
+        description: `Confirmados: ${ok}. Con error: ${err}.`,
+      });
+    } else {
+      toast({ title: "Productos eliminados", description: `Se quitaron ${ok} fila(s).` });
     }
   };
 
@@ -362,10 +460,74 @@ export default function AdminProductsPage() {
       )}
       {!loading && !error && filtered.length > 0 && (
         <div className={ADMIN_CARD}>
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 p-3 border-b border-border">
+            <p className="text-sm text-muted-foreground order-2 sm:order-1">
+              {filtered.length} producto(s) · Página {currentCatalogPage} de {totalPages}
+              {filtered.length > 0
+                ? ` · Mostrando ${showFrom}–${showTo} en esta hoja${selectedProductIds.size > 0 ? ` · ${selectedProductIds.size} seleccionado(s)` : ""}`
+                : ""}
+            </p>
+            <div className="flex flex-wrap items-center gap-2 order-1 sm:order-2">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="admin-catalog-page-size" className="text-xs text-muted-foreground sr-only sm:not-sr-only sm:inline">
+                  Por página
+                </Label>
+                <Select
+                  value={String(catalogPageSize)}
+                  onValueChange={(v) => {
+                    setCatalogPageSize(Number(v) || 20);
+                    setCatalogPage(1);
+                  }}
+                >
+                  <SelectTrigger id="admin-catalog-page-size" className={cn(ADMIN_FORM_CONTROL, "h-9 w-[4.5rem] text-sm")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedProductIds.size > 0 && (
+                <Button type="button" variant="ghost" size="sm" className="h-9 text-xs" onClick={clearSelection}>
+                  Quitar selección
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="h-9 gap-1.5"
+                disabled={selectedProductIds.size === 0 || bulkDeleting}
+                onClick={() => void handleDeleteSelected()}
+              >
+                {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Eliminar seleccionados
+                {selectedProductIds.size > 0 ? ` (${selectedProductIds.size})` : ""}
+              </Button>
+            </div>
+          </div>
           <div className={ADMIN_TABLE_SCROLL}>
             <table className={ADMIN_TABLE}>
               <thead>
                 <tr className={ADMIN_THEAD_ROW}>
+                  <th className={cn(ADMIN_TH, "w-10 pl-2")} scope="col">
+                    <span className="sr-only">Seleccionar fila</span>
+                    <Checkbox
+                      className="align-middle"
+                      checked={
+                        allOnPageSelected
+                          ? true
+                          : someOnPageSelected
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={() => toggleSelectAllOnPage()}
+                      aria-label="Seleccionar todos en esta página"
+                    />
+                  </th>
                   <th className={ADMIN_TH}>Producto</th>
                   <th className={ADMIN_TH}>SKU</th>
                   <th className={ADMIN_TH}>Categoría</th>
@@ -376,8 +538,15 @@ export default function AdminProductsPage() {
                 </tr>
               </thead>
               <tbody className={ADMIN_TBODY}>
-                {filtered.map((p) => (
+                {pagedProducts.map((p) => (
                   <tr key={p.id} className={ADMIN_TR}>
+                    <td className={cn(ADMIN_TD, "w-10 pl-2")}>
+                      <Checkbox
+                        checked={selectedProductIds.has(p.id)}
+                        onCheckedChange={() => toggleSelectProduct(p.id)}
+                        aria-label={`Seleccionar ${p.name || p.sku || p.id}`}
+                      />
+                    </td>
                     <td className={ADMIN_TD}>
                       <div className="flex items-center gap-3">
                         {p.images?.[0] || p.image ? (
@@ -447,6 +616,35 @@ export default function AdminProductsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 p-3 border-t border-border">
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                disabled={currentCatalogPage <= 1}
+                onClick={() => setCatalogPage((p) => Math.max(1, p - 1))}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground min-w-[8.5rem] text-center tabular-nums">
+                {currentCatalogPage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                disabled={currentCatalogPage >= totalPages}
+                onClick={() => setCatalogPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Página siguiente"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       )}
