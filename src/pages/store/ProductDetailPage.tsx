@@ -19,6 +19,7 @@ import {
   isNewProduct,
 } from "@/lib/productHelpers";
 import { resolveProductImageSrc } from "@/lib/productImageUrl";
+import { productDescriptionPlainText } from "@/lib/productDescriptionText";
 
 function getProductImages(product: Product): string[] {
   const raw =
@@ -89,6 +90,7 @@ export default function ProductDetailPage() {
 
   const images = getProductImages(product);
   const maxQty = product.stock > 0 ? product.stock : 1;
+  const descriptionText = productDescriptionPlainText(product.description);
   const discountPct = getDiscountPercentage(product);
   const effectivePrice = getEffectivePrice(product);
   const affiliateBuyerPct = aff.buyerPercentForProduct(product.id);
@@ -217,7 +219,9 @@ export default function ProductDetailPage() {
             </span>
           )}
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-4 break-words">{product.name}</h1>
-          <p className="text-muted-foreground mb-6 leading-relaxed">{product.description}</p>
+          {descriptionText ? (
+            <p className="text-muted-foreground mb-6 leading-relaxed whitespace-pre-line">{descriptionText}</p>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-sm text-muted-foreground">
             <span className="break-all">SKU: {product.sku}</span>
