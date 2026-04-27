@@ -663,6 +663,9 @@ app.use(
   cors({
     origin: true,
     credentials: true,
+    /** Preflight: el admin Fastrax envía `x-api-key` además de `Authorization` y `Content-Type`. */
+    allowedHeaders: ["authorization", "content-type", "x-api-key"],
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   })
 );
 /** Webhook: body crudo a veces viene como JSON o x-www-form-urlencoded */
