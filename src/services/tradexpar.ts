@@ -924,18 +924,20 @@ export const tradexpar = {
      * @see https://supabase.com/docs/guides/auth/social-login/auth-facebook (permisos public_profile + email)
      */
     try {
-      const { data, error } = await getSupabaseAuth().auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-          ...(provider === "facebook"
-            ? { scopes: "public_profile email" }
-            : provider === "google"
-              ? { scopes: "openid email profile" }
-              : {}),
-        },
-      });
+      const { data, error } = await runAuthExclusive(() =>
+        getSupabaseAuth().auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo,
+            skipBrowserRedirect: true,
+            ...(provider === "facebook"
+              ? { scopes: "public_profile email" }
+              : provider === "google"
+                ? { scopes: "openid email profile" }
+                : {}),
+          },
+        })
+      );
       if (error) throw new Error(error.message);
       return { url: data.url ?? "" };
     } catch (e) {

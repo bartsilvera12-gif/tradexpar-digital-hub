@@ -62,8 +62,10 @@ export default function CustomerAccountPage() {
   /**
    * No redirigir a /login mientras la URL sigue siendo el callback OAuth: si Navigate corre antes
    * de que GoTrue procese el hash, se pierde el token y la sesión nunca se registra.
+   * Solo mostrar «Completando…» mientras el contexto hidrata: si `initializing` ya es false y no hay
+   * usuario, el callback falló o el hash quedó colgado — no bloquear la vista para siempre.
    */
-  if (isOAuthCallbackUrl() || isOAuthReturnPending()) {
+  if ((isOAuthCallbackUrl() || isOAuthReturnPending()) && initializing) {
     return (
       <div className="container mx-auto px-4 py-10 max-w-2xl">
         <Loader text="Completando inicio de sesión..." />

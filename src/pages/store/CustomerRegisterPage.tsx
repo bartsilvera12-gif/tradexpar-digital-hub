@@ -7,7 +7,8 @@ import { OAuthProviderButtons } from "@/components/store/OAuthProviderButtons";
 
 export default function CustomerRegisterPage() {
   const navigate = useNavigate();
-  const { register, loading } = useCustomerAuth();
+  const { register, loading, initializing } = useCustomerAuth();
+  const authBusy = loading || initializing;
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
 
@@ -19,6 +20,10 @@ export default function CustomerRegisterPage() {
     const password = form.password;
     if (!name || !email || !password) {
       setError("Todos los campos son obligatorios. Completá nombre, correo y contraseña.");
+      return;
+    }
+    if (initializing) {
+      setError("Esperá a que termine de comprobarse la sesión (unos segundos) e intentá de nuevo.");
       return;
     }
     try {
@@ -54,9 +59,16 @@ export default function CustomerRegisterPage() {
       <p className="text-sm text-muted-foreground mb-6">
         Creá la cuenta con Google o Facebook, o completá el formulario (todos los campos son obligatorios en ese caso).
       </p>
+      {initializing && (
+        <p className="text-sm text-muted-foreground mb-4 flex items-center gap-2" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          Comprobando si ya tenés una sesión abierta…
+        </p>
+      )}
 
       <div className="bg-card border rounded-2xl p-6 space-y-5">
         <OAuthProviderButtons
+          disabled={initializing}
           googleLabel="Registrarse con Google"
           facebookLabel="Registrarse con Facebook"
         />
@@ -87,6 +99,7 @@ export default function CustomerRegisterPage() {
               aria-required="true"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
+              disabled={authBusy}
             />
           </div>
           <div className="space-y-1.5">
@@ -103,6 +116,7 @@ export default function CustomerRegisterPage() {
               aria-required="true"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
+              disabled={authBusy}
             />
           </div>
           <div className="space-y-1.5">
@@ -120,15 +134,21 @@ export default function CustomerRegisterPage() {
               aria-required="true"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
+              disabled={authBusy}
             />
             <p className="text-xs text-muted-foreground">Mínimo 6 caracteres (requisito habitual de seguridad).</p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <button disabled={loading} className="w-full py-3 gradient-celeste text-white rounded-xl font-semibold">
+          <button disabled={authBusy} className="w-full py-3 gradient-celeste text-white rounded-xl font-semibold">
             {loading ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Creando...
+              </span>
+            ) : initializing ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Preparando…
               </span>
             ) : (
               "Crear cuenta"

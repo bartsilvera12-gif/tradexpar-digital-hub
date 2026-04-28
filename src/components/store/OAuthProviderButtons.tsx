@@ -39,11 +39,14 @@ type Props = {
   googleLabel?: string;
   /** Texto del botón de Facebook */
   facebookLabel?: string;
+  /** p. ej. mientras `CustomerAuth` hidrata la sesión: evita competir con getSession/initialize de GoTrue */
+  disabled?: boolean;
 };
 
 export function OAuthProviderButtons({
   googleLabel = "Continuar con Google",
   facebookLabel = "Continuar con Facebook",
+  disabled: hydrateDisabled = false,
 }: Props) {
   const [busy, setBusy] = useState<"google" | "facebook" | null>(null);
 
@@ -78,7 +81,7 @@ export function OAuthProviderButtons({
     <div className="grid grid-cols-1 gap-3">
       <button
         type="button"
-        disabled={busy !== null}
+        disabled={hydrateDisabled || busy !== null}
         onClick={() => void start("google")}
         className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 py-3 text-sm font-medium text-[#1f1f1f] shadow-sm transition-colors hover:bg-[#f8f9fa] disabled:opacity-60"
       >
@@ -91,7 +94,7 @@ export function OAuthProviderButtons({
       </button>
       <button
         type="button"
-        disabled={busy !== null}
+        disabled={hydrateDisabled || busy !== null}
         onClick={() => void start("facebook")}
         className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#1877F2] px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#166fe5] disabled:opacity-60"
       >

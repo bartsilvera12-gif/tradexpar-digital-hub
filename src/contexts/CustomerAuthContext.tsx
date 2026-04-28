@@ -26,6 +26,19 @@ const STORAGE_KEY = "tradexpar_customer_user";
 /** Login/registro en la tienda (cliente): redes lentas u operaciones de Auth encoladas en el mismo navegador. No es el acceso al panel administrador. */
 const CUSTOMER_CREDENTIAL_FLOW_TIMEOUT_MS = 45_000;
 
+/** Evita iniciar signIn/signUp mientras `syncStoreCustomer` sigue en `initialize`/`getSession` (bloqueo mutuo del lock de GoTrue). */
+const HYDRATE_WAIT_BEFORE_CREDENTIAL_MS = 22_000;
+
+async function waitUntilInitialHydrateDone(
+  initializingRef: React.MutableRefObject<boolean>,
+  maxMs: number
+): Promise<void> {
+  const start = Date.now();
+  while (initializingRef.current && Date.now() - start < maxMs) {
+    await new Promise((r) => setTimeout(r, 45));
+  }
+}
+
 const CustomerAuthContext = createContext<CustomerAuthContextType | undefined>(undefined);
 
 function loadStoredUser(): CustomerUser | null {
@@ -42,6 +55,10 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const [user, setUser] = useState<CustomerUser | null>(() => loadStoredUser());
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const initializingRef = useRef(true);
+  useEffect(() => {
+    initializingRef.current = initializing;
+  }, [initializing]);
   /** Evita que onAuthStateChange vuelva a ejecutar syncStoreCustomer con sesión aún válida durante signOut(). */
   const logoutInProgressRef = useRef(false);
   /** Login/registro con email+contraseña: si syncStoreCustomer corre en paralelo con signIn/signUp, GoTrue puede bloquearse. */
@@ -126,6 +143,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const login = async (email: string, password: string) => {
+    await waitUntilInitialHydrateDone(initializingRef, HYDRATE_WAIT_BEFORE_CREDENTIAL_MS);
     credentialAuthInProgressRef.current = true;
     setLoading(true);
     try {
@@ -154,6 +172,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const register = async (name: string, email: string, password: string) => {
+    await waitUntilInitialHydrateDone(initializingRef, HYDRATE_WAIT_BEFORE_CREDENTIAL_MS);
     credentialAuthInProgressRef.current = true;
     setLoading(true);
     try {
@@ -187,7 +206,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     flushSync(() => {
       persistUser(null);
     });
-    /** No await: signOut() puede tardar (revocación en servidor); la UI ya quedó limpia. */
+    /**
+     * Encolar con el mismo `runAuthExclusive` que `signInWithOAuth`: evita carrera con un nuevo
+     * inicio (p. ej. Facebook) justo después de cerrar sesión, que dejaba el flujo colgado.
+     * No await: la UI ya quedó limpia; signOut sigue en la cola.
+     */
     void runAuthExclusive(() => getSupabaseAuth().auth.signOut({ scope: "local" })).finally(() => {
       logoutInProgressRef.current = false;
     });
