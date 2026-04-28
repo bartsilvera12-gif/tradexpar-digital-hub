@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { CustomerUser } from "@/types";
 import {
@@ -19,6 +19,8 @@ interface CustomerAuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Reintenta cargar la fila `customers` cuando ya hay sesión Supabase (p. ej. OAuth recién completado). */
+  refreshCustomerFromSession: () => Promise<boolean>;
 }
 
 const STORAGE_KEY = "tradexpar_customer_user";
@@ -199,6 +201,21 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const persistUserRef = useRef(persistUser);
+  persistUserRef.current = persistUser;
+  const refreshCustomerFromSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const synced = await tradexpar.syncStoreCustomer();
+      if (synced) {
+        persistUserRef.current(synced);
+        return true;
+      }
+    } catch {
+      /* RLS, RPC u otro error */
+    }
+    return false;
+  }, []);
+
   const logout = async () => {
     logoutInProgressRef.current = true;
     clearOAuthReturnPending();
@@ -217,8 +234,16 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const value = useMemo(
-    () => ({ user, loading, initializing, login, register, logout }),
-    [user, loading, initializing]
+    () => ({
+      user,
+      loading,
+      initializing,
+      login,
+      register,
+      logout,
+      refreshCustomerFromSession,
+    }),
+    [user, loading, initializing, login, register, logout, refreshCustomerFromSession]
   );
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>;

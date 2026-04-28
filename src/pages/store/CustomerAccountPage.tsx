@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 import { Loader } from "@/components/shared/Loader";
@@ -48,9 +48,43 @@ function formatCooldownRemaining(iso: string): string {
 }
 
 export default function CustomerAccountPage() {
-  const { user, logout, initializing } = useCustomerAuth();
+  const { user, logout, initializing, refreshCustomerFromSession } = useCustomerAuth();
   /** Respaldo si hubo carrera entre navigate y el estado del contexto. */
   const effectiveUser = user ?? readStoredCustomer();
+  const [oauthRecovery, setOauthRecovery] = useState<"idle" | "working" | "failed">("idle");
+  const recoveryInFlight = useRef(false);
+
+  useEffect(() => {
+    if (effectiveUser || initializing) {
+      setOauthRecovery("idle");
+      return;
+    }
+    if (isOAuthCallbackUrl() || isOAuthReturnPending()) return;
+    if (recoveryInFlight.current) return;
+    recoveryInFlight.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await getSupabaseAuth().auth.getSession();
+        if (cancelled) return;
+        if (!data.session?.user) {
+          setOauthRecovery("idle");
+          return;
+        }
+        setOauthRecovery("working");
+        const ok = await refreshCustomerFromSession();
+        if (cancelled) return;
+        setOauthRecovery(ok ? "idle" : "failed");
+      } finally {
+        if (!cancelled) recoveryInFlight.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      recoveryInFlight.current = false;
+    };
+  }, [effectiveUser, initializing, refreshCustomerFromSession]);
 
   /** Si ya hay usuario (p. ej. login recién hecho), no bloquear por la hidratación en segundo plano. */
   if (effectiveUser) {
@@ -77,6 +111,41 @@ export default function CustomerAccountPage() {
     return (
       <div className="container mx-auto px-4 py-10 max-w-2xl">
         <Loader text="Comprobando tu sesión..." />
+      </div>
+    );
+  }
+
+  if (oauthRecovery === "working") {
+    return (
+      <div className="container mx-auto px-4 py-10 max-w-2xl">
+        <Loader text="Sincronizando tu perfil…" />
+      </div>
+    );
+  }
+
+  if (oauthRecovery === "failed") {
+    return (
+      <div className="container mx-auto px-4 py-10 max-w-2xl space-y-4">
+        <h1 className="text-xl font-semibold text-foreground">No pudimos cargar tu cuenta</h1>
+        <p className="text-sm text-muted-foreground">
+          Tu sesión con Facebook u otro proveedor está activa, pero no se pudo crear o leer tu perfil en la tienda.
+          Reintentá o cerrá sesión y volvé a entrar. Si usás Facebook, comprobá en Meta que el permiso{" "}
+          <span className="font-medium text-foreground">email</span> esté habilitado para la app.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="button"
+            onClick={() => {
+              setOauthRecovery("working");
+              void refreshCustomerFromSession().then((ok) => setOauthRecovery(ok ? "idle" : "failed"));
+            }}
+          >
+            Reintentar
+          </Button>
+          <Button type="button" variant="outline" asChild>
+            <Link to="/login">Ir a iniciar sesión</Link>
+          </Button>
+        </div>
       </div>
     );
   }

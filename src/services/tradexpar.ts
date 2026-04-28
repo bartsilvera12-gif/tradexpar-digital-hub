@@ -1272,6 +1272,24 @@ export const tradexpar = {
  */
 let storeCustomerAuthLibraryInited = false;
 
+/** Email visible en JWT/sesión; Facebook a veces lo deja solo en user_metadata o identity_data hasta el próximo refresh. */
+function pickEmailForStore(user: User, sessionUser: User): string {
+  const direct = (user.email ?? "").trim();
+  if (direct) return direct;
+  const meta = user.user_metadata;
+  if (meta && typeof meta === "object" && "email" in meta) {
+    const e = (meta as { email?: unknown }).email;
+    if (typeof e === "string" && e.trim()) return e.trim();
+  }
+  const oauthIdentity = user.identities?.find((i) => i.provider === "google" || i.provider === "facebook");
+  const idEmail =
+    oauthIdentity && oauthIdentity.identity_data && typeof oauthIdentity.identity_data === "object"
+      ? String((oauthIdentity.identity_data as { email?: string }).email ?? "").trim()
+      : "";
+  if (idEmail) return idEmail;
+  return (sessionUser.email ?? "").trim();
+}
+
 async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   if (!isSupabaseConfigured()) return null;
   if (isAdminLoginPath() || isAdminPanelSignInBusy()) {
@@ -1291,10 +1309,9 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   }
   if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
   let session = (await auth.getSession()).data.session;
-  /** Tras redirect OAuth (PKCE puede tardar), la sesión puede aparecer tarde. */
+  /** Tras redirect OAuth (PKCE / red lenta), la sesión puede aparecer bastante más tarde que ~4s. */
   if (oauthReturn && !session?.user) {
-    /** ~4s máx.; el hydrate global lleva otro timeout para no colgar la app. */
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 120; i++) {
       if (isAdminLoginPath() || isAdminPanelSignInBusy()) return null;
       await new Promise((r) => setTimeout(r, 100));
       session = (await auth.getSession()).data.session;
@@ -1303,20 +1320,47 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   }
   if (!session?.user) return null;
   if (session.access_token) setDataClientAccessToken(session.access_token);
-  /** `getUser()` va al servidor cada vez y suma RTT; para sincronizar `customers` alcanza `session.user` (mismo JWT). */
-  const u = session.user;
+  /**
+   * Tras OAuth, `getSession().user` a veces llega sin email/identities completos; `getUser()` fuerza
+   * datos actualizados desde Auth (útil para Facebook + email en metadata).
+   */
+  let u = session.user;
+  const sessionUserSnapshot = session.user;
+  if (oauthReturn) {
+    const { data: gu, error: guErr } = await auth.getUser();
+    if (!guErr && gu.user) {
+      u = gu.user;
+    }
+    const { data: sess2 } = await auth.getSession();
+    if (sess2.session?.access_token) setDataClientAccessToken(sess2.session.access_token);
+  } else {
+    const p0 = oauthProviderFromUser(u);
+    if (
+      (p0 === "facebook" || p0 === "google") &&
+      !pickEmailForStore(u, sessionUserSnapshot)
+    ) {
+      const { data: gu, error: guErr } = await auth.getUser();
+      if (!guErr && gu.user) u = gu.user;
+      const { data: sess2 } = await auth.getSession();
+      if (sess2.session?.access_token) setDataClientAccessToken(sess2.session.access_token);
+    }
+  }
   const uid = u.id;
-  let row = await fetchCustomerByAuthId(uid);
+  let row: Record<string, unknown> | null = null;
+  try {
+    row = await fetchCustomerByAuthId(uid);
+  } catch {
+    row = null;
+  }
   if (row) return rowToCustomerUser(row);
 
   const prov = oauthProviderFromUser(u);
-  const sessionUser = session.user;
 
   const nameFromSession = (emailFallback: string) =>
     (u.user_metadata?.full_name as string) ||
     (u.user_metadata?.name as string) ||
-    (sessionUser.user_metadata?.full_name as string) ||
-    (sessionUser.user_metadata?.name as string) ||
+    (sessionUserSnapshot.user_metadata?.full_name as string) ||
+    (sessionUserSnapshot.user_metadata?.name as string) ||
     emailFallback.split("@")[0] ||
     "Usuario";
 
@@ -1336,12 +1380,7 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   }
 
   if (prov === "google" || prov === "facebook") {
-    const oauthIdentity = u.identities?.find((i) => i.provider === "google" || i.provider === "facebook");
-    const emailFromIdentity =
-      oauthIdentity && oauthIdentity.identity_data && typeof oauthIdentity.identity_data === "object"
-        ? String((oauthIdentity.identity_data as { email?: string }).email ?? "").trim()
-        : "";
-    const email = (u.email ?? sessionUser.email ?? emailFromIdentity ?? "").trim();
+    const email = pickEmailForStore(u, sessionUserSnapshot);
     if (!email) return null;
     const name = nameFromSession(email);
 
@@ -1380,7 +1419,7 @@ async function syncStoreCustomerInner(): Promise<CustomerUser | null> {
   }
 
   /** Email/contraseña (u otros): sin fila en `customers`, Mi cuenta y las RPC devuelven no_customer. */
-  const email = (u.email ?? sessionUser.email ?? "").trim();
+  const email = pickEmailForStore(u, sessionUserSnapshot);
   if (!email) return null;
   const name = nameFromSession(email);
   const sb = tx();
