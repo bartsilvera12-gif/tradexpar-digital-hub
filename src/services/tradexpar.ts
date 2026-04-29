@@ -473,21 +473,29 @@ async function mergeCustomerAffiliateFlags(
   });
 }
 
-async function assertAdminProfile(userId: string) {
-  if (import.meta.env.VITE_ADMIN_REQUIRE_SUPER !== "true") return;
-  const { data, error } = await tx()
+/**
+ * Lectura de `profiles.is_super_admin` para el usuario autenticado.
+ * Por defecto el panel exige super admin; solo en dev sin tabla/RLS: `VITE_ADMIN_SKIP_PROFILE_CHECK=true`.
+ */
+async function fetchProfileSuperAdminRow(userId: string) {
+  return tx()
     .from("profiles")
     .select("is_super_admin")
     .eq("id", userId)
     .maybeSingle()
     .abortSignal(requestAbortSignal(12_000));
+}
+
+async function assertAdminProfile(userId: string) {
+  if (import.meta.env.VITE_ADMIN_SKIP_PROFILE_CHECK === "true") return;
+  const { data, error } = await fetchProfileSuperAdminRow(userId);
   if (error) {
     const msg = error.message ?? String(error);
     await getSupabaseAuth().auth.signOut({ scope: "local" });
     setDataClientAccessToken(null);
     if (/does not exist|schema cache|42P01|PGRST/i.test(msg)) {
       throw new Error(
-        "No se pudo leer `tradexpar.profiles` (¿falta la tabla o políticas RLS?). Revisá el SQL del proyecto o desactivá VITE_ADMIN_REQUIRE_SUPER."
+        "No se pudo leer `tradexpar.profiles` (¿falta la tabla o políticas RLS?). Revisá el SQL del proyecto o, solo en entorno controlado, definí VITE_ADMIN_SKIP_PROFILE_CHECK=true."
       );
     }
     throw new Error(`No se pudo verificar permisos de administrador: ${msg}`);
@@ -497,6 +505,20 @@ async function assertAdminProfile(userId: string) {
     setDataClientAccessToken(null);
     throw new Error("Tu usuario no tiene permisos de administrador.");
   }
+}
+
+/**
+ * Comprueba que la sesión Auth actual sigue correspondiendo a un `is_super_admin` en `tradexpar.profiles`.
+ * Usado por `AdminLayout` para evitar acceso con flags en sessionStorage o sesión de cliente de tienda.
+ */
+export async function verifyAdminPanelSession(): Promise<boolean> {
+  if (import.meta.env.VITE_ADMIN_SKIP_PROFILE_CHECK === "true") return true;
+  const { data: { session } } = await getSupabaseAuth().auth.getSession();
+  const uid = session?.user?.id;
+  if (!uid) return false;
+  const { data, error } = await fetchProfileSuperAdminRow(uid);
+  if (error) return false;
+  return (data as { is_super_admin?: boolean } | null)?.is_super_admin === true;
 }
 
 /** Mensajes claros cuando `/auth/v1/token` devuelve 400 (credenciales, confirmación, etc.). */

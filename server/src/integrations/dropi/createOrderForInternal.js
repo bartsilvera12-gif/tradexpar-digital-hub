@@ -5,6 +5,10 @@
 
 import { postDropiBridgeJson, dropiConfigured, resolveBridgeBaseUrl } from "./client.js";
 import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
+import { mapPagoparToDropi } from "./mapPagoparToDropi.js";
+
+/** `false` = mismo comportamiento que antes del mapeo PagoPar→Dropi (solo `customer_city_code`). Una línea para revertir. */
+const USE_DROPI_CITY_CODE_MAP = true;
 
 function envTrim(key) {
   const v = process.env[key];
@@ -265,6 +269,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     .select(
       "id, checkout_type, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, customer_address_reference"
     )
+    // Tras migración SQL (customer_city_name, customer_dropi_city_code): añadilas al select de arriba.
     .eq("id", oid)
     .maybeSingle();
 
@@ -387,6 +392,21 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   const pathSeg = envTrim("DROPI_BRIDGE_ORDER_PATH") || "order";
   const minProfit = dropiMinProfitGs();
+  const rawCityCode = orderRow.customer_city_code != null ? String(orderRow.customer_city_code) : "";
+  /** Si migrás orders.customer_dropi_city_code y lo incluís en el select, Dropi usa ese código directo. */
+  const dropiOverride =
+    orderRow.customer_dropi_city_code != null && String(orderRow.customer_dropi_city_code).trim() !== ""
+      ? String(orderRow.customer_dropi_city_code).trim()
+      : "";
+  const dropiCityCode =
+    dropiOverride ||
+    (USE_DROPI_CITY_CODE_MAP
+      ? mapPagoparToDropi(orderRow.customer_city_code, orderRow.customer_city_name) || rawCityCode
+      : rawCityCode);
+  console.log("[DROPI CITY MAP]", {
+    original: orderRow.customer_city_code,
+    mapped: dropiCityCode,
+  });
   const payload = {
     tradexpar_order_id: oid,
     payment_confirmed: true,
@@ -396,7 +416,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       phone: orderRow.customer_phone != null ? String(orderRow.customer_phone) : "",
       document: orderRow.customer_document != null ? String(orderRow.customer_document) : "",
       address: orderRow.customer_address != null ? String(orderRow.customer_address) : "",
-      city_code: orderRow.customer_city_code != null ? String(orderRow.customer_city_code) : "",
+      city_code: dropiCityCode !== "" ? String(dropiCityCode) : "",
       address_reference:
         orderRow.customer_address_reference != null ? String(orderRow.customer_address_reference) : "",
     },

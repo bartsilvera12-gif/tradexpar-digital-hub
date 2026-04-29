@@ -12,6 +12,11 @@ interface ImportMetaEnv {
   readonly VITE_DROPI_ORDER_BASE_URL?: string;
   /** Si es "true", solo usa Edge Function para cambio de contraseña admin (ignora RPC SQL). */
   readonly VITE_ADMIN_PASSWORD_VIA_EDGE?: string;
+  /**
+   * Solo entornos controlados (sin tabla `profiles` / RLS): si es "true", no exige `is_super_admin` para el panel.
+   * En producción debe estar sin definir o en "false" para que solo entren super admins.
+   */
+  readonly VITE_ADMIN_SKIP_PROFILE_CHECK?: string;
 }
 
 interface ImportMeta {
