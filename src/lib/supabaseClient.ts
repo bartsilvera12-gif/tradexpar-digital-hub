@@ -92,29 +92,6 @@ export function runAuthExclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-/**
- * GoTrue puede anidar llamadas a `lock` (p. ej. getSession → refresh). Si cada nivel usa
- * `runAuthExclusive` sin reentrancia, la interna queda en cola detrás de la externa → deadlock
- * y la UI queda en «Comprobando sesión» / «Preparando…».
- */
-let goTrueLockDepth = 0;
-
-async function browserAuthLock(
-  _name: string,
-  _timeout: number,
-  fn: () => Promise<unknown>
-): Promise<unknown> {
-  goTrueLockDepth += 1;
-  try {
-    if (goTrueLockDepth > 1) {
-      return await fn();
-    }
-    return await runAuthExclusive(fn);
-  } finally {
-    goTrueLockDepth -= 1;
-  }
-}
-
 /** GoTrue: sin forzar schema en tablas de auth. */
 
 export function getSupabaseAuth(): SupabaseClient {
@@ -129,7 +106,12 @@ export function getSupabaseAuth(): SupabaseClient {
     const url = resolveSupabaseUrl();
     const key = resolveSupabaseAnonKey();
 
-    /** GoTrue en navegador: sin Web Locks; serialización reentrante para no bloquear login tienda. */
+    /**
+     * Cliente Auth por defecto de Supabase (Web Locks entre pestañas).
+     * No usar `lock` personalizado: combinado con `initialize`/`getSession`/`onAuthStateChange`
+     * en paralelo deja la hidratación colgada («Comprobando sesión» / login bloqueado).
+     * `lockAcquireTimeout` alto reduce timeouts del lock nativo.
+     */
     const browserAuthOptions =
       typeof window !== "undefined"
         ? {
@@ -138,7 +120,6 @@ export function getSupabaseAuth(): SupabaseClient {
             detectSessionInUrl: true,
             lockAcquireTimeout: 120_000,
             storage: window.localStorage,
-            lock: browserAuthLock,
           }
         : {
             persistSession: true,
@@ -149,7 +130,6 @@ export function getSupabaseAuth(): SupabaseClient {
           };
 
     authClient = createClient(url, key, {
-      // Tipos del bundle a veces van detrás de GoTrue (lock / lockAcquireTimeout existen en runtime).
       auth: browserAuthOptions as never,
     });
 

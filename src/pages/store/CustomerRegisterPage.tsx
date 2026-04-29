@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
@@ -7,7 +7,10 @@ import { OAuthProviderButtons } from "@/components/store/OAuthProviderButtons";
 
 export default function CustomerRegisterPage() {
   const navigate = useNavigate();
-  const { register, loading, initializing } = useCustomerAuth();
+  const { register, loading, initializing, unlockInteractiveAuth } = useCustomerAuth();
+  useLayoutEffect(() => {
+    unlockInteractiveAuth();
+  }, [unlockInteractiveAuth]);
   const authBusy = loading || initializing;
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");

@@ -24,7 +24,12 @@ export function AdminLayout() {
       setAdminVerified((v) => (v === null ? false : v));
     }, safetyMs);
     void (async () => {
-      const ok = await verifyAdminPanelSession();
+      let ok = false;
+      try {
+        ok = await verifyAdminPanelSession();
+      } catch {
+        ok = false;
+      }
       if (cancelled) return;
       window.clearTimeout(safety);
       if (!ok) {

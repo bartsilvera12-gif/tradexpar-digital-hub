@@ -92,6 +92,13 @@ export function isAdminLoginPath(): boolean {
   return /\/admin\/login\b/.test(window.location.pathname);
 }
 
+/** Login/registro de la tienda (clientes). No es el panel admin; la hidratación no debe bloquear la UI aquí. */
+export function isStoreLoginOrRegisterPath(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.location.pathname.trim().replace(/\/+$/, "") || "/";
+  return p === "/login" || p === "/register";
+}
+
 let adminPanelSignInDepth = 0;
 
 /** True mientras corre el login del panel (signInWithPassword + assertAdminProfile). */

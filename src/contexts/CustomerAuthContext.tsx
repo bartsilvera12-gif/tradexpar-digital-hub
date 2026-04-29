@@ -7,6 +7,7 @@ import {
   isAdminPanelSignInBusy,
   isOAuthCallbackUrl,
   isOAuthReturnPending,
+  isStoreLoginOrRegisterPath,
   tradexpar,
 } from "@/services/tradexpar";
 import { getSupabaseAuth, runAuthExclusive, setDataClientAccessToken } from "@/lib/supabaseClient";
@@ -21,6 +22,8 @@ interface CustomerAuthContextType {
   logout: () => Promise<void>;
   /** Reintenta cargar la fila `customers` cuando ya hay sesión Supabase (p. ej. OAuth recién completado). */
   refreshCustomerFromSession: () => Promise<boolean>;
+  /** `/login` y `/register`: desbloquea la UI al instante (sync en segundo plano). Independiente del panel admin. */
+  unlockInteractiveAuth: () => void;
 }
 
 const STORAGE_KEY = "tradexpar_customer_user";
@@ -75,6 +78,18 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const unlockInteractiveAuth = useCallback(() => {
+    setInitializing(false);
+  }, []);
+
+  /** Si por cualquier motivo `initializing` no baja, no bloquear login para siempre. */
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setInitializing(false);
+    }, 20_000);
+    return () => window.clearTimeout(id);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     /** Si syncStoreCustomer o getSession colgaban, el catch hacía await getSession otra vez y nunca se ejecutaba finally → "Comprobando tu sesión" eterno. */
@@ -86,6 +101,22 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       /** Misma pestaña en /admin/login: no llamar initialize/getSession de tienda (bloquea login del panel). */
       if (typeof window !== "undefined" && isAdminLoginPath()) {
         if (!cancelled) setInitializing(false);
+        return;
+      }
+      /**
+       * Tienda `/login` y `/register`: no bloquear botones ni OAuth esperando `syncStoreCustomer`.
+       * El sync corre en segundo plano; el panel admin no usa estas rutas.
+       */
+      if (typeof window !== "undefined" && isStoreLoginOrRegisterPath()) {
+        if (!cancelled) setInitializing(false);
+        void (async () => {
+          try {
+            const synced = await tradexpar.syncStoreCustomer();
+            if (!cancelled && synced) persistUser(synced);
+          } catch {
+            clearOAuthReturnPending();
+          }
+        })();
         return;
       }
       const oauthFlow =
@@ -242,8 +273,9 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       register,
       logout,
       refreshCustomerFromSession,
+      unlockInteractiveAuth,
     }),
-    [user, loading, initializing, login, register, logout, refreshCustomerFromSession]
+    [user, loading, initializing, login, register, logout, refreshCustomerFromSession, unlockInteractiveAuth]
   );
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>;
