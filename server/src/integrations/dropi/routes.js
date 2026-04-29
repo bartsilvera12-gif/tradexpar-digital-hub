@@ -1,6 +1,6 @@
 import { createRequireAdminMiddleware } from "../../adminAuth.js";
 import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
-import { dropiConfigured } from "./client.js";
+import { dropiAdminCatalogSyncAllowed, dropiConfigured } from "./client.js";
 import { createDropiOrderForInternalOrder } from "./createOrderForInternal.js";
 import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
 import { orderCanFulfillDropiTest } from "./orderDropiGates.js";
@@ -139,6 +139,12 @@ function jsonFromCreateResult(orderId, r) {
  */
 export function registerDropiRoutes(app) {
   app.post("/api/admin/dropi/sync-test", requireAdmin, async (req, res) => {
+    if (!dropiAdminCatalogSyncAllowed()) {
+      return res.status(503).json({
+        ok: false,
+        message: "Sync de catálogo Dropi desactivado (DROPI_ADMIN_SYNC_ENABLED=false).",
+      });
+    }
     try {
       const sb = supabaseService();
       const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -164,6 +170,12 @@ export function registerDropiRoutes(app) {
   });
 
   app.post("/api/admin/dropi/sync-images", requireAdmin, async (req, res) => {
+    if (!dropiAdminCatalogSyncAllowed()) {
+      return res.status(503).json({
+        ok: false,
+        message: "Sync de imágenes Dropi desactivado (DROPI_ADMIN_SYNC_ENABLED=false).",
+      });
+    }
     try {
       const sb = supabaseService();
       const body = req.body && typeof req.body === "object" ? req.body : {};

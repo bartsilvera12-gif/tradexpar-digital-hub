@@ -525,18 +525,68 @@ async function assertAdminProfile(userId: string) {
   }
 }
 
+/** `sub` del access_token sin `auth.getSession()` (GoTrue puede colgar por lock del navegador). */
+function parseJwtSub(accessToken: string): string | null {
+  try {
+    const parts = accessToken.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1];
+    const pad = payload.length % 4 === 0 ? "" : "=".repeat(4 - (payload.length % 4));
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/") + pad;
+    const o = JSON.parse(atob(b64)) as { sub?: string };
+    return typeof o.sub === "string" && o.sub.length > 0 ? o.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+const ADMIN_GET_SESSION_MAX_MS = 10_000;
+const ADMIN_VERIFY_TOTAL_MAX_MS = 30_000;
+
 /**
  * Comprueba que la sesión Auth actual sigue correspondiendo a un `is_super_admin` en `tradexpar.profiles`.
  * Usado por `AdminLayout` para evitar acceso con flags en sessionStorage o sesión de cliente de tienda.
+ *
+ * No depende solo de `getSession()`: con varias pestañas / lock de GoTrue esa llamada puede no resolver
+ * y dejar el panel en «Verificando acceso» indefinidamente. Primero se usa `tradexpar_admin_token` (JWT).
  */
 export async function verifyAdminPanelSession(): Promise<boolean> {
   if (import.meta.env.VITE_ADMIN_SKIP_PROFILE_CHECK === "true") return true;
-  const { data: { session } } = await getSupabaseAuth().auth.getSession();
-  const uid = session?.user?.id;
-  if (!uid) return false;
-  const { data, error } = await fetchProfileSuperAdminRow(uid);
-  if (error) return false;
-  return (data as { is_super_admin?: boolean } | null)?.is_super_admin === true;
+
+  const run = async (): Promise<boolean> => {
+    let uid: string | null = null;
+
+    if (typeof sessionStorage !== "undefined") {
+      const t = sessionStorage.getItem("tradexpar_admin_token")?.trim();
+      if (t) {
+        setDataClientAccessToken(t);
+        uid = parseJwtSub(t);
+      }
+    }
+
+    if (!uid) {
+      uid = await Promise.race([
+        getSupabaseAuth()
+          .auth.getSession()
+          .then(({ data, error }) => {
+            if (error) return null;
+            return data.session?.user?.id ?? null;
+          }),
+        new Promise<null>((r) => setTimeout(() => r(null), ADMIN_GET_SESSION_MAX_MS)),
+      ]);
+    }
+
+    if (!uid) return false;
+
+    const { data, error } = await fetchProfileSuperAdminRow(uid);
+    if (error) return false;
+    return (data as { is_super_admin?: boolean } | null)?.is_super_admin === true;
+  };
+
+  return Promise.race([
+    run(),
+    new Promise<boolean>((r) => setTimeout(() => r(false), ADMIN_VERIFY_TOTAL_MAX_MS)),
+  ]);
 }
 
 /** Mensajes claros cuando `/auth/v1/token` devuelve 400 (credenciales, confirmación, etc.). */

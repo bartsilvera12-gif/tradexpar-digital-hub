@@ -17,9 +17,16 @@ export function AdminLayout() {
   useEffect(() => {
     if (!isLogged) return;
     let cancelled = false;
+    /** Si la verificación no termina (caso extremo), no dejar la UI colgada para siempre. */
+    const safetyMs = 35_000;
+    const safety = window.setTimeout(() => {
+      if (cancelled) return;
+      setAdminVerified((v) => (v === null ? false : v));
+    }, safetyMs);
     void (async () => {
       const ok = await verifyAdminPanelSession();
       if (cancelled) return;
+      window.clearTimeout(safety);
       if (!ok) {
         sessionStorage.removeItem("tradexpar_admin");
         sessionStorage.removeItem("tradexpar_admin_token");
@@ -30,6 +37,7 @@ export function AdminLayout() {
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(safety);
     };
   }, [isLogged]);
 

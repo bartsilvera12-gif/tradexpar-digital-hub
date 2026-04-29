@@ -3,7 +3,13 @@
  * Requiere `tradexpar.products.external_sku` (ver `server/sql/fastrax_supabase_sql_arrays.mjs` / Supabase).
  */
 
-import { fastraxPost, fastraxConfigured, fastraxEnabled, listProductsPage } from "./client.js";
+import {
+  fastraxPost,
+  fastraxConfigured,
+  fastraxEnabled,
+  fastraxCatalogImportAllowed,
+  listProductsPage,
+} from "./client.js";
 import { upsertFastraxMappedRow } from "./fastraxProductUpsert.js";
 import { extractProductRows, mapFastraxRowToProduct } from "./mapper.js";
 
@@ -18,6 +24,9 @@ const OPE4_STOP = 2;
  * @returns {Promise<Record<string, unknown>>}
  */
 export async function runFastraxProductSync(sb, options = {}) {
+  if (!fastraxCatalogImportAllowed()) {
+    return { ok: false, error: "FASTRAX_CATALOG_IMPORT_DISABLED" };
+  }
   if (!fastraxEnabled()) {
     return { ok: false, error: "FASTRAX_DISABLED" };
   }

@@ -18,6 +18,14 @@ export function fastraxEnabled() {
   return String(process.env.FASTRAX_ENABLED ?? "1").trim() !== "0";
 }
 
+/**
+ * Importación de catálogo (sync-products, import SKUs/items): solo con FASTRAX_ENABLED=true explícito.
+ * Pedidos / ope 12–13 siguen usando {@link fastraxEnabled} (habilitado si no es "0").
+ */
+export function fastraxCatalogImportAllowed() {
+  return String(process.env.FASTRAX_ENABLED ?? "").trim().toLowerCase() === "true";
+}
+
 export function fastraxConfigured() {
   if (!fastraxEnabled()) return false;
   return Boolean(
