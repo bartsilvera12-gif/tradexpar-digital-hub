@@ -106,22 +106,29 @@ export function getSupabaseAuth(): SupabaseClient {
     const url = resolveSupabaseUrl();
     const key = resolveSupabaseAnonKey();
 
+    /** GoTrue en navegador usa Web Locks por defecto → errores «Lock … stolen» con llamadas concurrentes. Serializamos con `runAuthExclusive` sin `navigator.locks`. */
+    const browserAuthOptions =
+      typeof window !== "undefined"
+        ? {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            lockAcquireTimeout: 120_000,
+            storage: window.localStorage,
+            lock: async (_name: string, _timeout: number, fn: () => Promise<unknown>) =>
+              runAuthExclusive(fn),
+          }
+        : {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            lockAcquireTimeout: 120_000,
+            storage: undefined,
+          };
+
     authClient = createClient(url, key, {
-
-      auth: {
-
-        persistSession: true,
-
-        autoRefreshToken: true,
-
-        detectSessionInUrl: true,
-
-        lockAcquireTimeout: 120_000,
-
-        storage: typeof window !== "undefined" ? window.localStorage : undefined,
-
-      },
-
+      // Tipos del bundle a veces van detrás de GoTrue (lock / lockAcquireTimeout existen en runtime).
+      auth: browserAuthOptions as never,
     });
 
   }
