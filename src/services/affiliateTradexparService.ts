@@ -269,17 +269,33 @@ export async function setAttributionCommissionStatus(attributionId: string, stat
 /** True si el usuario puede ver el enlace al panel (distribuidor activo o solicitud pendiente con su email). */
 export async function fetchAffiliatePortalLinkVisible(): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  const sb = getSupabaseData();
-  const { data, error } = await sb.rpc("affiliate_customer_portal_eligible");
-  if (error) {
+  try {
+    const sb = getSupabaseData();
+    const { data, error } = await sb.rpc("affiliate_customer_portal_eligible");
+    if (!error) return Boolean(data);
     const m = error.message?.toLowerCase() ?? "";
-    /** Solo «no existe la función» se trata como no elegible; el resto es fallo real (red, RLS, permisos). */
-    if (m.includes("could not find") || m.includes("does not exist") || m.includes("schema cache")) {
+    const details = String((error as { details?: string }).details ?? "").toLowerCase();
+    /** Función no desplegada en PostgREST / ruta 404: no elegible (evita ruido si el SQL no está en el servidor). */
+    if (
+      m.includes("could not find") ||
+      m.includes("does not exist") ||
+      m.includes("schema cache") ||
+      m.includes("not found") ||
+      m.includes("404") ||
+      details.includes("404")
+    ) {
       return false;
     }
     throw new Error(error.message);
+  } catch (e) {
+    /** Fallos de red al llamar este RPC opcional: ocultar enlace, sin tumbar la tienda. */
+    if (e instanceof Error) {
+      const low = e.message.toLowerCase();
+      if (low.includes("404") || low.includes("failed to fetch")) return false;
+      throw e;
+    }
+    return false;
   }
-  return Boolean(data);
 }
 
 /** Panel del distribuidor digital independiente: requiere sesión Supabase (cliente autenticado con JWT). */

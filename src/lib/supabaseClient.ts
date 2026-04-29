@@ -151,7 +151,11 @@ export function setDataClientAccessToken(token: string | null) {
 
   dataAccessToken = token?.trim() || null;
 
-  dataClient = null;
+  /**
+   * No anular `dataClient`: cada `createClient` genera un nuevo GoTrueClient y Supabase
+   * advierte «Multiple GoTrueClient instances» (peor si el JWT cambia a menudo).
+   * El JWT para PostgREST se inyecta en cada request vía `global.fetch` en `getSupabaseData`.
+   */
 
 }
 
@@ -208,9 +212,18 @@ export function getSupabaseData(): SupabaseClient {
         autoRefreshToken: false,
         detectSessionInUrl: false,
         storage: createMemoryStorage(),
+        /** Distinto del cliente Auth (`sb-*-auth-token`) para no compartir estado GoTrue. */
+        storageKey: "sb-tradexpar-data-client-inert",
       },
       db: { schema: "tradexpar" },
-      global: dataAccessToken ? { headers: { Authorization: `Bearer ${dataAccessToken}` } } : {},
+      global: {
+        fetch: (input, init) => {
+          const headers = new Headers(init?.headers);
+          const t = dataAccessToken?.trim();
+          if (t) headers.set("Authorization", `Bearer ${t}`);
+          return fetch(input, { ...init, headers });
+        },
+      },
     });
 
   }
