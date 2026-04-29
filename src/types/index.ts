@@ -30,6 +30,14 @@ export interface Product {
   discount_value?: number | null;
   discount_starts_at?: string | null;
   discount_ends_at?: string | null;
+  /** Solo Dropi: resultado de validación sincronización (columnas opcionales hasta migración SQL). */
+  dropi_validation_status?: string | null;
+  dropi_validation_errors?: string[] | null;
+  dropi_min_sale_price?: number | null;
+  dropi_suggested_price?: number | null;
+  dropi_last_validated_at?: string | null;
+  /** Si false, no mostrar en tienda / no checkout (con flag VITE_DROPI_ENFORCE_PRODUCT_VALIDATION). */
+  dropi_sellable?: boolean | null;
 }
 
 export interface CartItem {

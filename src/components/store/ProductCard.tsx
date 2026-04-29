@@ -21,6 +21,7 @@ import {
 import { ProductPromoBadge } from "@/components/store/ProductPromoBadge";
 import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 import { withAffiliateRef } from "@/lib/affiliate";
+import { isDropiProductBlocked } from "@/lib/dropiProductGate";
 
 interface ProductCardProps {
   product: Product;
@@ -51,6 +52,8 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   };
 
   const soldOut = product.stock !== undefined && product.stock <= 0;
+  const dropiUnavailable = isDropiProductBlocked(product);
+  const notPurchasable = soldOut || dropiUnavailable;
   const primaryImageSrc = resolveProductPrimaryImageSrc(product);
 
   return (
@@ -105,7 +108,14 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             <div className="text-sm text-muted-foreground font-medium text-center">Sin imagen</div>
           )}
 
-          {soldOut && (
+          {dropiUnavailable && (
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+              <span className="text-foreground font-semibold text-sm px-4 py-1.5 rounded-full border text-center">
+                No disponible
+              </span>
+            </div>
+          )}
+          {soldOut && !dropiUnavailable && (
             <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
               <span className="text-foreground font-semibold text-sm px-4 py-1.5 rounded-full border">Agotado</span>
             </div>
@@ -155,7 +165,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             </a>
             <button
               onClick={() => setShowQty(!showQty)}
-              disabled={soldOut}
+              disabled={notPurchasable}
               className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 rounded-full gradient-celeste text-primary-foreground flex items-center justify-center hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed shadow-brand touch-manipulation"
             >
               <ShoppingCart className="h-3.5 w-3.5" />

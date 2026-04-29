@@ -27,6 +27,7 @@ import type {
   ParaguayCity,
 } from "@/types";
 import { deriveOrderKind } from "@/lib/adminOrdersUtils";
+import { filterStorefrontCatalog } from "@/lib/dropiProductGate";
 import {
   formatSupabaseErrorForUser,
   isTransientNetworkOrServerError,
@@ -277,6 +278,23 @@ function mapProduct(row: Record<string, unknown>): Product {
     discount_value: row.discount_value != null ? Number(row.discount_value) : null,
     discount_starts_at: row.discount_starts_at != null ? String(row.discount_starts_at) : null,
     discount_ends_at: row.discount_ends_at != null ? String(row.discount_ends_at) : null,
+    dropi_validation_status:
+      row.dropi_validation_status != null ? String(row.dropi_validation_status) : null,
+    dropi_validation_errors: Array.isArray(row.dropi_validation_errors)
+      ? (row.dropi_validation_errors as string[])
+      : null,
+    dropi_min_sale_price:
+      row.dropi_min_sale_price != null && row.dropi_min_sale_price !== ""
+        ? Number(row.dropi_min_sale_price)
+        : null,
+    dropi_suggested_price:
+      row.dropi_suggested_price != null && row.dropi_suggested_price !== ""
+        ? Number(row.dropi_suggested_price)
+        : null,
+    dropi_last_validated_at:
+      row.dropi_last_validated_at != null ? String(row.dropi_last_validated_at) : null,
+    dropi_sellable:
+      row.dropi_sellable === false ? false : row.dropi_sellable === true ? true : null,
   };
 }
 
@@ -707,6 +725,25 @@ export const tradexpar = {
     for (let attempt = 0; attempt <= STORE_CATALOG_RETRIES; attempt++) {
       try {
         return await fetchProductsOnce();
+      } catch (e) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
+        if (attempt < STORE_CATALOG_RETRIES && isTransientNetworkOrServerError(lastErr.message)) {
+          await sleep(400 * (attempt + 1));
+          continue;
+        }
+        throw lastErr;
+      }
+    }
+    throw lastErr ?? new Error("No se pudo cargar el catálogo.");
+  },
+
+  /** Catálogo tienda: igual que `getProducts` pero sin productos Dropi marcados como no vendibles (según flag). */
+  getStoreCatalog: async (): Promise<Product[]> => {
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= STORE_CATALOG_RETRIES; attempt++) {
+      try {
+        const rows = await fetchProductsOnce();
+        return filterStorefrontCatalog(rows);
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e));
         if (attempt < STORE_CATALOG_RETRIES && isTransientNetworkOrServerError(lastErr.message)) {

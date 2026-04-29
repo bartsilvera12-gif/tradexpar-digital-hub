@@ -21,6 +21,7 @@ import {
 import { resolveProductImageSrc } from "@/lib/productImageUrl";
 import { productDescriptionPlainText } from "@/lib/productDescriptionText";
 import { withAffiliateRef } from "@/lib/affiliate";
+import { isDropiProductBlocked } from "@/lib/dropiProductGate";
 
 function getProductImages(product: Product): string[] {
   const raw =
@@ -92,6 +93,7 @@ export default function ProductDetailPage() {
   }
 
   const images = getProductImages(product);
+  const dropiUnavailable = isDropiProductBlocked(product);
   const maxQty = product.stock > 0 ? product.stock : 1;
   const descriptionText = productDescriptionPlainText(product.description);
   const discountPct = getDiscountPercentage(product);
@@ -177,6 +179,13 @@ export default function ProductDetailPage() {
                 </>
               ) : (
                 <span className="text-muted-foreground text-sm">Sin imagen</span>
+              )}
+              {dropiUnavailable && (
+                <div className="absolute inset-0 z-[15] bg-background/80 backdrop-blur-sm flex items-center justify-center">
+                  <span className="text-foreground font-semibold text-sm sm:text-base px-4 py-2 rounded-full border text-center">
+                    No disponible para envío
+                  </span>
+                </div>
               )}
             </div>
 
@@ -300,11 +309,11 @@ export default function ProductDetailPage() {
                   toastCartAdded(product.name, qty);
                 }
               }}
-              disabled={product.stock <= 0}
+              disabled={product.stock <= 0 || dropiUnavailable}
               className="w-full sm:flex-1 min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             >
               <ShoppingCart className="h-5 w-5 shrink-0" />
-              Agregar al carrito
+              {dropiUnavailable ? "No disponible" : "Agregar al carrito"}
             </button>
             <a
               href={buildWhatsAppProductLink(product)}

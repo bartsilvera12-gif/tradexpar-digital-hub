@@ -9,7 +9,7 @@ export const STORE_CATALOG_QUERY_KEY = ["store-catalog", "products"] as const;
 export function useStoreCatalog() {
   return useQuery({
     queryKey: STORE_CATALOG_QUERY_KEY,
-    queryFn: () => tradexpar.getProducts(),
+    queryFn: () => tradexpar.getStoreCatalog(),
     staleTime: 2 * 60_000,
     gcTime: 20 * 60_000,
     refetchOnWindowFocus: true,
