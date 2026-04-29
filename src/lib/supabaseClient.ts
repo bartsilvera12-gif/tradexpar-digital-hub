@@ -92,6 +92,29 @@ export function runAuthExclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/**
+ * GoTrue puede anidar llamadas a `lock` (p. ej. getSession → refresh). Si cada nivel usa
+ * `runAuthExclusive` sin reentrancia, la interna queda en cola detrás de la externa → deadlock
+ * y la UI queda en «Comprobando sesión» / «Preparando…».
+ */
+let goTrueLockDepth = 0;
+
+async function browserAuthLock(
+  _name: string,
+  _timeout: number,
+  fn: () => Promise<unknown>
+): Promise<unknown> {
+  goTrueLockDepth += 1;
+  try {
+    if (goTrueLockDepth > 1) {
+      return await fn();
+    }
+    return await runAuthExclusive(fn);
+  } finally {
+    goTrueLockDepth -= 1;
+  }
+}
+
 /** GoTrue: sin forzar schema en tablas de auth. */
 
 export function getSupabaseAuth(): SupabaseClient {
@@ -106,7 +129,7 @@ export function getSupabaseAuth(): SupabaseClient {
     const url = resolveSupabaseUrl();
     const key = resolveSupabaseAnonKey();
 
-    /** GoTrue en navegador usa Web Locks por defecto → errores «Lock … stolen» con llamadas concurrentes. Serializamos con `runAuthExclusive` sin `navigator.locks`. */
+    /** GoTrue en navegador: sin Web Locks; serialización reentrante para no bloquear login tienda. */
     const browserAuthOptions =
       typeof window !== "undefined"
         ? {
@@ -115,8 +138,7 @@ export function getSupabaseAuth(): SupabaseClient {
             detectSessionInUrl: true,
             lockAcquireTimeout: 120_000,
             storage: window.localStorage,
-            lock: async (_name: string, _timeout: number, fn: () => Promise<unknown>) =>
-              runAuthExclusive(fn),
+            lock: browserAuthLock,
           }
         : {
             persistSession: true,
