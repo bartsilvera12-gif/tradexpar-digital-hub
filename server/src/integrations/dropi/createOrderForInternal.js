@@ -7,9 +7,13 @@ import { postDropiBridgeJson, dropiConfigured, resolveBridgeBaseUrl } from "./cl
 import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
 import { mapPagoparToDropi } from "./mapPagoparToDropi.js";
 import { normalizeDropiItemForBridge } from "./normalizeDropiItemForBridge.js";
+import { splitDropiPayloadByItem } from "./splitDropiPayloadByItem.js";
 
 /** `false` = mismo comportamiento que antes del mapeo PagoPar→Dropi (solo `customer_city_code`). Una línea para revertir. */
 const USE_DROPI_CITY_CODE_MAP = true;
+
+/** `false` = un solo POST al bridge con todas las líneas Dropi (antes del split). Una línea para revertir. */
+const DROPI_SPLIT_ORDERS_BY_ITEM = true;
 
 function envTrim(key) {
   const v = process.env[key];
@@ -219,13 +223,112 @@ function pickDropiOrderMeta(bridge) {
 }
 
 /**
+ * Un ítem normalizado para el bridge (precios + `normalizeDropiItemForBridge`).
+ * @param {Record<string, unknown>} pl
+ * @param {Record<string, unknown>} p
+ * @param {number} minProfit
+ * @returns {Record<string, unknown>}
+ */
+function buildDropiPayloadItemForLine(pl, p, minProfit) {
+  const idStr = pl.product_id != null ? String(pl.product_id) : "";
+  const costRow = resolveProductUnitCost(p);
+  const qty = Math.max(1, Number(pl.quantity) || 1);
+  const ps = p.pricing_source != null ? String(p.pricing_source).trim() : "";
+
+  if (costRow != null) {
+    const { finalDropiPrice, originalUnitPrice } = resolveDropiSellingPriceGuaranies(
+      pl,
+      p,
+      costRow.cost,
+      minProfit
+    );
+    console.info("[dropi/order-create] cost_resolved", {
+      product_id: idStr,
+      cost: costRow.cost,
+      dropi_cost_price: p.dropi_cost_price,
+      fallback_used: costRow.fallback_used,
+    });
+    console.info("[dropi/order-create] price_resolved", {
+      cost: costRow.cost,
+      original_unit_price: originalUnitPrice,
+      min_profit: minProfit,
+      final_dropi_price: finalDropiPrice,
+    });
+    const sub = Math.round(finalDropiPrice * qty * 100) / 100;
+    return normalizeDropiItemForBridge(
+      {
+        line_index: pl.line_index,
+        product_id: pl.product_id != null ? String(pl.product_id) : "",
+        product_name: pl.product_name != null ? String(pl.product_name) : "",
+        quantity: qty,
+        price: finalDropiPrice,
+        sale_price: finalDropiPrice,
+        suggested_price: finalDropiPrice,
+        unit_price: finalDropiPrice,
+        cost: costRow.cost,
+        pricing_source: ps || "cost",
+        line_subtotal: sub,
+        sku: p.sku != null ? String(p.sku) : "",
+        dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
+      },
+      { line: pl, product: p }
+    );
+  }
+
+  const originalUnit = lineSaleUnitPriceGuaranies(pl);
+  const selling = pickSellingCoalescedForBridge(pl, p) ?? 0;
+  const finalNoCost = Math.round(selling);
+  const sub2 = Math.round(finalNoCost * qty * 100) / 100;
+  console.info("[dropi/order-create] margin_check_skipped_no_cost", {
+    product_id: idStr,
+    pricing_source: ps || null,
+    selling: finalNoCost,
+  });
+  console.info("[dropi/order-create] price_resolved", {
+    cost: null,
+    original_unit_price: originalUnit,
+    min_profit: 0,
+    final_dropi_price: finalNoCost,
+  });
+  return normalizeDropiItemForBridge(
+    {
+      line_index: pl.line_index,
+      product_id: pl.product_id != null ? String(pl.product_id) : "",
+      product_name: pl.product_name != null ? String(pl.product_name) : "",
+      quantity: qty,
+      price: finalNoCost,
+      sale_price: finalNoCost,
+      suggested_price: finalNoCost,
+      unit_price: finalNoCost,
+      cost: null,
+      pricing_source: ps || null,
+      line_subtotal: sub2,
+      sku: p.sku != null ? String(p.sku) : "",
+      dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
+    },
+    { line: pl, product: p }
+  );
+}
+
+/** @param {Record<string, unknown>} payloadItem */
+function logDropiItemPayload(payloadItem) {
+  console.log("[DROPI ITEM PAYLOAD]", {
+    dropi_product_id: payloadItem.dropi_product_id ?? null,
+    sku: payloadItem.sku ?? null,
+    quantity: payloadItem.quantity ?? null,
+    variation_id: payloadItem.variation_id ?? null,
+    has_variation_id: Object.prototype.hasOwnProperty.call(payloadItem, "variation_id"),
+  });
+}
+
+/**
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {string} orderId
  * @param {{ context?: "webhook" | "admin_create" | "admin_test", force?: boolean, echoBridgePayload?: boolean }} [options]
  * @returns {Promise<Record<string, unknown>>}
  */
 export async function createDropiOrderForInternalOrder(sb, orderId, options = {}) {
-  const { context = "webhook", echoBridgePayload = false } = options;
+  const { context = "webhook", echoBridgePayload = false, force = false } = options;
   /** Fijado al armar el body del POST; en respuestas (p. ej. test-create) replica lo enviado. */
   let lastPayload = /** @type {Record<string, unknown> | null} */ (null);
   const withEcho = (o) => {
@@ -253,7 +356,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
         return v != null && String(v).trim() !== "" ? String(v).trim() : "";
       })()
     : "";
-  if (mStatus === "succeeded" && mDropiId) {
+  if (mStatus === "succeeded" && mDropiId && !force) {
     console.info("[dropi/order-create] order loaded", { order_id: oid, map_skip: "already_succeeded" });
     return {
       ok: true,
@@ -284,7 +387,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   const { data: itemRows, error: itemsErr } = await sb
     .from("order_items")
-    .select("id, product_id, product_name, quantity, unit_price, line_subtotal, line_index")
+    .select("id, product_id, product_name, quantity, unit_price, line_subtotal, line_index, external_order_id")
     .eq("order_id", oid)
     .order("line_index", { ascending: true });
 
@@ -408,7 +511,7 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
     original: orderRow.customer_city_code,
     mapped: dropiCityCode,
   });
-  const payload = {
+  const baseWithoutItems = {
     tradexpar_order_id: oid,
     payment_confirmed: true,
     customer: {
@@ -421,219 +524,364 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
       address_reference:
         orderRow.customer_address_reference != null ? String(orderRow.customer_address_reference) : "",
     },
-    items: dropiForBridge.map(({ line, product }) => {
-      const pl = /** @type {Record<string, unknown>} */ (line);
-      const p = /** @type {Record<string, unknown>} */ (product);
-      const idStr = pl.product_id != null ? String(pl.product_id) : "";
-      const costRow = resolveProductUnitCost(p);
-      const qty = Math.max(1, Number(pl.quantity) || 1);
-      const ps = p.pricing_source != null ? String(p.pricing_source).trim() : "";
-
-      if (costRow != null) {
-        const { finalDropiPrice, originalUnitPrice } = resolveDropiSellingPriceGuaranies(
-          pl,
-          p,
-          costRow.cost,
-          minProfit
-        );
-        console.info("[dropi/order-create] cost_resolved", {
-          product_id: idStr,
-          cost: costRow.cost,
-          dropi_cost_price: p.dropi_cost_price,
-          fallback_used: costRow.fallback_used,
-        });
-        console.info("[dropi/order-create] price_resolved", {
-          cost: costRow.cost,
-          original_unit_price: originalUnitPrice,
-          min_profit: minProfit,
-          final_dropi_price: finalDropiPrice,
-        });
-        const sub = Math.round(finalDropiPrice * qty * 100) / 100;
-        const payloadItem = normalizeDropiItemForBridge(
-          {
-            line_index: pl.line_index,
-            product_id: pl.product_id != null ? String(pl.product_id) : "",
-            product_name: pl.product_name != null ? String(pl.product_name) : "",
-            quantity: qty,
-            price: finalDropiPrice,
-            sale_price: finalDropiPrice,
-            suggested_price: finalDropiPrice,
-            unit_price: finalDropiPrice,
-            cost: costRow.cost,
-            pricing_source: ps || "cost",
-            line_subtotal: sub,
-            sku: p.sku != null ? String(p.sku) : "",
-            dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
-          },
-          { line: pl, product: p }
-        );
-        console.log("[DROPI ITEM PAYLOAD]", {
-          dropi_product_id: payloadItem.dropi_product_id ?? null,
-          sku: payloadItem.sku ?? null,
-          quantity: payloadItem.quantity ?? null,
-          variation_id: payloadItem.variation_id ?? null,
-          has_variation_id: Object.prototype.hasOwnProperty.call(payloadItem, "variation_id"),
-        });
-        return payloadItem;
-      }
-
-      const originalUnit = lineSaleUnitPriceGuaranies(pl);
-      const selling = pickSellingCoalescedForBridge(pl, p) ?? 0;
-      const finalNoCost = Math.round(selling);
-      const sub2 = Math.round(finalNoCost * qty * 100) / 100;
-      console.info("[dropi/order-create] margin_check_skipped_no_cost", {
-        product_id: idStr,
-        pricing_source: ps || null,
-        selling: finalNoCost,
-      });
-      console.info("[dropi/order-create] price_resolved", {
-        cost: null,
-        original_unit_price: originalUnit,
-        min_profit: 0,
-        final_dropi_price: finalNoCost,
-      });
-      const payloadItem = normalizeDropiItemForBridge(
-        {
-          line_index: pl.line_index,
-          product_id: pl.product_id != null ? String(pl.product_id) : "",
-          product_name: pl.product_name != null ? String(pl.product_name) : "",
-          quantity: qty,
-          price: finalNoCost,
-          sale_price: finalNoCost,
-          suggested_price: finalNoCost,
-          unit_price: finalNoCost,
-          cost: null,
-          pricing_source: ps || null,
-          line_subtotal: sub2,
-          sku: p.sku != null ? String(p.sku) : "",
-          dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
-        },
-        { line: pl, product: p }
-      );
-      console.log("[DROPI ITEM PAYLOAD]", {
-        dropi_product_id: payloadItem.dropi_product_id ?? null,
-        sku: payloadItem.sku ?? null,
-        quantity: payloadItem.quantity ?? null,
-        variation_id: payloadItem.variation_id ?? null,
-        has_variation_id: Object.prototype.hasOwnProperty.call(payloadItem, "variation_id"),
-      });
-      return payloadItem;
-    }),
   };
-  lastPayload = payload;
 
-  const ts0 = utcNowIso();
-  const pErr = await upsertMap(sb, {
+  /** @type {{ line: Record<string, unknown>, product: Record<string, unknown>, payloadItem: Record<string, unknown> }[]} */
+  const bridgeEntries = [];
+  for (const { line, product } of dropiForBridge) {
+    const pl = /** @type {Record<string, unknown>} */ (line);
+    const p = /** @type {Record<string, unknown>} */ (product);
+    const payloadItem = buildDropiPayloadItemForLine(pl, p, minProfit);
+    logDropiItemPayload(payloadItem);
+    bridgeEntries.push({ line: pl, product: p, payloadItem });
+  }
+
+  const bridgeItemsOnly = bridgeEntries.map((e) => e.payloadItem);
+  const useSplit = DROPI_SPLIT_ORDERS_BY_ITEM && bridgeItemsOnly.length > 1;
+
+  if (!useSplit) {
+    const orderPayload = { ...baseWithoutItems, items: bridgeItemsOnly };
+    lastPayload = orderPayload;
+    const ts0 = utcNowIso();
+    const pErr = await upsertMap(sb, {
+      order_id: oid,
+      status: "pending",
+      dropi_status: "pending",
+      payload: orderPayload,
+      last_error: null,
+      error: null,
+      updated_at: ts0,
+    });
+    if (pErr) {
+      return withEcho({ ok: false, order_id: oid, skipped: false, context: "pending_map_upsert", ...shapeError(pErr) });
+    }
+    console.info("[dropi/order-create] bridge request", {
+      order_id: oid,
+      path: pathSeg,
+      lines: dropiForBridge.length,
+      mode: "single",
+    });
+    console.info("[dropi/order-create] bridge request payload", JSON.stringify(orderPayload, null, 2));
+
+    let bridgeRes;
+    try {
+      bridgeRes = await postDropiBridgeJson(pathSeg, orderPayload);
+    } catch (e) {
+      const sh = shapeError(e);
+      const errText = pickErrorMessageString(e).slice(0, 2000);
+      const mu = await upsertMap(sb, {
+        order_id: oid,
+        status: "failed",
+        dropi_status: "failed",
+        last_error: errText,
+        error: errText,
+        payload: orderPayload,
+        response: null,
+        updated_at: utcNowIso(),
+      });
+      if (mu) {
+        return withEcho({ ok: false, order_id: oid, context: "bridge_ex_map_upsert", ...shapeError(mu) });
+      }
+      console.error("[dropi/order-create] bridge error", {
+        order_id: oid,
+        error_message: sh.error_message,
+        error_code: sh.error_code,
+        raw: e,
+      });
+      return withEcho({ ok: false, order_id: oid, ...sh });
+    }
+
+    const meta = pickDropiOrderMeta(/** @type {Record<string, unknown>} */ (bridgeRes));
+    if (!meta.id) {
+      const errText = "Bridge: respuesta sin id de pedido Dropi (revisá DROPI_BRIDGE_ORDER_PATH y el plugin)";
+      const mFail = await upsertMap(sb, {
+        order_id: oid,
+        status: "failed",
+        dropi_status: "failed",
+        last_error: errText,
+        error: errText,
+        payload: orderPayload,
+        response: /** @type {Record<string, unknown>} */ (bridgeRes),
+        updated_at: utcNowIso(),
+      });
+      if (mFail) {
+        return withEcho({ ok: false, order_id: oid, context: "no_dropi_id_map_upsert", ...shapeError(mFail) });
+      }
+      console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
+      return withEcho({ ok: false, order_id: oid, ...shapeError(errText) });
+    }
+
+    const syncTs = utcNowIso();
+    const ds = meta.dropiStatus || "succeeded";
+    const okMap = await upsertMap(sb, {
+      order_id: oid,
+      status: "succeeded",
+      dropi_status: ds,
+      dropi_order_id: meta.id,
+      dropi_order_code: meta.code,
+      dropi_status_label: meta.statusLabel,
+      dropi_order_url: meta.url,
+      payload: orderPayload,
+      response: /** @type {Record<string, unknown>} */ (bridgeRes),
+      last_error: null,
+      error: null,
+      last_sync_at: syncTs,
+      updated_at: syncTs,
+    });
+    if (okMap) {
+      return withEcho({ ok: false, order_id: oid, context: "success_map_upsert", ...shapeError(okMap) });
+    }
+    const { data: afterWrite } = await sb.from("dropi_order_map").select("id, order_id").eq("order_id", oid).maybeSingle();
+    console.info("[dropi/order-create] map saved", {
+      order_id: oid,
+      map_id: mapIdFromRow(afterWrite),
+      dropi_order_id: meta.id,
+    });
+    const orderPatch = { external_order_url: meta.url || null };
+    await sb.from("orders").update(orderPatch).eq("id", oid);
+
+    for (const { line } of dropiForBridge) {
+      const lid = line.id != null ? String(line.id) : "";
+      if (!lid) continue;
+      await sb
+        .from("order_items")
+        .update({
+          external_provider: "dropi",
+          external_order_id: meta.id,
+          external_url: meta.url || null,
+          line_status: "ordered_in_dropi",
+        })
+        .eq("id", lid);
+    }
+
+    console.info("[dropi/order-create] bridge success", { order_id: oid, dropi_order_id: meta.id, mode: "single" });
+    return withEcho({
+      ok: true,
+      order_id: oid,
+      dropi_order_id: meta.id,
+      dropi_order_code: meta.code,
+      dropi_order_url: meta.url,
+      map_id: mapIdFromRow(afterWrite),
+      bridge_response: /** @type {Record<string, unknown>} */ (bridgeRes),
+      created: bridgeEntries.map((e) => ({
+        line_index: e.payloadItem.line_index ?? null,
+        order_item_id: e.line.id ?? null,
+        dropi_product_id: e.payloadItem.dropi_product_id ?? null,
+        dropi_order_id: meta.id,
+        dropi_order_url: meta.url ?? null,
+      })),
+    });
+  }
+
+  const splitPayloads = splitDropiPayloadByItem(baseWithoutItems, bridgeItemsOnly);
+  lastPayload = { split_orders: true, tradexpar_order_id: oid, payloads: splitPayloads };
+
+  const pendingEnvelope = {
+    split_orders: true,
+    tradexpar_order_id: oid,
+    payloads: splitPayloads,
+  };
+
+  const tsSplit0 = utcNowIso();
+  const pErrSplit = await upsertMap(sb, {
     order_id: oid,
     status: "pending",
     dropi_status: "pending",
-    payload,
+    payload: pendingEnvelope,
     last_error: null,
     error: null,
-    updated_at: ts0,
+    updated_at: tsSplit0,
   });
-  if (pErr) {
-    return withEcho({ ok: false, order_id: oid, skipped: false, context: "pending_map_upsert", ...shapeError(pErr) });
+  if (pErrSplit) {
+    return withEcho({ ok: false, order_id: oid, skipped: false, context: "pending_map_upsert_split", ...shapeError(pErrSplit) });
   }
-  console.info("[dropi/order-create] bridge request", { order_id: oid, path: pathSeg, lines: dropiForBridge.length });
-  console.info("[dropi/order-create] bridge request payload", JSON.stringify(payload, null, 2));
 
-  let bridgeRes;
-  try {
-    bridgeRes = await postDropiBridgeJson(pathSeg, payload);
-  } catch (e) {
-    const sh = shapeError(e);
-    const errText = pickErrorMessageString(e).slice(0, 2000);
-    const mu = await upsertMap(sb, {
-      order_id: oid,
-      status: "failed",
-      dropi_status: "failed",
-      last_error: errText,
-      error: errText,
-      payload,
-      response: null,
-      updated_at: utcNowIso(),
-    });
-    if (mu) {
-      return withEcho({ ok: false, order_id: oid, context: "bridge_ex_map_upsert", ...shapeError(mu) });
+  /** @type {Record<string, unknown>[]} */
+  const created = [];
+  /** @type {Record<string, unknown>[]} */
+  const failed = [];
+  /** @type {Record<string, unknown>[]} */
+  const attemptResponses = [];
+
+  for (let i = 0; i < bridgeEntries.length; i++) {
+    const ent = bridgeEntries[i];
+    const onePayload = splitPayloads[i];
+    const pi = ent.payloadItem;
+    const alreadySent =
+      ent.line.external_order_id != null && String(ent.line.external_order_id).trim() !== "";
+    if (alreadySent && !force) {
+      console.info("[dropi/order-create] split skip line already in Dropi", {
+        order_id: oid,
+        line_index: pi.line_index ?? null,
+        external_order_id: String(ent.line.external_order_id).trim(),
+      });
+      created.push({
+        line_index: pi.line_index ?? null,
+        order_item_id: ent.line.id ?? null,
+        dropi_product_id: pi.dropi_product_id ?? null,
+        dropi_order_id: String(ent.line.external_order_id).trim(),
+        skipped_duplicate_retry: true,
+      });
+      attemptResponses.push({ skipped: true, reason: "already_sent" });
+      continue;
     }
-    console.error("[dropi/order-create] bridge error", { order_id: oid, error_message: sh.error_message, error_code: sh.error_code, raw: e });
-    return withEcho({ ok: false, order_id: oid, ...sh });
-  }
-
-  const meta = pickDropiOrderMeta(/** @type {Record<string, unknown>} */ (bridgeRes));
-  if (!meta.id) {
-    const errText = "Bridge: respuesta sin id de pedido Dropi (revisá DROPI_BRIDGE_ORDER_PATH y el plugin)";
-    const mFail = await upsertMap(sb, {
+    console.log("[DROPI SPLIT ORDER]", {
       order_id: oid,
-      status: "failed",
-      dropi_status: "failed",
-      last_error: errText,
-      error: errText,
-      payload,
-      response: /** @type {Record<string, unknown>} */ (bridgeRes),
-      updated_at: utcNowIso(),
+      line_index: pi.line_index ?? null,
+      dropi_product_id: pi.dropi_product_id ?? null,
+      has_variation_id: Object.prototype.hasOwnProperty.call(pi, "variation_id"),
     });
-    if (mFail) {
-      return withEcho({ ok: false, order_id: oid, context: "no_dropi_id_map_upsert", ...shapeError(mFail) });
+    logDropiItemPayload(pi);
+
+    try {
+      console.info("[dropi/order-create] bridge request", {
+        order_id: oid,
+        path: pathSeg,
+        mode: "split",
+        index: i + 1,
+        of: bridgeEntries.length,
+      });
+      console.info("[dropi/order-create] bridge request payload", JSON.stringify(onePayload, null, 2));
+      const bridgeRes = await postDropiBridgeJson(pathSeg, onePayload);
+      const meta = pickDropiOrderMeta(/** @type {Record<string, unknown>} */ (bridgeRes));
+      attemptResponses.push(/** @type {Record<string, unknown>} */ (bridgeRes));
+      if (!meta.id) {
+        const msg = "Bridge: respuesta sin id de pedido Dropi (revisá DROPI_BRIDGE_ORDER_PATH y el plugin)";
+        failed.push({
+          line_index: pi.line_index ?? null,
+          order_item_id: ent.line.id ?? null,
+          dropi_product_id: pi.dropi_product_id ?? null,
+          error: msg,
+        });
+        continue;
+      }
+      const lid = ent.line.id != null ? String(ent.line.id) : "";
+      if (lid) {
+        await sb
+          .from("order_items")
+          .update({
+            external_provider: "dropi",
+            external_order_id: meta.id,
+            external_url: meta.url || null,
+            line_status: "ordered_in_dropi",
+          })
+          .eq("id", lid);
+      }
+      created.push({
+        line_index: pi.line_index ?? null,
+        order_item_id: ent.line.id ?? null,
+        dropi_product_id: pi.dropi_product_id ?? null,
+        dropi_order_id: meta.id,
+        dropi_order_url: meta.url ?? null,
+        dropi_order_code: meta.code,
+      });
+    } catch (e) {
+      const errText = pickErrorMessageString(e).slice(0, 2000);
+      failed.push({
+        line_index: pi.line_index ?? null,
+        order_item_id: ent.line.id ?? null,
+        dropi_product_id: pi.dropi_product_id ?? null,
+        error: errText,
+      });
+      attemptResponses.push({ error: errText });
+      console.error("[dropi/order-create] bridge error split line", {
+        order_id: oid,
+        line_index: pi.line_index,
+        err: errText,
+      });
     }
-    console.error("[dropi/order-create] bridge error", { order_id: oid, err: errText });
-    return withEcho({ ok: false, order_id: oid, ...shapeError(errText) });
   }
 
-  const syncTs = utcNowIso();
-  const ds = meta.dropiStatus || "succeeded";
-  const okMap = await upsertMap(sb, {
+  const syncTsSplit = utcNowIso();
+  let mapStat = "failed";
+  let dropiStat = "failed";
+  if (failed.length === 0) {
+    mapStat = "succeeded";
+    dropiStat = "succeeded";
+  } else if (created.length > 0) {
+    mapStat = "partial";
+    dropiStat = "partial";
+  }
+
+  const firstOk = created[0] ? /** @type {Record<string, unknown>} */ (created[0]) : null;
+  const errSummary =
+    failed.length > 0 ? `Fallaron ${failed.length} de ${bridgeEntries.length} línea(s) Dropi.` : null;
+
+  const compositePayload = {
+    ...pendingEnvelope,
+    results: { created, failed },
+  };
+  const compositeResponse = { split: true, attempts: attemptResponses };
+
+  const okMapSplit = await upsertMap(sb, {
     order_id: oid,
-    status: "succeeded",
-    dropi_status: ds,
-    dropi_order_id: meta.id,
-    dropi_order_code: meta.code,
-    dropi_status_label: meta.statusLabel,
-    dropi_order_url: meta.url,
-    payload,
-    response: /** @type {Record<string, unknown>} */ (bridgeRes),
-    last_error: null,
-    error: null,
-    last_sync_at: syncTs,
-    updated_at: syncTs,
+    status: mapStat,
+    dropi_status: dropiStat,
+    dropi_order_id: firstOk?.dropi_order_id != null ? String(firstOk.dropi_order_id) : null,
+    dropi_order_code: firstOk?.dropi_order_code != null ? String(firstOk.dropi_order_code) : null,
+    dropi_status_label: null,
+    dropi_order_url: firstOk?.dropi_order_url != null ? String(firstOk.dropi_order_url) : null,
+    payload: compositePayload,
+    response: /** @type {Record<string, unknown>} */ (compositeResponse),
+    last_error: errSummary,
+    error: errSummary,
+    last_sync_at: syncTsSplit,
+    updated_at: syncTsSplit,
   });
-  if (okMap) {
-    return withEcho({ ok: false, order_id: oid, context: "success_map_upsert", ...shapeError(okMap) });
-  }
-  const { data: afterWrite } = await sb.from("dropi_order_map").select("id, order_id").eq("order_id", oid).maybeSingle();
-  console.info("[dropi/order-create] map saved", {
-    order_id: oid,
-    map_id: mapIdFromRow(afterWrite),
-    dropi_order_id: meta.id,
-  });
-  const orderPatch = { external_order_url: meta.url || null };
-  await sb.from("orders").update(orderPatch).eq("id", oid);
-
-  for (const { line } of dropiForBridge) {
-    const lid = line.id != null ? String(line.id) : "";
-    if (!lid) continue;
-    await sb
-      .from("order_items")
-      .update({
-        external_provider: "dropi",
-        external_order_id: meta.id,
-        external_url: meta.url || null,
-        line_status: "ordered_in_dropi",
-      })
-      .eq("id", lid);
+  if (okMapSplit) {
+    return withEcho({ ok: false, order_id: oid, context: "split_map_upsert", ...shapeError(okMapSplit) });
   }
 
-  console.info("[dropi/order-create] bridge success", { order_id: oid, dropi_order_id: meta.id });
+  const { data: afterWriteSplit } = await sb.from("dropi_order_map").select("id, order_id").eq("order_id", oid).maybeSingle();
+  await sb
+    .from("orders")
+    .update({ external_order_url: firstOk?.dropi_order_url != null ? String(firstOk.dropi_order_url) : null })
+    .eq("id", oid);
+
+  if (failed.length === 0) {
+    console.info("[dropi/order-create] bridge success split", { order_id: oid, n: created.length });
+    return withEcho({
+      ok: true,
+      order_id: oid,
+      split: true,
+      dropi_order_id: firstOk?.dropi_order_id ?? null,
+      created,
+      map_id: mapIdFromRow(afterWriteSplit),
+      bridge_response: compositeResponse,
+    });
+  }
+  if (created.length > 0) {
+    console.warn("[dropi/order-create] bridge partial split", {
+      order_id: oid,
+      created: created.length,
+      failed: failed.length,
+    });
+    return withEcho({
+      ok: false,
+      partial: true,
+      order_id: oid,
+      split: true,
+      created,
+      failed,
+      dropi_order_id: firstOk?.dropi_order_id ?? null,
+      map_id: mapIdFromRow(afterWriteSplit),
+      bridge_response: compositeResponse,
+      error: errSummary,
+    });
+  }
+
+  console.error("[dropi/order-create] bridge all lines failed split", { order_id: oid, failed });
   return withEcho({
-    ok: true,
+    ok: false,
+    partial: false,
     order_id: oid,
-    dropi_order_id: meta.id,
-    dropi_order_code: meta.code,
-    dropi_order_url: meta.url,
-    map_id: mapIdFromRow(afterWrite),
-    bridge_response: /** @type {Record<string, unknown>} */ (bridgeRes),
+    split: true,
+    created: [],
+    failed,
+    map_id: mapIdFromRow(afterWriteSplit),
+    error: errSummary ?? "Todas las líneas Dropi fallaron",
   });
+
 }
 
 /** @param {unknown} row */

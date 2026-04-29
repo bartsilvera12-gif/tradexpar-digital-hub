@@ -127,6 +127,10 @@ function jsonFromCreateResult(orderId, r) {
     reason: r.reason,
   };
   if (r.bridge_payload != null) o.bridge_payload = r.bridge_payload;
+  if (r.partial === true) o.partial = true;
+  if (r.split === true) o.split = true;
+  if (Array.isArray(r.created)) o.created = r.created;
+  if (Array.isArray(r.failed)) o.failed = r.failed;
   return o;
 }
 
@@ -316,6 +320,13 @@ export function registerDropiRoutes(app) {
         );
       }
       if (!r.ok) {
+        if (r.partial === true && Array.isArray(r.created) && r.created.length > 0) {
+          const { data: mapAfterPartial } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
+          return res.status(200).json({
+            ...jsonFromCreateResult(orderId, r),
+            map: mapAfterPartial,
+          });
+        }
         return res.status(502).json(/** @type {Record<string, unknown>} */ (jsonFromCreateResult(orderId, r)));
       }
 
@@ -457,6 +468,13 @@ export function registerDropiRoutes(app) {
         );
       }
       if (!r.ok) {
+        if (r.partial === true && Array.isArray(r.created) && r.created.length > 0) {
+          const { data: mapPartial } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
+          return res.status(200).json({
+            ...jsonFromCreateResult(orderId, r),
+            map: mapPartial,
+          });
+        }
         return res.status(502).json(/** @type {Record<string, unknown>} */ (jsonFromCreateResult(orderId, r)));
       }
       const { data: mapAfter } = await sb.from("dropi_order_map").select("*").eq("order_id", orderId).maybeSingle();
