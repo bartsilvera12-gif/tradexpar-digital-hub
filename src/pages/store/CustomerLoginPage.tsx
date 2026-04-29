@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
@@ -7,7 +7,11 @@ import { OAuthProviderButtons } from "@/components/store/OAuthProviderButtons";
 
 export default function CustomerLoginPage() {
   const navigate = useNavigate();
-  const { login, loading, initializing } = useCustomerAuth();
+  const { login, loading, initializing, unlockInteractiveAuth } = useCustomerAuth();
+  /** Si venís de otra ruta con `initializing` en true, la pantalla de clientes no debe quedar bloqueada por hidratación global. */
+  useLayoutEffect(() => {
+    unlockInteractiveAuth();
+  }, [unlockInteractiveAuth]);
   const authBusy = loading || initializing;
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");

@@ -26,7 +26,6 @@ import type {
   ParaguayCity,
 } from "@/types";
 import { deriveOrderKind } from "@/lib/adminOrdersUtils";
-import { filterStorefrontCatalog } from "@/lib/dropiProductGate";
 import {
   formatSupabaseErrorForUser,
   isTransientNetworkOrServerError,
@@ -90,6 +89,13 @@ export function clearOAuthReturnPending(): void {
 export function isAdminLoginPath(): boolean {
   if (typeof window === "undefined") return false;
   return /\/admin\/login\b/.test(window.location.pathname);
+}
+
+/** Login/registro de la tienda (clientes). No es el panel admin; la hidratación no debe bloquear la UI aquí. */
+export function isStoreLoginOrRegisterPath(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.location.pathname.trim().replace(/\/+$/, "") || "/";
+  return p === "/login" || p === "/register";
 }
 
 let adminPanelSignInDepth = 0;
@@ -278,23 +284,6 @@ function mapProduct(row: Record<string, unknown>): Product {
     discount_value: row.discount_value != null ? Number(row.discount_value) : null,
     discount_starts_at: row.discount_starts_at != null ? String(row.discount_starts_at) : null,
     discount_ends_at: row.discount_ends_at != null ? String(row.discount_ends_at) : null,
-    dropi_validation_status:
-      row.dropi_validation_status != null ? String(row.dropi_validation_status) : null,
-    dropi_validation_errors: Array.isArray(row.dropi_validation_errors)
-      ? (row.dropi_validation_errors as string[])
-      : null,
-    dropi_min_sale_price:
-      row.dropi_min_sale_price != null && row.dropi_min_sale_price !== ""
-        ? Number(row.dropi_min_sale_price)
-        : null,
-    dropi_suggested_price:
-      row.dropi_suggested_price != null && row.dropi_suggested_price !== ""
-        ? Number(row.dropi_suggested_price)
-        : null,
-    dropi_last_validated_at:
-      row.dropi_last_validated_at != null ? String(row.dropi_last_validated_at) : null,
-    dropi_sellable:
-      row.dropi_sellable === false ? false : row.dropi_sellable === true ? true : null,
   };
 }
 
@@ -525,18 +514,68 @@ async function assertAdminProfile(userId: string) {
   }
 }
 
+/** `sub` del access_token sin `auth.getSession()` (GoTrue puede colgar por lock del navegador). */
+function parseJwtSub(accessToken: string): string | null {
+  try {
+    const parts = accessToken.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1];
+    const pad = payload.length % 4 === 0 ? "" : "=".repeat(4 - (payload.length % 4));
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/") + pad;
+    const o = JSON.parse(atob(b64)) as { sub?: string };
+    return typeof o.sub === "string" && o.sub.length > 0 ? o.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+const ADMIN_GET_SESSION_MAX_MS = 10_000;
+const ADMIN_VERIFY_TOTAL_MAX_MS = 30_000;
+
 /**
  * Comprueba que la sesión Auth actual sigue correspondiendo a un `is_super_admin` en `tradexpar.profiles`.
  * Usado por `AdminLayout` para evitar acceso con flags en sessionStorage o sesión de cliente de tienda.
+ *
+ * No depende solo de `getSession()`: con varias pestañas / lock de GoTrue esa llamada puede no resolver
+ * y dejar el panel en «Verificando acceso» indefinidamente. Primero se usa `tradexpar_admin_token` (JWT).
  */
 export async function verifyAdminPanelSession(): Promise<boolean> {
   if (import.meta.env.VITE_ADMIN_SKIP_PROFILE_CHECK === "true") return true;
-  const { data: { session } } = await getSupabaseAuth().auth.getSession();
-  const uid = session?.user?.id;
-  if (!uid) return false;
-  const { data, error } = await fetchProfileSuperAdminRow(uid);
-  if (error) return false;
-  return (data as { is_super_admin?: boolean } | null)?.is_super_admin === true;
+
+  const run = async (): Promise<boolean> => {
+    let uid: string | null = null;
+
+    if (typeof sessionStorage !== "undefined") {
+      const t = sessionStorage.getItem("tradexpar_admin_token")?.trim();
+      if (t) {
+        setDataClientAccessToken(t);
+        uid = parseJwtSub(t);
+      }
+    }
+
+    if (!uid) {
+      uid = await Promise.race([
+        getSupabaseAuth()
+          .auth.getSession()
+          .then(({ data, error }) => {
+            if (error) return null;
+            return data.session?.user?.id ?? null;
+          }),
+        new Promise<null>((r) => setTimeout(() => r(null), ADMIN_GET_SESSION_MAX_MS)),
+      ]);
+    }
+
+    if (!uid) return false;
+
+    const { data, error } = await fetchProfileSuperAdminRow(uid);
+    if (error) return false;
+    return (data as { is_super_admin?: boolean } | null)?.is_super_admin === true;
+  };
+
+  return Promise.race([
+    run(),
+    new Promise<boolean>((r) => setTimeout(() => r(false), ADMIN_VERIFY_TOTAL_MAX_MS)),
+  ]);
 }
 
 /** Mensajes claros cuando `/auth/v1/token` devuelve 400 (credenciales, confirmación, etc.). */
@@ -725,25 +764,6 @@ export const tradexpar = {
     for (let attempt = 0; attempt <= STORE_CATALOG_RETRIES; attempt++) {
       try {
         return await fetchProductsOnce();
-      } catch (e) {
-        lastErr = e instanceof Error ? e : new Error(String(e));
-        if (attempt < STORE_CATALOG_RETRIES && isTransientNetworkOrServerError(lastErr.message)) {
-          await sleep(400 * (attempt + 1));
-          continue;
-        }
-        throw lastErr;
-      }
-    }
-    throw lastErr ?? new Error("No se pudo cargar el catálogo.");
-  },
-
-  /** Catálogo tienda: igual que `getProducts` pero sin productos Dropi marcados como no vendibles (según flag). */
-  getStoreCatalog: async (): Promise<Product[]> => {
-    let lastErr: Error | null = null;
-    for (let attempt = 0; attempt <= STORE_CATALOG_RETRIES; attempt++) {
-      try {
-        const rows = await fetchProductsOnce();
-        return filterStorefrontCatalog(rows);
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e));
         if (attempt < STORE_CATALOG_RETRIES && isTransientNetworkOrServerError(lastErr.message)) {

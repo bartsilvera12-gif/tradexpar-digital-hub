@@ -12,6 +12,9 @@ node_modules
 dist-ssr
 *.local
 
+# Artefacto local para Hostinger (npm run zip:dist); no subir el ZIP al repo.
+tradexpar-dist.zip
+
 # Variables de entorno (secretos); usá `.env.example` como plantilla.
 .env
 .env.local
