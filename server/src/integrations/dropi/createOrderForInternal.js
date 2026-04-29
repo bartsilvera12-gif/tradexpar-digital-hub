@@ -6,6 +6,7 @@
 import { postDropiBridgeJson, dropiConfigured, resolveBridgeBaseUrl } from "./client.js";
 import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
 import { mapPagoparToDropi } from "./mapPagoparToDropi.js";
+import { normalizeDropiItemForBridge } from "./normalizeDropiItemForBridge.js";
 
 /** `false` = mismo comportamiento que antes del mapeo PagoPar→Dropi (solo `customer_city_code`). Una línea para revertir. */
 const USE_DROPI_CITY_CODE_MAP = true;
@@ -448,21 +449,32 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
           final_dropi_price: finalDropiPrice,
         });
         const sub = Math.round(finalDropiPrice * qty * 100) / 100;
-        return {
-          line_index: pl.line_index,
-          product_id: pl.product_id != null ? String(pl.product_id) : "",
-          product_name: pl.product_name != null ? String(pl.product_name) : "",
-          quantity: qty,
-          price: finalDropiPrice,
-          sale_price: finalDropiPrice,
-          suggested_price: finalDropiPrice,
-          unit_price: finalDropiPrice,
-          cost: costRow.cost,
-          pricing_source: ps || "cost",
-          line_subtotal: sub,
-          sku: p.sku != null ? String(p.sku) : "",
-          dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
-        };
+        const payloadItem = normalizeDropiItemForBridge(
+          {
+            line_index: pl.line_index,
+            product_id: pl.product_id != null ? String(pl.product_id) : "",
+            product_name: pl.product_name != null ? String(pl.product_name) : "",
+            quantity: qty,
+            price: finalDropiPrice,
+            sale_price: finalDropiPrice,
+            suggested_price: finalDropiPrice,
+            unit_price: finalDropiPrice,
+            cost: costRow.cost,
+            pricing_source: ps || "cost",
+            line_subtotal: sub,
+            sku: p.sku != null ? String(p.sku) : "",
+            dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
+          },
+          { line: pl, product: p }
+        );
+        console.log("[DROPI ITEM PAYLOAD]", {
+          dropi_product_id: payloadItem.dropi_product_id ?? null,
+          sku: payloadItem.sku ?? null,
+          quantity: payloadItem.quantity ?? null,
+          variation_id: payloadItem.variation_id ?? null,
+          has_variation_id: Object.prototype.hasOwnProperty.call(payloadItem, "variation_id"),
+        });
+        return payloadItem;
       }
 
       const originalUnit = lineSaleUnitPriceGuaranies(pl);
@@ -480,21 +492,32 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
         min_profit: 0,
         final_dropi_price: finalNoCost,
       });
-      return {
-        line_index: pl.line_index,
-        product_id: pl.product_id != null ? String(pl.product_id) : "",
-        product_name: pl.product_name != null ? String(pl.product_name) : "",
-        quantity: qty,
-        price: finalNoCost,
-        sale_price: finalNoCost,
-        suggested_price: finalNoCost,
-        unit_price: finalNoCost,
-        cost: null,
-        pricing_source: ps || null,
-        line_subtotal: sub2,
-        sku: p.sku != null ? String(p.sku) : "",
-        dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
-      };
+      const payloadItem = normalizeDropiItemForBridge(
+        {
+          line_index: pl.line_index,
+          product_id: pl.product_id != null ? String(pl.product_id) : "",
+          product_name: pl.product_name != null ? String(pl.product_name) : "",
+          quantity: qty,
+          price: finalNoCost,
+          sale_price: finalNoCost,
+          suggested_price: finalNoCost,
+          unit_price: finalNoCost,
+          cost: null,
+          pricing_source: ps || null,
+          line_subtotal: sub2,
+          sku: p.sku != null ? String(p.sku) : "",
+          dropi_product_id: p.external_product_id != null ? String(p.external_product_id) : "",
+        },
+        { line: pl, product: p }
+      );
+      console.log("[DROPI ITEM PAYLOAD]", {
+        dropi_product_id: payloadItem.dropi_product_id ?? null,
+        sku: payloadItem.sku ?? null,
+        quantity: payloadItem.quantity ?? null,
+        variation_id: payloadItem.variation_id ?? null,
+        has_variation_id: Object.prototype.hasOwnProperty.call(payloadItem, "variation_id"),
+      });
+      return payloadItem;
     }),
   };
   lastPayload = payload;
