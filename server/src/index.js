@@ -45,8 +45,6 @@ import {
 import { registerDropiRoutes } from "./integrations/dropi/routes.js";
 import { createDropiOrderForInternalOrder } from "./integrations/dropi/createOrderForInternal.js";
 import { registerFastraxRoutes } from "./integrations/fastrax/routes.js";
-import { registerInternalSyncStockRoutes } from "./routes/internal/syncStock.js";
-import "./cron/syncStockCron.js";
 import { createFastraxOrderForInternalOrder } from "./integrations/fastrax/createOrderForInternal.js";
 import { createApiKeyMiddleware } from "./middleware/apiKey.js";
 
@@ -690,7 +688,6 @@ app.use(express.json({ limit: "512kb" }));
 
 registerDropiRoutes(app);
 registerFastraxRoutes(app);
-registerInternalSyncStockRoutes(app);
 
 app.get("/health", (_req, res) => {
   let supabaseHost = "";
