@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  getSupabaseAuth,
-  runAuthExclusive,
-  setDataClientAccessToken,
-  tryReadAuthAccessTokenFromStorage,
-} from "@/lib/supabaseClient";
+import { getSupabaseAuth, setDataClientAccessToken, tryReadAuthAccessTokenFromStorage } from "@/lib/supabaseClient";
 import { affiliatesAvailable, fetchAffiliatePortalLinkVisible } from "@/services/affiliateTradexparService";
+
+const AFFILIATE_SESSION_READ_MS = 12_000;
 
 /** True cuando hay sesión Supabase y el backend permite ver el panel (distribuidor o solicitud pendiente). */
 export function useAffiliatePortalLinkVisible(userId: string | undefined): boolean {
@@ -22,8 +19,17 @@ export function useAffiliatePortalLinkVisible(userId: string | undefined): boole
       try {
         let token = tryReadAuthAccessTokenFromStorage();
         if (!token) {
-          const { data } = await runAuthExclusive(() => getSupabaseAuth().auth.getSession());
-          token = data.session?.access_token ?? null;
+          try {
+            const res = await Promise.race([
+              getSupabaseAuth().auth.getSession(),
+              new Promise<never>((_, rej) =>
+                setTimeout(() => rej(new Error("session_read_timeout")), AFFILIATE_SESSION_READ_MS)
+              ),
+            ]);
+            token = res.data.session?.access_token ?? null;
+          } catch {
+            token = null;
+          }
         }
         setDataClientAccessToken(token);
         if (!token) {

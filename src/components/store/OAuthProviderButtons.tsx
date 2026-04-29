@@ -52,7 +52,8 @@ export function OAuthProviderButtons({
 
   const start = async (provider: "google" | "facebook") => {
     setBusy(provider);
-    const timeoutMs = 25000;
+    /** Red lenta o cold start del Auth en api.neura.com.py; la cola ya no bloquea OAuth. */
+    const timeoutMs = 45_000;
     try {
       const { url } = await Promise.race([
         tradexpar.customerOAuthStart(provider),

@@ -7,7 +7,7 @@ import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSupabaseAuth, runAuthExclusive } from "@/lib/supabaseClient";
+import { getSupabaseAuth } from "@/lib/supabaseClient";
 import { isOAuthCallbackUrl, isOAuthReturnPending, tradexpar } from "@/services/tradexpar";
 
 import type { CustomerUser } from "@/types";
@@ -183,7 +183,7 @@ function AccountContent({
     let cancelled = false;
     const SESSION_TIMEOUT_MS = 12_000;
 
-    void runAuthExclusive(async () => {
+    void (async () => {
       try {
         const { data, error } = await Promise.race([
           getSupabaseAuth().auth.getSession(),
@@ -202,7 +202,7 @@ function AccountContent({
           setAllowsPasswordSection(allowsPasswordFromCustomerProvider(user.provider) ?? true);
         }
       }
-    });
+    })();
 
     return () => {
       cancelled = true;

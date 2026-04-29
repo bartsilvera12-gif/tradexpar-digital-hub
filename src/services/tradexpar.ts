@@ -8,7 +8,6 @@ import {
   isSupabaseConfigured,
   resolveSupabaseAnonKey,
   resolveSupabaseUrl,
-  runAuthExclusive,
   setDataClientAccessToken,
   syncDataClientTokenFromAuthSession,
   tryReadAuthAccessTokenFromStorage,
@@ -138,12 +137,13 @@ async function syncStoreJwtToDataClient(): Promise<void> {
     return;
   }
   try {
+    /** Sin cola global: un `getSession` encolado y colgado hacía que `signInWithOAuth` nunca empezara y venciera el timeout del botón. */
     await Promise.race([
-      runAuthExclusive(async () => {
+      (async () => {
         const { data: { session }, error } = await getSupabaseAuth().auth.getSession();
         if (error) throw new Error(formatSupabaseErrorForUser(error.message));
         if (session?.access_token) setDataClientAccessToken(session.access_token);
-      }),
+      })(),
       new Promise<never>((_, rej) =>
         setTimeout(
           () => rej(new Error("__STORE_JWT_SYNC_TIMEOUT__")),
@@ -840,16 +840,14 @@ export const tradexpar = {
   },
 
   customerRegister: async (payload: { name: string; email: string; password: string }) => {
-    const { data, error } = await runAuthExclusive(() =>
-      getSupabaseAuth().auth.signUp({
-        email: payload.email,
-        password: payload.password,
-        options: {
-          data: { full_name: payload.name },
-          emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/login` : undefined,
-        },
-      })
-    );
+    const { data, error } = await getSupabaseAuth().auth.signUp({
+      email: payload.email,
+      password: payload.password,
+      options: {
+        data: { full_name: payload.name },
+        emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/login` : undefined,
+      },
+    });
     if (error) {
       const raw = error.message || "";
       if (/confirmation email|sending confirmation/i.test(raw)) {
@@ -879,12 +877,10 @@ export const tradexpar = {
   },
 
   customerLogin: async (payload: { email: string; password: string }) => {
-    const { data, error } = await runAuthExclusive(() =>
-      getSupabaseAuth().auth.signInWithPassword({
-        email: payload.email,
-        password: payload.password,
-      })
-    );
+    const { data, error } = await getSupabaseAuth().auth.signInWithPassword({
+      email: payload.email,
+      password: payload.password,
+    });
     if (error) throw new Error(error.message);
     const uid = data.user?.id;
     if (!uid) throw new Error("Sesión inválida");
@@ -983,20 +979,19 @@ export const tradexpar = {
      * @see https://supabase.com/docs/guides/auth/social-login/auth-facebook (permisos public_profile + email)
      */
     try {
-      const { data, error } = await runAuthExclusive(() =>
-        getSupabaseAuth().auth.signInWithOAuth({
-          provider,
-          options: {
-            redirectTo,
-            skipBrowserRedirect: true,
-            ...(provider === "facebook"
-              ? { scopes: "public_profile email" }
-              : provider === "google"
-                ? { scopes: "openid email profile" }
-                : {}),
-          },
-        })
-      );
+      /** Fuera de `runAuthExclusive`: OAuth no puede quedar en cola detrás de otro `getSession` colgado (toast «La solicitud tardó demasiado»). */
+      const { data, error } = await getSupabaseAuth().auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          ...(provider === "facebook"
+            ? { scopes: "public_profile email" }
+            : provider === "google"
+              ? { scopes: "openid email profile" }
+              : {}),
+        },
+      });
       if (error) throw new Error(error.message);
       return { url: data.url ?? "" };
     } catch (e) {

@@ -5,12 +5,7 @@ import logoIcon from "@/assets/logo-icon.png";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  getSupabaseAuth,
-  runAuthExclusive,
-  setDataClientAccessToken,
-  tryReadAuthAccessTokenFromStorage,
-} from "@/lib/supabaseClient";
+import { getSupabaseAuth, setDataClientAccessToken, tryReadAuthAccessTokenFromStorage } from "@/lib/supabaseClient";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 import {
   affiliatesAvailable,
@@ -76,7 +71,7 @@ export default function AffiliatePortalPage() {
       let token = tryReadAuthAccessTokenFromStorage();
       if (!token) {
         const sessionRes = await withTimeout(
-          runAuthExclusive(() => getSupabaseAuth().auth.getSession()),
+          getSupabaseAuth().auth.getSession(),
           SESSION_READY_MS,
           "Tiempo de espera al leer tu sesión. Probá recargar la página o cerrar sesión y volver a entrar."
         );
