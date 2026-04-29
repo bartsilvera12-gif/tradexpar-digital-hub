@@ -21,7 +21,6 @@ import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
 import type { CustomerLocation, ParaguayCity } from "@/types";
 import { PAGOPAR_CIUDADES_PY } from "@/config/pagoparCiudadesPy";
-import { assertCheckoutDropiSellable } from "@/lib/dropiProductGate";
 
 /** Costo envío 24 h (debe coincidir con la RPC `create_checkout_order` en Supabase). */
 const SHIPPING_24H_PYG = 25_000;
@@ -196,7 +195,6 @@ export default function CheckoutPage() {
       setLoading(true);
       setError(null);
       try {
-        assertCheckoutDropiSellable(items);
         await runCreatePaymentAndRedirect({ orderId: pendingOrderId });
       } finally {
         setLoading(false);
@@ -207,8 +205,6 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      assertCheckoutDropiSellable(items);
-
       if (!form.email.trim()) {
         throw new Error("El email es obligatorio.");
       }

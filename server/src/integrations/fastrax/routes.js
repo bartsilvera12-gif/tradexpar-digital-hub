@@ -1,13 +1,6 @@
 import { createRequireAdminMiddleware } from "../../adminAuth.js";
 import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
-import {
-  fastraxCatalogImportAllowed,
-  fastraxConfigured,
-  fastraxEnabled,
-  getFastraxImageOpe3,
-  getVersion,
-  listProductsPage,
-} from "./client.js";
+import { fastraxConfigured, fastraxEnabled, getFastraxImageOpe3, getVersion, listProductsPage } from "./client.js";
 import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
 import {
@@ -233,12 +226,6 @@ export function registerFastraxRoutes(app) {
 
   /** Buscador → `tradexpar.products` (items con datos y raw_detail; Bearer admin). */
   app.post("/api/admin/fastrax/import", requireAdmin, async (req, res) => {
-    if (!fastraxCatalogImportAllowed()) {
-      return res.status(503).json({
-        ok: false,
-        error: "Importación de catálogo desactivada: definí FASTRAX_ENABLED=true en el servidor.",
-      });
-    }
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -260,12 +247,6 @@ export function registerFastraxRoutes(app) {
   });
 
   app.post("/api/admin/fastrax/products/import", requireAdmin, async (req, res) => {
-    if (!fastraxCatalogImportAllowed()) {
-      return res.status(503).json({
-        ok: false,
-        error: "Importación de catálogo desactivada: definí FASTRAX_ENABLED=true en el servidor.",
-      });
-    }
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -287,12 +268,6 @@ export function registerFastraxRoutes(app) {
   });
 
   app.post("/api/admin/fastrax/sync-products", requireAdmin, async (req, res) => {
-    if (!fastraxCatalogImportAllowed()) {
-      return res.status(503).json({
-        ok: false,
-        error: "Sync de catálogo desactivado: definí FASTRAX_ENABLED=true en el servidor.",
-      });
-    }
     if (!fastraxEnabled()) {
       return res.status(503).json({ ok: false, error: "FASTRAX_ENABLED=0" });
     }

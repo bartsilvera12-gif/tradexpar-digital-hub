@@ -17,8 +17,6 @@ interface ImportMetaEnv {
    * En producción debe estar sin definir o en "false" para que solo entren super admins.
    */
   readonly VITE_ADMIN_SKIP_PROFILE_CHECK?: string;
-  /** "true" = ocultar Dropi no válidos en tienda y bloquear checkout (alinear con DROPI_ENFORCE_PRODUCT_VALIDATION en server). */
-  readonly VITE_DROPI_ENFORCE_PRODUCT_VALIDATION?: string;
 }
 
 interface ImportMeta {

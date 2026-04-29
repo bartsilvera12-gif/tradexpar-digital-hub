@@ -1,5 +1,4 @@
 import { fetchDropiProductDetail, fetchDropiProductList } from "./client.js";
-import { computeDropiProductValidationPatch } from "./dropiProductValidation.js";
 import { extractDropiProductRows, mapDropiProduct } from "./mapper.js";
 
 /** @param {import('@supabase/supabase-js').SupabaseClient} sb */
@@ -272,22 +271,10 @@ async function upsertDropiProductRow(sb, raw, syncRunId, stats, detailRequestedI
     }
 
     const baseRow = buildProductRow(raw, mapped);
-    const listGsForVal = Math.round(Number(baseRow.price) || Number(mapped.salePrice) || 0);
-    const valPatch = await computeDropiProductValidationPatch(
-      raw,
-      mapped,
-      listGsForVal,
-      decision.mode === "update" ? decision.id : null
-    );
-    Object.assign(baseRow, valPatch);
 
     if (decision.mode === "update") {
       if (decision.prevCrc === mapped.syncCrc) {
         stats.unchanged++;
-        await sb
-          .from("products")
-          .update({ ...valPatch, updated_at: utcNowIso() })
-          .eq("id", decision.id);
         const q = await enqueueImages(sb, decision.id, mapped.imageUrls, syncRunId);
         stats.images_queued += q;
         return;

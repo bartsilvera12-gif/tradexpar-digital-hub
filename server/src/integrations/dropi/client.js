@@ -55,15 +55,6 @@ export function dropiConfigured() {
   return Boolean(resolveBridgeBaseUrl() && envTrim("DROPI_BRIDGE_KEY"));
 }
 
-/**
- * Sync manual de catálogo/imágenes desde admin. Por defecto permitido; desactivar con DROPI_ADMIN_SYNC_ENABLED=false.
- * No afecta creación de pedidos Dropi tras pago (createOrderForInternal).
- */
-export function dropiAdminCatalogSyncAllowed() {
-  const v = String(process.env.DROPI_ADMIN_SYNC_ENABLED ?? "true").trim().toLowerCase();
-  return v !== "false" && v !== "0";
-}
-
 function assertBridgeEnv() {
   const base = resolveBridgeBaseUrl();
   const key = envTrim("DROPI_BRIDGE_KEY");

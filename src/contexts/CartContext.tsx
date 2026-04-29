@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import type { Product, CartItem } from "@/types";
 import { getEffectivePrice } from "@/lib/productHelpers";
-import { DROPI_CHECKOUT_BLOCK_MESSAGE, isDropiProductBlocked } from "@/lib/dropiProductGate";
-import { toast } from "@/hooks/use-toast";
 
 interface CartContextType {
   items: CartItem[];
@@ -80,14 +78,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addItem = useCallback((product: Product, quantity = 1): boolean => {
-    if (isDropiProductBlocked(product)) {
-      toast({
-        variant: "destructive",
-        title: "No disponible",
-        description: DROPI_CHECKOUT_BLOCK_MESSAGE,
-      });
-      return false;
-    }
     setItems((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
