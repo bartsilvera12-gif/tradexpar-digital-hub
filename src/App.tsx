@@ -78,7 +78,11 @@ const App = () => (
                   <Route path="/" element={<HomePage />} />
                   <Route path="/products" element={<ProductsPage />} />
                   <Route path="/sobre-tradexpar" element={<AboutTradexparPage />} />
+                  {/* Públicas (Meta / Facebook Login: URLs de política y datos) */}
+                  <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/privacidad" element={<PrivacyPage />} />
+                  <Route path="/data-deletion" element={<DataDeletionPage />} />
+                  <Route path="/eliminacion-de-datos" element={<DataDeletionPage />} />
                   <Route path="/eliminar-datos" element={<DataDeletionPage />} />
                   <Route path="/products/:id" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
