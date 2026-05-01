@@ -82,7 +82,7 @@ export function ViralProductRotatingSection({ title, subtitle, linkTo, products 
         </Link>
       </motion.header>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-4 lg:gap-5 min-w-0">
+      <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 xs:gap-3 sm:gap-4 md:gap-4 lg:grid-cols-4 lg:gap-5 min-w-0">
         <AnimatePresence initial={false} mode="popLayout">
           {visible.map((p, i) => (
             <motion.div

@@ -261,7 +261,7 @@ function ProductSection({
           <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 lg:gap-5">
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 xs:gap-3 sm:gap-4 md:gap-5">
         {products.map((p, i) => (
           <ProductCard key={p.id} product={p} index={i} />
         ))}

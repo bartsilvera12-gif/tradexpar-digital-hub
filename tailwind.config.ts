@@ -20,6 +20,10 @@ export default {
       },
     },
     extend: {
+      screens: {
+        /** Catálogo: 2 columnas solo desde ~pantalla ancha; evita tarjetas aplastadas en móvil angosto */
+        xs: "420px",
+      },
       fontFamily: {
         sans: ["Montserrat", "system-ui", "sans-serif"],
         display: ["Montserrat", "system-ui", "sans-serif"],

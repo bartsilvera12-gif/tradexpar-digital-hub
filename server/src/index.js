@@ -136,9 +136,23 @@ const PAGOPAR_COMPRADOR_CIUDAD = String(
   process.env.PAGOPAR_COMPRADOR_CIUDAD || process.env.PAGOPAR_ITEM_CIUDAD || "1"
 ).trim() || "1";
 const PAGOPAR_ITEM_PRODUCTO_ID = Number(process.env.PAGOPAR_ITEM_PRODUCTO_ID || 895);
+const _rawPagoparItemImg = process.env.PAGOPAR_ITEM_IMAGEN_URL;
 const PAGOPAR_ITEM_IMAGEN_URL =
-  process.env.PAGOPAR_ITEM_IMAGEN_URL ||
-  "https://www.pagopar.com/static/img/logo.png";
+  _rawPagoparItemImg != null && String(_rawPagoparItemImg).trim() !== ""
+    ? String(_rawPagoparItemImg).trim()
+    : "https://www.pagopar.com/static/img/logo.png";
+/**
+ * Base pública para rutas relativas de catálogo (`/fastrax-products/…`, etc.).
+ * Misma idea que `src/lib/productImageUrl.ts` (default payments.neura.com.py).
+ */
+const PAYMENTS_PUBLIC_BASE_URL = (
+  process.env.PAYMENTS_PUBLIC_BASE_URL ||
+  process.env.VITE_API_BASE_URL ||
+  "https://payments.neura.com.py"
+)
+  .toString()
+  .trim()
+  .replace(/\/+$/, "");
 /** Texto vacío si falta valor (PagoPar: sin null/undefined en compras_items). */
 function pagoparItemStr(v) {
   if (v == null) return "";
@@ -634,20 +648,85 @@ function resolvePagoparComprasItemConfig(order, orderId, mode, overrides) {
   };
 }
 
+const PAGOPAR_ITEM_IMAGEN_FALLBACK = "https://www.pagopar.com/static/img/logo.png";
+
+/** Primera URL útil en fila `products` (columna `images` json o `image`). */
+function primaryImageRawFromProductRow(p) {
+  if (!p || typeof p !== "object") return "";
+  const imgs = p.images;
+  if (Array.isArray(imgs)) {
+    for (const x of imgs) {
+      if (typeof x === "string" && x.trim()) return x.trim();
+      if (x && typeof x === "object" && typeof x.url === "string" && x.url.trim()) return x.url.trim();
+    }
+  }
+  if (p.image != null && String(p.image).trim()) return String(p.image).trim();
+  return "";
+}
+
+/** URL absoluta https accesible por PagoPar (rutas relativas → API público de pagos). */
+function absolutizeProductImageUrlForPagopar(raw) {
+  let u = (raw ?? "").trim();
+  if (!u) return "";
+  if (u.startsWith("//")) u = `https:${u}`;
+  if (/^https?:\/\//i.test(u)) return u.slice(0, 2000);
+  const base = PAYMENTS_PUBLIC_BASE_URL || "https://payments.neura.com.py";
+  const path = u.startsWith("/") ? u : `/${u}`;
+  return `${base.replace(/\/+$/, "")}${path}`.slice(0, 2000);
+}
+
+/**
+ * Una imagen al azar entre las líneas del pedido que tengan imagen en catálogo.
+ * Vacío si no hay líneas o ninguna imagen.
+ */
+async function fetchRandomOrderLineProductImageUrl(sb, orderId) {
+  const { data: lines, error: e1 } = await sb
+    .schema(ORDERS_SCHEMA)
+    .from("order_items")
+    .select("product_id, line_index")
+    .eq("order_id", orderId)
+    .order("line_index", { ascending: true });
+  if (e1 || !lines?.length) return "";
+
+  const ids = [...new Set(lines.map((r) => r.product_id).filter(Boolean))];
+  if (!ids.length) return "";
+
+  const { data: prods, error: e2 } = await sb
+    .schema(ORDERS_SCHEMA)
+    .from("products")
+    .select("id, image, images")
+    .in("id", ids);
+  if (e2 || !prods?.length) return "";
+
+  const byId = new Map(prods.map((p) => [p.id, p]));
+  const candidates = [];
+  for (const line of lines) {
+    const raw = primaryImageRawFromProductRow(byId.get(line.product_id));
+    if (raw) candidates.push(raw);
+  }
+  if (!candidates.length) return "";
+
+  const rawPick = candidates[Math.floor(Math.random() * candidates.length)];
+  return absolutizeProductImageUrlForPagopar(rawPick);
+}
+
 /** Una línea de compras_items: 13 claves; strings siempre "" si no hay valor (nunca null/undefined). */
-function buildPagoparCompraItem(order, orderId, precioTotalLinea, cantidadLinea, mode, overrides) {
+function buildPagoparCompraItem(order, orderId, precioTotalLinea, cantidadLinea, mode, overrides, catalogImageUrl) {
   const shortId = orderId.slice(0, 8);
   const nombre = pagoparItemStr(`Pedido Tradexpar ${shortId}`).slice(0, 200);
   const cantidad = Math.max(1, Math.round(Number(cantidadLinea) || 1));
   const precio_total = Math.round(Number(precioTotalLinea) || 0);
   const cfg = resolvePagoparComprasItemConfig(order, orderId, mode, overrides);
+  const fromCatalog = pagoparItemStr(catalogImageUrl ?? "").trim();
+  const fromEnv = pagoparItemStr(PAGOPAR_ITEM_IMAGEN_URL).trim();
+  const url_imagen = pagoparItemStr(fromCatalog || fromEnv || PAGOPAR_ITEM_IMAGEN_FALLBACK).slice(0, 2000);
   return {
     ciudad: cfg.ciudad,
     nombre,
     cantidad,
     categoria: cfg.categoria,
     public_key: pagoparItemStr(PAGOPAR_PUBLIC_KEY),
-    url_imagen: pagoparItemStr(PAGOPAR_ITEM_IMAGEN_URL),
+    url_imagen,
     descripcion: cfg.descripcion,
     id_producto: cfg.id_producto,
     precio_total,
@@ -855,7 +934,26 @@ app.post("/api/public/orders/:orderId/create-payment", apiKeyMiddleware, async (
     const fecha_maxima_pago = fechaMax.toISOString().slice(0, 19).replace("T", " ");
 
     const comprador = buildPagoparCompradorFromOrder(order);
-    const compras_items = [buildPagoparCompraItem(order, orderId, montoTotal, 1, pagoparProductMode, pagoparOverrides)];
+    let pagoparCatalogImageUrl = "";
+    try {
+      pagoparCatalogImageUrl = await fetchRandomOrderLineProductImageUrl(supabaseAdmin(), orderId);
+    } catch (err) {
+      console.warn(
+        "[create-payment][pagopar] imagen ítem catálogo:",
+        err instanceof Error ? err.message : err
+      );
+    }
+    const compras_items = [
+      buildPagoparCompraItem(
+        order,
+        orderId,
+        montoTotal,
+        1,
+        pagoparProductMode,
+        pagoparOverrides,
+        pagoparCatalogImageUrl
+      ),
+    ];
     assertPagoparCompradorShape(comprador);
     assertPagoparCompraItemShape(compras_items[0]);
     assertComprasItemsPrecioTotalSum(compras_items, montoTotal);

@@ -52,6 +52,8 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
 
   const soldOut = product.stock !== undefined && product.stock <= 0;
   const primaryImageSrc = resolveProductPrimaryImageSrc(product);
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(primaryImageSrc) && !imageFailed;
 
   return (
     <motion.div
@@ -61,8 +63,8 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       className="group relative bg-card rounded-lg sm:rounded-xl overflow-hidden border hover:shadow-card-hover transition-shadow duration-300 h-full min-w-0 flex flex-col"
     >
       {/* Image area */}
-      <Link to={productHref} className="block relative">
-        <div className="aspect-square bg-muted/20 flex items-center justify-center p-3 sm:p-5 relative overflow-hidden">
+      <Link to={productHref} className="block relative shrink-0">
+        <div className="aspect-square min-h-[10.25rem] xs:min-h-0 w-full bg-muted/30 flex items-center justify-center p-2 sm:p-5 relative overflow-hidden">
           {/* Badges */}
           <div className="absolute top-2.5 left-0 z-10 flex flex-col gap-2">
             {discountPct > 0 && <ProductPromoBadge variant="sale" percent={discountPct} shape="ribbon" />}
@@ -93,16 +95,19 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             <Heart className={`h-4 w-4 ${has(product.id) ? "fill-current" : ""}`} />
           </button>
 
-          {primaryImageSrc ? (
+          {showImage ? (
             <img
-              src={primaryImageSrc}
+              src={primaryImageSrc!}
               alt={product.name}
-              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+              className="max-h-full w-full h-full object-contain object-center group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
               decoding="async"
+              onError={() => setImageFailed(true)}
             />
           ) : (
-            <div className="text-sm text-muted-foreground font-medium text-center">Sin imagen</div>
+            <div className="px-2 text-xs sm:text-sm text-muted-foreground font-medium text-center leading-snug">
+              Sin imagen
+            </div>
           )}
 
           {soldOut && (
@@ -113,13 +118,15 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         </div>
       </Link>
 
-      {/* Info */}
-      <div className="p-2.5 sm:p-3.5 flex flex-col gap-1.5 min-h-[128px] sm:min-h-[140px] flex-1">
+      {/* Info (siempre bajo la imagen; min-altura flexible en móvil) */}
+      <div className="p-3 xs:p-2.5 sm:p-3.5 flex flex-col gap-1 min-h-0 sm:min-h-[140px] flex-1">
         {product.category && (
-          <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">{product.category}</p>
+          <p className="text-[10px] xs:text-[11px] text-muted-foreground uppercase tracking-widest font-medium">
+            {product.category}
+          </p>
         )}
         <Link to={productHref} className="min-w-0">
-          <h3 className="text-[13px] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors [overflow-wrap:anywhere]">
+          <h3 className="text-sm xs:text-[13px] sm:text-sm font-semibold text-foreground line-clamp-3 xs:line-clamp-2 leading-snug group-hover:text-primary transition-colors [overflow-wrap:anywhere]">
             {product.name}
           </h3>
         </Link>
@@ -139,7 +146,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                 ₲ {effectivePrice.toLocaleString("es-PY")}
               </span>
             )}
-            <span className="text-lg font-bold text-foreground leading-none">
+            <span className="text-base xs:text-lg font-bold text-foreground leading-none tabular-nums">
               ₲ {displayUnitPrice.toLocaleString("es-PY")}
             </span>
           </div>

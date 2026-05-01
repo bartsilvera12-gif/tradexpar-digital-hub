@@ -44,9 +44,9 @@ export default function ProductsPage() {
   const hasActiveFilters = category !== "all" || source !== "all" || offersOnly;
 
   return (
-    <div className="container mx-auto py-6 sm:py-8 min-w-0 max-w-full">
+    <div className="container mx-auto py-5 sm:py-8 min-w-0 max-w-full pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
       {/* Header */}
-      <div className="mb-5 sm:mb-8">
+      <div className="mb-4 sm:mb-8">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground [text-wrap:balance]">
           Catálogo
         </h1>
@@ -145,7 +145,7 @@ export default function ProductsPage() {
         <EmptyState title="Sin resultados" description="No se encontraron productos con esos filtros." />
       )}
       {!loading && !error && filtered.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 lg:gap-5 min-w-0">
+        <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 xs:gap-3 sm:gap-4 md:gap-5 min-w-0">
           {filtered.map((p, i) => (
             <ProductCard key={p.id} product={p} index={i} />
           ))}
