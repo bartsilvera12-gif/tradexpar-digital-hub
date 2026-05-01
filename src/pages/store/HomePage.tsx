@@ -42,32 +42,32 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Hero: imagen completa (sin recorte); el alto sigue la proporción real del PNG. */}
-      <section className="relative isolate w-full max-w-[100vw] overflow-hidden">
+      {/* Hero: en móvil imagen y texto en columna (sin texto sobre la foto); desde sm overlay como desktop. */}
+      <section className="relative isolate flex w-full max-w-[100vw] flex-col overflow-hidden sm:block">
         <img
           src={HERO_IMAGE_URL}
           alt="Tradexpar — Distribuidora digital"
-          className="relative z-0 block h-auto w-full max-w-full"
+          className="relative z-0 block h-auto w-full max-w-full shrink-0"
           sizes="100vw"
           fetchPriority="high"
           decoding="async"
         />
         <div
-          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/90 via-black/45 to-black/25 sm:from-black/80 sm:via-black/30 sm:to-transparent"
+          className="pointer-events-none absolute inset-0 z-[1] hidden bg-gradient-to-t from-black/90 via-black/45 to-black/25 sm:block sm:from-black/80 sm:via-black/30 sm:to-transparent"
           aria-hidden
         />
-        <div className="absolute bottom-0 left-0 right-0 z-10 max-w-screen-xl mx-auto px-3 sm:px-4 pb-[max(2.25rem,env(safe-area-inset-bottom))] sm:pb-10 lg:pb-16 pointer-events-none [&_a]:pointer-events-auto">
+        <div className="relative z-10 mx-auto w-full max-w-screen-xl border-t border-border/40 bg-background px-3 pt-6 pb-[max(2.25rem,env(safe-area-inset-bottom))] pointer-events-none sm:absolute sm:bottom-0 sm:left-0 sm:right-0 sm:border-0 sm:bg-transparent sm:px-4 sm:pt-0 sm:pb-10 lg:pb-16 [&_a]:pointer-events-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             className="max-w-xl w-full"
           >
-            <h1 className="text-[clamp(1.2rem,4.5vw+0.4rem,3.15rem)] sm:text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground leading-[1.12] sm:leading-tight mb-3 sm:mb-4 [text-wrap:balance]">
+            <h1 className="text-[clamp(1.2rem,4.5vw+0.4rem,3.15rem)] sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.12] sm:leading-tight mb-3 sm:mb-4 [text-wrap:balance] text-foreground sm:text-primary-foreground">
               Distribuidora digital<br />
               <span className="text-gradient">de alto rendimiento</span>
             </h1>
-            <p className="text-sm sm:text-base text-primary-foreground/80 sm:text-primary-foreground/70 mb-5 sm:mb-6 max-w-md leading-relaxed [text-wrap:balance]">
+            <p className="mb-5 sm:mb-6 max-w-md text-sm leading-relaxed text-muted-foreground [text-wrap:balance] sm:text-base sm:text-primary-foreground/70">
               Accede a productos digitales premium con la confianza y tecnología de Tradexpar.
             </p>
             <Link
