@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
-import { cartHasDropiItems, deriveCheckoutTypeFromItems } from "@/lib/productHelpers";
+import { deriveCheckoutTypeFromItems } from "@/lib/productHelpers";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
@@ -82,14 +82,6 @@ export default function CheckoutPage() {
   /** Pedido creado, pendiente de redirigir al pago. */
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  /**
-   * Ciudades con cobertura de entrega (solo carritos con ítems que la requieren). `null` = aún no calculado o no aplica filtro.
-   */
-  const [deliveryFilteredCities, setDeliveryFilteredCities] = useState<ParaguayCity[] | null>(null);
-  /** Código interno de entrega por ciudad (solo cuando aplica filtro de cobertura). */
-  const [cityIdToDeliveryCode, setCityIdToDeliveryCode] = useState<Record<string, string>>({});
-  const [coverageLoading, setCoverageLoading] = useState(false);
-
   useEffect(() => {
     let cancelled = false;
     void tradexpar
@@ -115,69 +107,15 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  const needsDeliveryCoverageFilter = useMemo(() => cartHasDropiItems(items), [items]);
-
-  useEffect(() => {
-    if (!needsDeliveryCoverageFilter || cities.length === 0) {
-      setDeliveryFilteredCities(null);
-      setCityIdToDeliveryCode({});
-      setCoverageLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setCoverageLoading(true);
-    setDeliveryFilteredCities(null);
-
-    void (async () => {
-      const acc: { city: ParaguayCity; code: string }[] = [];
-      await Promise.all(
-        cities.map(async (city) => {
-          try {
-            const r = await api.checkDropiCityMapping({
-              pagopar_code: city.pagopar_city_code,
-              city_name: `${city.name}, ${city.department}`,
-            });
-            if (!cancelled && r.ok === true && typeof r.dropi_city_code === "string" && r.dropi_city_code.trim() !== "") {
-              acc.push({ city, code: r.dropi_city_code.trim() });
-            }
-          } catch {
-            /* ciudad omitida */
-          }
-        })
-      );
-      if (cancelled) return;
-      const map: Record<string, string> = {};
-      acc.forEach(({ city, code }) => {
-        map[city.id] = code;
-      });
-      acc.sort((a, b) => {
-        const d = a.city.department.localeCompare(b.city.department, "es");
-        if (d !== 0) return d;
-        return a.city.sort_order - b.city.sort_order;
-      });
-      setCityIdToDeliveryCode(map);
-      setDeliveryFilteredCities(acc.map((x) => x.city));
-      setCoverageLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [needsDeliveryCoverageFilter, cities]);
-
   const citiesByDepartment = useMemo(() => {
-    const source = needsDeliveryCoverageFilter ? (deliveryFilteredCities ?? []) : cities;
     const m = new Map<string, ParaguayCity[]>();
-    for (const c of source) {
+    for (const c of cities) {
       const arr = m.get(c.department) ?? [];
       arr.push(c);
       m.set(c.department, arr);
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "es"));
-  }, [needsDeliveryCoverageFilter, cities, deliveryFilteredCities]);
-
-  const coverageEmpty =
-    needsDeliveryCoverageFilter && !coverageLoading && deliveryFilteredCities !== null && deliveryFilteredCities.length === 0;
+  }, [cities]);
 
   useEffect(() => {
     if (!user) return;
@@ -214,13 +152,6 @@ export default function CheckoutPage() {
   }, [user]);
 
   const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
-
-  useEffect(() => {
-    if (!needsDeliveryCoverageFilter || !deliveryFilteredCities) return;
-    if (form.cityId && !deliveryFilteredCities.some((c) => c.id === form.cityId)) {
-      setForm((prev) => ({ ...prev, cityId: "" }));
-    }
-  }, [needsDeliveryCoverageFilter, deliveryFilteredCities, form.cityId]);
 
   /**
    * Sin `forma_pago`, el POST usa el default del servidor (`PAGOPAR_FORMA_PAGO`, típicamente 9).
@@ -297,17 +228,6 @@ export default function CheckoutPage() {
       if (!form.cityId) {
         throw new Error("Seleccioná una ciudad.");
       }
-      if (needsDeliveryCoverageFilter) {
-        if (coverageLoading || deliveryFilteredCities === null) {
-          throw new Error("Esperá un momento mientras verificamos las zonas de entrega disponibles.");
-        }
-        if (
-          coverageEmpty ||
-          !cityIdToDeliveryCode[form.cityId]
-        ) {
-          throw new Error("Actualmente no contamos con cobertura para la ciudad seleccionada.");
-        }
-      }
       const cityRow = cities.find((c) => c.id === form.cityId);
       if (!cityRow) {
         throw new Error("Ciudad no válida. Recargá la página.");
@@ -336,10 +256,6 @@ export default function CheckoutPage() {
           address: form.address.trim(),
           city_code: cityCode,
           city_name: cityNameForOrder,
-          dropi_city_code:
-            needsDeliveryCoverageFilter && cityIdToDeliveryCode[form.cityId]
-              ? cityIdToDeliveryCode[form.cityId]
-              : undefined,
           address_reference: form.addressReference.trim() || undefined,
         },
         location_url,
@@ -399,17 +315,6 @@ export default function CheckoutPage() {
                 {!citiesFromDb && (
                   <p className="text-xs text-amber-700 dark:text-amber-400/90">
                     Estamos usando una lista reducida de ciudades. Si no ves la tuya, intentá más tarde o contactanos.
-                  </p>
-                )}
-                {coverageEmpty && (
-                  <p className="text-xs font-medium text-amber-800 dark:text-amber-200 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 [text-wrap:balance]">
-                    No hay cobertura disponible para los productos seleccionados.
-                  </p>
-                )}
-                {needsDeliveryCoverageFilter && coverageLoading && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" aria-hidden />
-                    Verificando zonas de entrega disponibles…
                   </p>
                 )}
               </div>
@@ -495,7 +400,6 @@ export default function CheckoutPage() {
                 <Select
                   value={form.cityId || "__none"}
                   onValueChange={(v) => setForm({ ...form, cityId: v === "__none" ? "" : v })}
-                  disabled={coverageLoading || coverageEmpty}
                 >
                   <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
                     <SelectValue placeholder="Seleccioná tu ciudad de entrega" />
@@ -516,15 +420,6 @@ export default function CheckoutPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {needsDeliveryCoverageFilter &&
-                  !coverageLoading &&
-                  !coverageEmpty &&
-                  deliveryFilteredCities !== null &&
-                  deliveryFilteredCities.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1.5 [text-wrap:balance]">
-                      Mostramos únicamente ciudades disponibles para entrega.
-                    </p>
-                  )}
               </div>
 
               <div>
@@ -669,9 +564,6 @@ export default function CheckoutPage() {
                   <span>₲{orderGrandTotal.toLocaleString("es-PY")}</span>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground leading-snug pt-3 mt-1 border-t border-border/60 text-center [text-wrap:balance]">
-                Envíos solo a Asunción y Gran Asunción – Departamento Central.
-              </p>
             </div>
           </div>
 
@@ -681,7 +573,7 @@ export default function CheckoutPage() {
             )}
             <button
               type="submit"
-              disabled={loading || paying || items.length === 0 || coverageLoading || coverageEmpty}
+              disabled={loading || paying || items.length === 0}
               className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
             >
               {loading || paying ? (

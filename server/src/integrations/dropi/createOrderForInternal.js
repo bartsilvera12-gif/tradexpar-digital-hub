@@ -5,7 +5,6 @@
 
 import { postDropiBridgeJson, dropiConfigured, resolveBridgeBaseUrl } from "./client.js";
 import { shapeError, pickErrorMessageString } from "./dropiErrors.js";
-import { mapPagoparToDropi } from "./mapPagoparToDropi.js";
 import { normalizeDropiItemForBridge } from "./normalizeDropiItemForBridge.js";
 import { splitDropiPayloadByItem } from "./splitDropiPayloadByItem.js";
 
@@ -16,6 +15,39 @@ function envTrim(key) {
   const v = process.env[key];
   if (v == null) return "";
   return String(v).trim();
+}
+
+/**
+ * Código de ciudad/sucursal Dropi enviado al bridge (no el código PagoPar del cliente).
+ * Prioridad: DROPI_ORDER_CITY_CODE → DROPI_DEFAULT_CITY_CODE → DROPI_VALIDATION_DROPICITY_CODE → "11".
+ * @returns {string}
+ */
+export function resolveDropiOrderCityCode() {
+  const a = envTrim("DROPI_ORDER_CITY_CODE");
+  if (a !== "") return a;
+  const b = envTrim("DROPI_DEFAULT_CITY_CODE");
+  if (b !== "") return b;
+  const c = envTrim("DROPI_VALIDATION_DROPICITY_CODE");
+  if (c !== "") return c;
+  return "11";
+}
+
+/**
+ * Referencia visible para operador: datos del comprador + ciudad real de la orden.
+ * @param {string | null | undefined} refRaw
+ * @param {string | null | undefined} cityName
+ * @param {string | null | undefined} cityCode
+ */
+function buildDropiAddressReferenceForOperator(refRaw, cityName, cityCode) {
+  const ref = refRaw != null ? String(refRaw).trim() : "";
+  const cityPart =
+    (cityName != null && String(cityName).trim() !== "" && String(cityName).trim()) ||
+    (cityCode != null && String(cityCode).trim() !== "" && String(cityCode).trim()) ||
+    "";
+  const suffix = cityPart !== "" ? `Ciudad real: ${cityPart}` : "";
+  if (suffix === "") return ref;
+  if (ref === "") return suffix;
+  return `${ref} | ${suffix}`;
 }
 
 function utcNowIso() {
@@ -492,100 +524,41 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   const pathSeg = envTrim("DROPI_BRIDGE_ORDER_PATH") || "order";
   const minProfit = dropiMinProfitGs();
-  const manualDropi =
-    orderRow.customer_dropi_city_code != null && String(orderRow.customer_dropi_city_code).trim() !== ""
-      ? String(orderRow.customer_dropi_city_code).trim()
-      : "";
 
-  let dropiCityCode = "";
-  if (manualDropi) {
-    dropiCityCode = manualDropi;
-  } else {
-    const mapped = mapPagoparToDropi(orderRow.customer_city_code, orderRow.customer_city_name);
-    if (!mapped.ok) {
-      const msg = "Ciudad sin mapeo Dropi. Pedido pagado, requiere despacho manual.";
-      const gatePayload = {
-        tradexpar_order_id: oid,
-        gate: "missing_dropi_city_mapping",
-        customer_city_code: orderRow.customer_city_code ?? null,
-        customer_city_name: orderRow.customer_city_name ?? null,
-      };
-      const mu = await upsertMap(sb, {
-        order_id: oid,
-        status: "pending_manual",
-        dropi_status: "pending_manual",
-        last_error: msg,
-        error: msg,
-        payload: gatePayload,
-        response: null,
-        updated_at: utcNowIso(),
-      });
-      if (mu) {
-        return { ok: false, skipped: false, order_id: oid, context: "pending_manual_map_upsert", ...shapeError(mu) };
-      }
-      console.warn("[dropi/order-create] ciudad sin mapeo Dropi (no se llama al bridge)", {
-        order_id: oid,
-        customer_city_code: orderRow.customer_city_code,
-      });
-      return {
-        ok: true,
-        skipped: true,
-        reason: "missing_dropi_city_mapping",
-        order_id: oid,
-        message: msg,
-      };
-    }
-    dropiCityCode = String(mapped.dropi_city_code ?? "").trim();
-  }
+  const originalCustomerCityCode =
+    orderRow.customer_city_code != null ? String(orderRow.customer_city_code).trim() : "";
+  const originalCustomerCityName =
+    orderRow.customer_city_name != null ? String(orderRow.customer_city_name).trim() : "";
+  const dropiOrderCityCode = resolveDropiOrderCityCode();
+  const addressRefForBridge = buildDropiAddressReferenceForOperator(
+    orderRow.customer_address_reference,
+    orderRow.customer_city_name,
+    orderRow.customer_city_code
+  );
 
   console.log("[DROPI CITY MAP]", {
-    original: orderRow.customer_city_code,
-    manual_dropi_override: Boolean(manualDropi),
-    mapped: dropiCityCode,
+    original_customer_city_code: originalCustomerCityCode || null,
+    dropi_order_city_code: dropiOrderCityCode,
+    customer_dropi_city_code_stored:
+      orderRow.customer_dropi_city_code != null && String(orderRow.customer_dropi_city_code).trim() !== ""
+        ? String(orderRow.customer_dropi_city_code).trim()
+        : null,
   });
-
-  if (!String(dropiCityCode).trim()) {
-    const msg = "Ciudad sin mapeo Dropi. Pedido pagado, requiere despacho manual.";
-    const gatePayload = {
-      tradexpar_order_id: oid,
-      gate: "missing_dropi_city_mapping",
-      customer_city_code: orderRow.customer_city_code ?? null,
-      customer_city_name: orderRow.customer_city_name ?? null,
-    };
-    const mu = await upsertMap(sb, {
-      order_id: oid,
-      status: "pending_manual",
-      dropi_status: "pending_manual",
-      last_error: msg,
-      error: msg,
-      payload: gatePayload,
-      response: null,
-      updated_at: utcNowIso(),
-    });
-    if (mu) {
-      return { ok: false, skipped: false, order_id: oid, context: "pending_manual_map_upsert", ...shapeError(mu) };
-    }
-    return {
-      ok: true,
-      skipped: true,
-      reason: "missing_dropi_city_mapping",
-      order_id: oid,
-      message: msg,
-    };
-  }
 
   const baseWithoutItems = {
     tradexpar_order_id: oid,
     payment_confirmed: true,
+    original_customer_city_code: originalCustomerCityCode || null,
+    original_customer_city_name: originalCustomerCityName || null,
+    dropi_order_city_code: dropiOrderCityCode,
     customer: {
       name: orderRow.customer_name != null ? String(orderRow.customer_name) : "",
       email: orderRow.customer_email != null ? String(orderRow.customer_email) : "",
       phone: orderRow.customer_phone != null ? String(orderRow.customer_phone) : "",
       document: orderRow.customer_document != null ? String(orderRow.customer_document) : "",
       address: orderRow.customer_address != null ? String(orderRow.customer_address) : "",
-      city_code: dropiCityCode !== "" ? String(dropiCityCode) : "",
-      address_reference:
-        orderRow.customer_address_reference != null ? String(orderRow.customer_address_reference) : "",
+      city_code: dropiOrderCityCode,
+      address_reference: addressRefForBridge,
     },
   };
 
@@ -737,11 +710,21 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   }
 
   const splitPayloads = splitDropiPayloadByItem(baseWithoutItems, bridgeItemsOnly);
-  lastPayload = { split_orders: true, tradexpar_order_id: oid, payloads: splitPayloads };
+  lastPayload = {
+    split_orders: true,
+    tradexpar_order_id: oid,
+    original_customer_city_code: originalCustomerCityCode || null,
+    original_customer_city_name: originalCustomerCityName || null,
+    dropi_order_city_code: dropiOrderCityCode,
+    payloads: splitPayloads,
+  };
 
   const pendingEnvelope = {
     split_orders: true,
     tradexpar_order_id: oid,
+    original_customer_city_code: originalCustomerCityCode || null,
+    original_customer_city_name: originalCustomerCityName || null,
+    dropi_order_city_code: dropiOrderCityCode,
     payloads: splitPayloads,
   };
 

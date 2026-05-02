@@ -349,6 +349,10 @@ function mapOrder(row: Record<string, unknown>): Order {
       row.shipping_option != null && String(row.shipping_option).trim() !== ""
         ? String(row.shipping_option).trim()
         : null,
+    payment_status:
+      row.payment_status != null && String(row.payment_status).trim() !== ""
+        ? String(row.payment_status).trim()
+        : undefined,
     order_kind: deriveOrderKind(items),
     customer: {
       name: String(row.customer_name ?? ""),

@@ -22,6 +22,8 @@ import {
   isOrderClosed,
   itemSummaryGrouped,
   orderKindLabel,
+  paymentSettlementBadgeClass,
+  paymentSettlementLabel,
   productTypeLabel,
   sourceLabel,
   statusBadgeClass,
@@ -61,6 +63,21 @@ function OrderKindBadge({ kind }: { kind: ReturnType<typeof deriveOrderKind> }) 
       )}
     >
       {orderKindLabel(kind)}
+    </Badge>
+  );
+}
+
+function PaymentSettlementBadge({ paymentStatus }: { paymentStatus: string | null | undefined }) {
+  const label = paymentSettlementLabel(paymentStatus);
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "text-[10px] px-2 py-0.5 font-medium border whitespace-nowrap",
+        paymentSettlementBadgeClass(label)
+      )}
+    >
+      {label}
     </Badge>
   );
 }
@@ -369,11 +386,12 @@ function OrderDropiCard({ o }: { o: Order }) {
             <span className="text-foreground/90 break-words">
               Checkout/PagoPar: {o.customer?.city_code ?? "—"}
               {o.customer?.city_name ? ` · ${o.customer.city_name}` : ""}
-              {o.customer?.dropi_city_code ? ` · Dropi (manual): ${o.customer.dropi_city_code}` : ""}
+              {o.customer?.dropi_city_code ? ` · Código almacenado (opcional): ${o.customer.dropi_city_code}` : ""}
             </span>
             {pendingManualDropi && (
               <span className="block mt-1 text-[10px] text-amber-800 dark:text-amber-200">
-                Actualizá el código Dropi válido en el pedido (`customer_dropi_city_code`) y reintentá.
+                Revisá el detalle del error y reintentá la creación en Dropi; la ciudad del bridge usa{" "}
+                <span className="font-mono">DROPI_ORDER_CITY_CODE</span> en el servidor.
               </span>
             )}
           </div>
@@ -1258,7 +1276,7 @@ export default function AdminOrdersPage() {
       {!loading && !error && filtered.length > 0 && (
         <div className={ADMIN_CARD}>
           <div className={ADMIN_TABLE_SCROLL}>
-            <table className="w-full min-w-[880px] text-xs sm:text-sm border-collapse">
+            <table className="w-full min-w-[980px] text-xs sm:text-sm border-collapse">
               <thead>
                 <tr className="bg-muted/30 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-border/80">
                   <th className="py-3.5 pl-3 pr-1 sm:pl-4 w-10" aria-hidden />
@@ -1267,6 +1285,7 @@ export default function AdminOrdersPage() {
                   <th className="py-3.5 px-3 sm:px-4 font-medium w-[11%]">Items</th>
                   <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[11%]">Tipo</th>
                   <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[12%]">Estado</th>
+                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[11%]">Pago</th>
                   <th className="py-3.5 px-3 sm:px-4 text-right font-medium whitespace-nowrap w-[12%]">Total</th>
                   <th className="py-3.5 px-3 sm:px-4 font-medium w-[14%]">Fecha</th>
                   <th className="py-3.5 pl-3 pr-4 sm:pr-5 text-center font-medium w-[72px]">Acc.</th>
@@ -1333,6 +1352,11 @@ export default function AdminOrdersPage() {
                             )}
                           </div>
                         </td>
+                        <td className="py-3 px-3 sm:px-4 align-middle text-center">
+                          <div className="flex justify-center items-center min-h-[2.5rem]">
+                            <PaymentSettlementBadge paymentStatus={o.payment_status} />
+                          </div>
+                        </td>
                         <td className="py-3 px-3 sm:px-4 align-middle text-right font-semibold tabular-nums text-xs sm:text-sm whitespace-nowrap text-foreground">
                           ₲{Number(o.total || 0).toLocaleString("es-PY")}
                         </td>
@@ -1360,7 +1384,7 @@ export default function AdminOrdersPage() {
                       </tr>
                       {open && (
                         <tr className="bg-muted/15">
-                          <td colSpan={9} className="p-0 border-t border-border/60">
+                          <td colSpan={10} className="p-0 border-t border-border/60">
                             <div className="px-3 py-4 sm:px-5 sm:py-5 border-l-[3px] border-primary/35 bg-muted/10">
                               {renderOrderDetail(o)}
                             </div>

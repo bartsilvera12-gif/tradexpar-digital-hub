@@ -107,6 +107,7 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
     .from("orders")
     .select(
       `id, total, status, created_at, checkout_type, affiliate_ref, external_order_url,
+       payment_status,
        customer_name, customer_email, customer_phone,
        customer_city_code, customer_city_name, customer_dropi_city_code,
        order_items(*)`
@@ -127,6 +128,10 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
       created_at: String(r.created_at),
       checkout_type: r.checkout_type as string | undefined,
       external_order_url: r.external_order_url != null ? String(r.external_order_url) : null,
+      payment_status:
+        r.payment_status != null && String(r.payment_status).trim() !== ""
+          ? String(r.payment_status).trim()
+          : undefined,
       customer: {
         name: String(r.customer_name ?? ""),
         email: r.customer_email ? String(r.customer_email) : undefined,

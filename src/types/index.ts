@@ -107,6 +107,8 @@ export interface Order {
   shipping_fee?: number;
   /** Etiqueta de la opción elegida (p. ej. entrega 24 h / 48 h). */
   shipping_option?: string | null;
+  /** Pasarela de pago: típicamente `pending` hasta webhook / sync; `paid` | `approved` si el cobro ingresó. */
+  payment_status?: string | null;
   customer: {
     name: string;
     email?: string;

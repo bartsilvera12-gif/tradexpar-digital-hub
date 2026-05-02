@@ -15,6 +15,10 @@ import { withAffiliateRef } from "@/lib/affiliate";
 const HERO_IMAGE_URL =
   "https://res.cloudinary.com/drupicep5/image/upload/v1777298367/f56bf9d5-0a1f-45e9-94a4-868d74c98f5d.png";
 
+/** Banner promocional bajo el hero (Distribuidora Digital / branding). */
+const PROMO_BANNER_URL =
+  "https://res.cloudinary.com/drupicep5/image/upload/v1777730635/a17a78c3-5f91-418e-bb92-93a45739fad2.png";
+
 const benefits = [
   { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
   { icon: Shield, title: "100% Seguro", desc: "Pagos protegidos y verificados" },
@@ -84,7 +88,7 @@ export default function HomePage() {
       {/* Banner promocional */}
       <section className="w-full max-w-[100vw] overflow-hidden">
         <img
-          src="https://res.cloudinary.com/drupicep5/image/upload/v1776343515/tradexpar_enhanced_v2_i5vlxm.png"
+          src={PROMO_BANNER_URL}
           alt="Promoción Tradexpar"
           className="w-full h-auto max-w-full block"
           sizes="100vw"

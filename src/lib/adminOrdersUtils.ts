@@ -32,6 +32,19 @@ export const ITEM_STATUSES_DROPI = [
   "cancelled",
 ] as const;
 
+/** Cobro vía pasarela (panel pedidos): acreditado vs pendiente. */
+export function paymentSettlementLabel(status: string | null | undefined): "Abonado" | "Pendiente" {
+  const s = (status ?? "").toLowerCase().trim();
+  if (s === "paid" || s === "approved") return "Abonado";
+  return "Pendiente";
+}
+
+export function paymentSettlementBadgeClass(label: "Abonado" | "Pendiente"): string {
+  return label === "Abonado"
+    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100"
+    : "border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-100";
+}
+
 export function isDropiLine(it: OrderLineItem): boolean {
   return it.product_source_type === "dropi" || it.external_provider === "dropi";
 }
