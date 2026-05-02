@@ -21,6 +21,15 @@ export function deriveCheckoutTypeFromItems(
   return "mixed";
 }
 
+/** True si el carrito incluye al menos un ítem que requiere cobertura de entrega extendida (checkout filtra ciudades). */
+export function cartHasDropiItems(items: CartItem[]): boolean {
+  return items.some(
+    (i) =>
+      i.product?.product_source_type === "dropi" ||
+      String(i.product?.external_provider ?? "").trim().toLowerCase() === "dropi"
+  );
+}
+
 function isDiscountWindowActive(product: Product, now = new Date()): boolean {
   if (!product.discount_type || !product.discount_value || product.discount_value <= 0) return false;
   const startsAt = product.discount_starts_at ? new Date(product.discount_starts_at) : null;

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
-import { deriveCheckoutTypeFromItems } from "@/lib/productHelpers";
+import { cartHasDropiItems, deriveCheckoutTypeFromItems } from "@/lib/productHelpers";
 import { useAffiliateBuyerDiscount } from "@/contexts/AffiliateBuyerDiscountContext";
 import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
@@ -46,7 +46,7 @@ function legacyParaguayCityOptions(): ParaguayCity[] {
   return PAGOPAR_CIUDADES_PY.map((c, i) => ({
     id: `legacy-${c.code}`,
     name: c.label,
-    department: "Lista corta PagoPar",
+    department: "Departamento Central",
     pagopar_city_code: c.code,
     sort_order: i,
   }));
@@ -79,11 +79,16 @@ export default function CheckoutPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Pedido creado, pendiente de iniciar pago con PagoPar. */
+  /** Pedido creado, pendiente de redirigir al pago. */
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  /** Aviso si la ciudad no tiene mapeo Dropi (solo carritos con líneas Dropi / mixtas). */
-  const [dropiCityHint, setDropiCityHint] = useState<string | null>(null);
+  /**
+   * Ciudades con cobertura de entrega (solo carritos con ítems que la requieren). `null` = aún no calculado o no aplica filtro.
+   */
+  const [deliveryFilteredCities, setDeliveryFilteredCities] = useState<ParaguayCity[] | null>(null);
+  /** Código interno de entrega por ciudad (solo cuando aplica filtro de cobertura). */
+  const [cityIdToDeliveryCode, setCityIdToDeliveryCode] = useState<Record<string, string>>({});
+  const [coverageLoading, setCoverageLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,15 +115,69 @@ export default function CheckoutPage() {
     };
   }, []);
 
+  const needsDeliveryCoverageFilter = useMemo(() => cartHasDropiItems(items), [items]);
+
+  useEffect(() => {
+    if (!needsDeliveryCoverageFilter || cities.length === 0) {
+      setDeliveryFilteredCities(null);
+      setCityIdToDeliveryCode({});
+      setCoverageLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCoverageLoading(true);
+    setDeliveryFilteredCities(null);
+
+    void (async () => {
+      const acc: { city: ParaguayCity; code: string }[] = [];
+      await Promise.all(
+        cities.map(async (city) => {
+          try {
+            const r = await api.checkDropiCityMapping({
+              pagopar_code: city.pagopar_city_code,
+              city_name: `${city.name}, ${city.department}`,
+            });
+            if (!cancelled && r.ok === true && typeof r.dropi_city_code === "string" && r.dropi_city_code.trim() !== "") {
+              acc.push({ city, code: r.dropi_city_code.trim() });
+            }
+          } catch {
+            /* ciudad omitida */
+          }
+        })
+      );
+      if (cancelled) return;
+      const map: Record<string, string> = {};
+      acc.forEach(({ city, code }) => {
+        map[city.id] = code;
+      });
+      acc.sort((a, b) => {
+        const d = a.city.department.localeCompare(b.city.department, "es");
+        if (d !== 0) return d;
+        return a.city.sort_order - b.city.sort_order;
+      });
+      setCityIdToDeliveryCode(map);
+      setDeliveryFilteredCities(acc.map((x) => x.city));
+      setCoverageLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [needsDeliveryCoverageFilter, cities]);
+
   const citiesByDepartment = useMemo(() => {
+    const source = needsDeliveryCoverageFilter ? (deliveryFilteredCities ?? []) : cities;
     const m = new Map<string, ParaguayCity[]>();
-    for (const c of cities) {
+    for (const c of source) {
       const arr = m.get(c.department) ?? [];
       arr.push(c);
       m.set(c.department, arr);
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "es"));
-  }, [cities]);
+  }, [needsDeliveryCoverageFilter, cities, deliveryFilteredCities]);
+
+  const coverageEmpty =
+    needsDeliveryCoverageFilter && !coverageLoading && deliveryFilteredCities !== null && deliveryFilteredCities.length === 0;
 
   useEffect(() => {
     if (!user) return;
@@ -157,43 +216,11 @@ export default function CheckoutPage() {
   const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
 
   useEffect(() => {
-    let cancelled = false;
-    const ct = checkoutType ?? "tradexpar";
-    if (!form.cityId || (ct !== "dropi" && ct !== "mixed")) {
-      setDropiCityHint(null);
-      return;
+    if (!needsDeliveryCoverageFilter || !deliveryFilteredCities) return;
+    if (form.cityId && !deliveryFilteredCities.some((c) => c.id === form.cityId)) {
+      setForm((prev) => ({ ...prev, cityId: "" }));
     }
-    const row = cities.find((c) => c.id === form.cityId);
-    if (!row) {
-      setDropiCityHint(null);
-      return;
-    }
-    void api
-      .checkDropiCityMapping({
-        pagopar_code: row.pagopar_city_code,
-        city_name: `${row.name}, ${row.department}`,
-      })
-      .then((r) => {
-        if (cancelled) return;
-        if (r.ok === true) {
-          setDropiCityHint(null);
-          return;
-        }
-        if (r.reason === "missing_dropi_city_mapping" && r.strict_mode === true) {
-          setDropiCityHint(
-            "Esta ciudad requiere confirmación manual de envío. No disponible para envío automático con Dropi hasta mapear la ciudad."
-          );
-        } else {
-          setDropiCityHint(null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setDropiCityHint(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [form.cityId, checkoutType, cities]);
+  }, [needsDeliveryCoverageFilter, deliveryFilteredCities, form.cityId]);
 
   /**
    * Sin `forma_pago`, el POST usa el default del servidor (`PAGOPAR_FORMA_PAGO`, típicamente 9).
@@ -222,7 +249,7 @@ export default function CheckoutPage() {
       navigate(`/success?order_id=${oid}&ref=${payment.ref}`);
       return true;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "No se pudo iniciar el pago con PagoPar");
+      setError(err instanceof Error ? err.message : "No se pudo iniciar el pago.");
       return false;
     } finally {
       setPaying(false);
@@ -270,6 +297,17 @@ export default function CheckoutPage() {
       if (!form.cityId) {
         throw new Error("Seleccioná una ciudad.");
       }
+      if (needsDeliveryCoverageFilter) {
+        if (coverageLoading || deliveryFilteredCities === null) {
+          throw new Error("Esperá un momento mientras verificamos las zonas de entrega disponibles.");
+        }
+        if (
+          coverageEmpty ||
+          !cityIdToDeliveryCode[form.cityId]
+        ) {
+          throw new Error("Actualmente no contamos con cobertura para la ciudad seleccionada.");
+        }
+      }
       const cityRow = cities.find((c) => c.id === form.cityId);
       if (!cityRow) {
         throw new Error("Ciudad no válida. Recargá la página.");
@@ -298,6 +336,10 @@ export default function CheckoutPage() {
           address: form.address.trim(),
           city_code: cityCode,
           city_name: cityNameForOrder,
+          dropi_city_code:
+            needsDeliveryCoverageFilter && cityIdToDeliveryCode[form.cityId]
+              ? cityIdToDeliveryCode[form.cityId]
+              : undefined,
           address_reference: form.addressReference.trim() || undefined,
         },
         location_url,
@@ -352,12 +394,22 @@ export default function CheckoutPage() {
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold text-foreground">Datos del cliente</h2>
                 <p className="text-xs text-muted-foreground">
-                  Completá los datos para el envío, la facturación y el pago con PagoPar.
+                  Completá los datos para el envío, la facturación y el pago.
                 </p>
                 {!citiesFromDb && (
                   <p className="text-xs text-amber-700 dark:text-amber-400/90">
-                    No se cargaron las ciudades desde la base: usando lista corta PagoPar. Ejecutá en Supabase{" "}
-                    <code className="text-[0.7rem] rounded bg-muted px-1">tradexpar_paraguay_cities.sql</code> y el seed.
+                    Estamos usando una lista reducida de ciudades. Si no ves la tuya, intentá más tarde o contactanos.
+                  </p>
+                )}
+                {coverageEmpty && (
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-200 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 [text-wrap:balance]">
+                    No hay cobertura disponible para los productos seleccionados.
+                  </p>
+                )}
+                {needsDeliveryCoverageFilter && coverageLoading && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" aria-hidden />
+                    Verificando zonas de entrega disponibles…
                   </p>
                 )}
               </div>
@@ -443,12 +495,13 @@ export default function CheckoutPage() {
                 <Select
                   value={form.cityId || "__none"}
                   onValueChange={(v) => setForm({ ...form, cityId: v === "__none" ? "" : v })}
+                  disabled={coverageLoading || coverageEmpty}
                 >
                   <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
-                    <SelectValue placeholder="Seleccionar ciudad" />
+                    <SelectValue placeholder="Seleccioná tu ciudad de entrega" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="__none">Seleccionar ciudad</SelectItem>
+                    <SelectItem value="__none">Seleccioná tu ciudad de entrega</SelectItem>
                     {citiesByDepartment.map(([dept, list]) => (
                       <SelectGroup key={dept}>
                         <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
@@ -463,6 +516,15 @@ export default function CheckoutPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {needsDeliveryCoverageFilter &&
+                  !coverageLoading &&
+                  !coverageEmpty &&
+                  deliveryFilteredCities !== null &&
+                  deliveryFilteredCities.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1.5 [text-wrap:balance]">
+                      Mostramos únicamente ciudades disponibles para entrega.
+                    </p>
+                  )}
               </div>
 
               <div>
@@ -614,22 +676,17 @@ export default function CheckoutPage() {
           </div>
 
           <div className="lg:col-span-2 space-y-4">
-            {dropiCityHint && (
-              <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100 text-sm [text-wrap:balance]">
-                {dropiCityHint}
-              </div>
-            )}
             {error && (
               <div className="p-4 rounded-xl bg-destructive/10 text-destructive text-sm">{error}</div>
             )}
             <button
               type="submit"
-              disabled={loading || paying || items.length === 0}
+              disabled={loading || paying || items.length === 0 || coverageLoading || coverageEmpty}
               className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 gradient-celeste text-white font-semibold rounded-xl hover:opacity-90 active:opacity-95 transition-opacity disabled:opacity-60 touch-manipulation"
             >
               {loading || paying ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" /> {paying ? "Abriendo PagoPar…" : "Procesando..."}
+                  <Loader2 className="h-5 w-5 animate-spin" /> {paying ? "Abriendo el pago…" : "Procesando..."}
                 </>
               ) : (
                 "Confirmar y pagar"
@@ -642,7 +699,7 @@ export default function CheckoutPage() {
       {pendingOrderId && (
         <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground max-w-5xl mx-auto lg:mx-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="min-w-0">
-            El pedido ya está registrado. Si no se abrió PagoPar, podés reintentar el enlace de pago.
+            El pedido ya está registrado. Si no se abrió la pasarela de pago, podés reintentar el enlace.
           </p>
           <Button
             type="button"
@@ -653,7 +710,7 @@ export default function CheckoutPage() {
             onClick={() => void runCreatePaymentAndRedirect({ orderId: pendingOrderId })}
           >
             {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Ir a PagoPar
+            Ir a pagar
           </Button>
         </div>
       )}
