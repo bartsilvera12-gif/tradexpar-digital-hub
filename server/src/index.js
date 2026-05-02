@@ -44,6 +44,7 @@ import {
 } from "./pagopar.js";
 import { registerDropiRoutes } from "./integrations/dropi/routes.js";
 import { createDropiOrderForInternalOrder } from "./integrations/dropi/createOrderForInternal.js";
+import { mapPagoparToDropi, isStrictPagoparToDropiMapping } from "./integrations/dropi/mapPagoparToDropi.js";
 import { registerFastraxRoutes } from "./integrations/fastrax/routes.js";
 import { createFastraxOrderForInternalOrder } from "./integrations/fastrax/createOrderForInternal.js";
 import { createApiKeyMiddleware } from "./middleware/apiKey.js";
@@ -817,6 +818,25 @@ app.get("/api/public/pagopar/payment-methods", apiKeyMiddleware, async (_req, re
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     });
+  }
+});
+
+/**
+ * GET /api/public/dropi/city-mapping?pagopar_code=&city_name=
+ * Misma `x-api-key` que el resto de `/api/public/*`. Usado por checkout para advertir ciudades sin mapeo Dropi.
+ */
+app.get("/api/public/dropi/city-mapping", apiKeyMiddleware, (req, res) => {
+  try {
+    const code = String(req.query.pagopar_code ?? "").trim();
+    const cityName = String(req.query.city_name ?? "").trim();
+    const r = mapPagoparToDropi(code || null, cityName || null);
+    return res.json({
+      ...r,
+      strict_mode: isStrictPagoparToDropiMapping(),
+    });
+  } catch (e) {
+    console.error("[dropi/city-mapping]", e);
+    return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }
 });
 

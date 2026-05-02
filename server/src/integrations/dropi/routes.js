@@ -298,7 +298,7 @@ export function registerDropiRoutes(app) {
           }, null)
         );
       }
-      if (mapBefore && !force) {
+      if (mapBefore && dropiMapBlocksRecreate(mapBefore) && !force) {
         return res.json(
           jsonMapResponse(mapBefore, orderId, {
             dropiCreated: mSt === "succeeded" && Boolean(mapBefore.dropi_order_id),

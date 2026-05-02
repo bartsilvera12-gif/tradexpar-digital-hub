@@ -74,6 +74,10 @@ export interface CreateOrderPayload {
     address?: string;
     /** Código de ciudad PagoPar (string, p. ej. "1"). */
     city_code?: string;
+    /** Nombre legible de ciudad (departamento) para mapeo Dropi. */
+    city_name?: string;
+    /** Override manual: código ciudad/sucursal válido en Dropi (BD / admin). */
+    dropi_city_code?: string;
     /** Referencia de dirección (opcional): entre calles, piso, etc. */
     address_reference?: string;
   };
@@ -110,6 +114,9 @@ export interface Order {
     document?: string;
     address?: string;
     city_code?: string;
+    /** Guardado en checkout (mapeo Dropi). */
+    city_name?: string;
+    dropi_city_code?: string;
     address_reference?: string;
   };
 }

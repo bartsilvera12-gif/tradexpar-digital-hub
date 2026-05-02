@@ -339,3 +339,84 @@ export async function fetchDropiBridgeGetOrderByDropiId(dropiOrderId) {
   }
   return /** @type {Record<string, unknown>} */ (parsed && typeof parsed === "object" ? parsed : {});
 }
+
+/**
+ * Intenta listar ciudades / sucursales vía bridge (rutas comunes). No lanza.
+ * `DROPI_BRIDGE_CITIES_PATH` = segmentos separados por coma (default: `cities,city-list,branches,locations`).
+ * @returns {Promise<{ ok: true, endpoint: string, raw: unknown, suggested_city_codes: string[] } | { ok: false, reason: string, endpoints_tried?: string[] }>}
+ */
+export async function fetchDropiBridgeCitiesList() {
+  const base = resolveBridgeBaseUrl();
+  const key = envTrim("DROPI_BRIDGE_KEY");
+  if (!base || !key) {
+    return { ok: false, reason: "bridge_not_configured" };
+  }
+  const paths = String(process.env.DROPI_BRIDGE_CITIES_PATH ?? "cities,city-list,branches,locations")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  /** @type {string[]} */
+  const endpoints_tried = [];
+
+  /**
+   * @param {unknown} parsed
+   * @returns {string[]}
+   */
+  function extractCityCodes(parsed) {
+    /** @type {Set<string>} */
+    const codes = new Set();
+    const push = (v) => {
+      if (v == null) return;
+      const s = String(v).trim();
+      if (s) codes.add(s);
+    };
+    if (Array.isArray(parsed)) {
+      for (const row of parsed) {
+        if (row && typeof row === "object" && !Array.isArray(row)) {
+          const o = /** @type {Record<string, unknown>} */ (row);
+          push(o.code ?? o.city_code ?? o.branch_code ?? o.id);
+        }
+      }
+      return [...codes];
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const root = /** @type {Record<string, unknown>} */ (parsed);
+      const objs = root.objects ?? root.data ?? root.cities ?? root.branches ?? root.rows;
+      if (Array.isArray(objs)) {
+        for (const row of objs) {
+          if (row && typeof row === "object" && !Array.isArray(row)) {
+            const o = /** @type {Record<string, unknown>} */ (row);
+            push(o.code ?? o.city_code ?? o.branch_code ?? o.id);
+          }
+        }
+      }
+    }
+    return [...codes];
+  }
+
+  for (const seg of paths) {
+    const url = `${base}/${seg.replace(/^\/+/, "").replace(/\/+$/, "")}`;
+    endpoints_tried.push(url);
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: bridgeHeaders(key),
+      });
+      const text = await res.text();
+      let parsed;
+      try {
+        parsed = text ? JSON.parse(text) : {};
+      } catch {
+        continue;
+      }
+      if (!res.ok) continue;
+      const suggested_city_codes = extractCityCodes(parsed);
+      if (suggested_city_codes.length > 0 || (parsed && typeof parsed === "object" && parsed.objects != null)) {
+        return { ok: true, endpoint: url, raw: parsed, suggested_city_codes };
+      }
+    } catch {
+      /* siguiente path */
+    }
+  }
+  return { ok: false, reason: "no_cities_endpoint_or_empty", endpoints_tried };
+}

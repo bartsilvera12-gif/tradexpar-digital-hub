@@ -247,6 +247,22 @@ export const api = {
     ),
 
   /**
+   * Ciudad checkout vs mapeo Dropi (server `mapPagoparToDropi`). Misma `x-api-key` que `/api/public/*`.
+   */
+  checkDropiCityMapping: (params: { pagopar_code: string; city_name?: string }) => {
+    const q = new URLSearchParams();
+    q.set("pagopar_code", params.pagopar_code);
+    if (params.city_name?.trim()) q.set("city_name", params.city_name.trim());
+    return apiFetch<{
+      ok: boolean;
+      dropi_city_code?: string;
+      reason?: string;
+      strict_mode?: boolean;
+      pagopar_city_code?: string;
+    }>(`/api/public/dropi/city-mapping?${q.toString()}`);
+  },
+
+  /**
    * Panel pedidos: estado Dropi en `dropi_order_map` (mismo `x-api-key` que otras APIs Node).
    */
   getAdminOrderDropiStatus: (orderId: string) =>

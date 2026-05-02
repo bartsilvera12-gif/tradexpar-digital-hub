@@ -53,6 +53,8 @@ export async function createCheckoutOrder(payload: CreateOrderPayload): Promise<
     p_customer_city_code: payload.customer.city_code?.trim() || null,
     p_customer_address_reference: payload.customer.address_reference?.trim() || null,
     p_shipping_option: payload.shipping_option ?? "48h",
+    p_customer_city_name: payload.customer.city_name?.trim() || null,
+    p_customer_dropi_city_code: payload.customer.dropi_city_code?.trim() || null,
   });
 
   if (error) throw error;
@@ -72,6 +74,8 @@ export async function createCheckoutOrder(payload: CreateOrderPayload): Promise<
       document: cust.document ? String(cust.document) : undefined,
       address: cust.address ? String(cust.address) : undefined,
       city_code: cust.city_code ? String(cust.city_code) : undefined,
+      city_name: cust.city_name ? String(cust.city_name) : undefined,
+      dropi_city_code: cust.dropi_city_code ? String(cust.dropi_city_code) : undefined,
       address_reference: cust.address_reference ? String(cust.address_reference) : undefined,
     },
     items: payload.items,
@@ -104,6 +108,7 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
     .select(
       `id, total, status, created_at, checkout_type, affiliate_ref, external_order_url,
        customer_name, customer_email, customer_phone,
+       customer_city_code, customer_city_name, customer_dropi_city_code,
        order_items(*)`
     )
     .order("created_at", { ascending: false });
@@ -126,6 +131,9 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
         name: String(r.customer_name ?? ""),
         email: r.customer_email ? String(r.customer_email) : undefined,
         phone: r.customer_phone ? String(r.customer_phone) : undefined,
+        city_code: r.customer_city_code != null ? String(r.customer_city_code) : undefined,
+        city_name: r.customer_city_name != null ? String(r.customer_city_name) : undefined,
+        dropi_city_code: r.customer_dropi_city_code != null ? String(r.customer_dropi_city_code) : undefined,
       },
       items,
       order_kind: deriveOrderKind(items),

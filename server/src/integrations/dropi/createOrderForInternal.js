@@ -9,9 +9,6 @@ import { mapPagoparToDropi } from "./mapPagoparToDropi.js";
 import { normalizeDropiItemForBridge } from "./normalizeDropiItemForBridge.js";
 import { splitDropiPayloadByItem } from "./splitDropiPayloadByItem.js";
 
-/** `false` = mismo comportamiento que antes del mapeo PagoPar→Dropi (solo `customer_city_code`). Una línea para revertir. */
-const USE_DROPI_CITY_CODE_MAP = true;
-
 /** `false` = un solo POST al bridge con todas las líneas Dropi (antes del split). Una línea para revertir. */
 const DROPI_SPLIT_ORDERS_BY_ITEM = true;
 
@@ -371,9 +368,8 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
   const { data: orderRow, error: orderErr } = await sb
     .from("orders")
     .select(
-      "id, checkout_type, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, customer_address_reference"
+      "id, checkout_type, customer_name, customer_email, customer_phone, customer_document, customer_address, customer_city_code, customer_city_name, customer_dropi_city_code, customer_address_reference"
     )
-    // Tras migración SQL (customer_city_name, customer_dropi_city_code): añadilas al select de arriba.
     .eq("id", oid)
     .maybeSingle();
 
@@ -496,21 +492,88 @@ export async function createDropiOrderForInternalOrder(sb, orderId, options = {}
 
   const pathSeg = envTrim("DROPI_BRIDGE_ORDER_PATH") || "order";
   const minProfit = dropiMinProfitGs();
-  const rawCityCode = orderRow.customer_city_code != null ? String(orderRow.customer_city_code) : "";
-  /** Si migrás orders.customer_dropi_city_code y lo incluís en el select, Dropi usa ese código directo. */
-  const dropiOverride =
+  const manualDropi =
     orderRow.customer_dropi_city_code != null && String(orderRow.customer_dropi_city_code).trim() !== ""
       ? String(orderRow.customer_dropi_city_code).trim()
       : "";
-  const dropiCityCode =
-    dropiOverride ||
-    (USE_DROPI_CITY_CODE_MAP
-      ? mapPagoparToDropi(orderRow.customer_city_code, orderRow.customer_city_name) || rawCityCode
-      : rawCityCode);
+
+  let dropiCityCode = "";
+  if (manualDropi) {
+    dropiCityCode = manualDropi;
+  } else {
+    const mapped = mapPagoparToDropi(orderRow.customer_city_code, orderRow.customer_city_name);
+    if (!mapped.ok) {
+      const msg = "Ciudad sin mapeo Dropi. Pedido pagado, requiere despacho manual.";
+      const gatePayload = {
+        tradexpar_order_id: oid,
+        gate: "missing_dropi_city_mapping",
+        customer_city_code: orderRow.customer_city_code ?? null,
+        customer_city_name: orderRow.customer_city_name ?? null,
+      };
+      const mu = await upsertMap(sb, {
+        order_id: oid,
+        status: "pending_manual",
+        dropi_status: "pending_manual",
+        last_error: msg,
+        error: msg,
+        payload: gatePayload,
+        response: null,
+        updated_at: utcNowIso(),
+      });
+      if (mu) {
+        return { ok: false, skipped: false, order_id: oid, context: "pending_manual_map_upsert", ...shapeError(mu) };
+      }
+      console.warn("[dropi/order-create] ciudad sin mapeo Dropi (no se llama al bridge)", {
+        order_id: oid,
+        customer_city_code: orderRow.customer_city_code,
+      });
+      return {
+        ok: true,
+        skipped: true,
+        reason: "missing_dropi_city_mapping",
+        order_id: oid,
+        message: msg,
+      };
+    }
+    dropiCityCode = String(mapped.dropi_city_code ?? "").trim();
+  }
+
   console.log("[DROPI CITY MAP]", {
     original: orderRow.customer_city_code,
+    manual_dropi_override: Boolean(manualDropi),
     mapped: dropiCityCode,
   });
+
+  if (!String(dropiCityCode).trim()) {
+    const msg = "Ciudad sin mapeo Dropi. Pedido pagado, requiere despacho manual.";
+    const gatePayload = {
+      tradexpar_order_id: oid,
+      gate: "missing_dropi_city_mapping",
+      customer_city_code: orderRow.customer_city_code ?? null,
+      customer_city_name: orderRow.customer_city_name ?? null,
+    };
+    const mu = await upsertMap(sb, {
+      order_id: oid,
+      status: "pending_manual",
+      dropi_status: "pending_manual",
+      last_error: msg,
+      error: msg,
+      payload: gatePayload,
+      response: null,
+      updated_at: utcNowIso(),
+    });
+    if (mu) {
+      return { ok: false, skipped: false, order_id: oid, context: "pending_manual_map_upsert", ...shapeError(mu) };
+    }
+    return {
+      ok: true,
+      skipped: true,
+      reason: "missing_dropi_city_mapping",
+      order_id: oid,
+      message: msg,
+    };
+  }
+
   const baseWithoutItems = {
     tradexpar_order_id: oid,
     payment_confirmed: true,

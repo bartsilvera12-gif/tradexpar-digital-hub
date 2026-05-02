@@ -228,8 +228,9 @@ function OrderDropiCard({ o }: { o: Order }) {
   const dUrl = map && String(map.dropi_order_url ?? "").trim() ? String(map.dropi_order_url).trim() : null;
   const walletFlag = isWalletInsufficient(map, errDetail);
   const dropiStatusNorm = map ? String(map.dropi_status ?? "").trim().toLowerCase() : "";
-  const retryFailedDropi =
-    Boolean(map) && !hasDropiId && dropiStatusNorm === "failed";
+  const pendingManualDropi = dropiStatusNorm === "pending_manual";
+  const retryDropiFromMap =
+    Boolean(map) && !hasDropiId && (dropiStatusNorm === "failed" || pendingManualDropi);
 
   const onCreate = () => {
     setActErr(null);
@@ -295,6 +296,14 @@ function OrderDropiCard({ o }: { o: Order }) {
               Saldo insuficiente en wallet Dropi
             </Badge>
           )}
+          {pendingManualDropi && (
+            <Badge
+              variant="outline"
+              className="text-[9px] border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100"
+            >
+              Pago ok — Dropi manual (ciudad sin mapeo)
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {dUrl && (
@@ -329,7 +338,7 @@ function OrderDropiCard({ o }: { o: Order }) {
           )}
           {!hasDropiId && (
             <Button type="button" size="sm" className="h-7 text-[10px]" disabled={creating} onClick={onCreate}>
-              {creating ? "Creando…" : retryFailedDropi ? "Reintentar pedido Dropi" : "Crear pedido Dropi"}
+              {creating ? "Creando…" : retryDropiFromMap ? "Reintentar pedido Dropi" : "Crear pedido Dropi"}
             </Button>
           )}
         </div>
@@ -349,6 +358,24 @@ function OrderDropiCard({ o }: { o: Order }) {
           <div className="sm:col-span-2">
             <span className="block font-medium text-foreground/80">Detalle</span>
             <span className="text-foreground/90 break-words">{errDetail}</span>
+          </div>
+        )}
+        {(pendingManualDropi ||
+          o.customer?.city_code ||
+          o.customer?.city_name ||
+          o.customer?.dropi_city_code) && (
+          <div className="sm:col-span-2">
+            <span className="block font-medium text-foreground/80">Ciudad en pedido</span>
+            <span className="text-foreground/90 break-words">
+              Checkout/PagoPar: {o.customer?.city_code ?? "—"}
+              {o.customer?.city_name ? ` · ${o.customer.city_name}` : ""}
+              {o.customer?.dropi_city_code ? ` · Dropi (manual): ${o.customer.dropi_city_code}` : ""}
+            </span>
+            {pendingManualDropi && (
+              <span className="block mt-1 text-[10px] text-amber-800 dark:text-amber-200">
+                Actualizá el código Dropi válido en el pedido (`customer_dropi_city_code`) y reintentá.
+              </span>
+            )}
           </div>
         )}
         <div className="sm:col-span-2">

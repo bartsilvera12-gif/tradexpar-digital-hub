@@ -82,6 +82,8 @@ export default function CheckoutPage() {
   /** Pedido creado, pendiente de iniciar pago con PagoPar. */
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  /** Aviso si la ciudad no tiene mapeo Dropi (solo carritos con líneas Dropi / mixtas). */
+  const [dropiCityHint, setDropiCityHint] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +155,45 @@ export default function CheckoutPage() {
   }, [user]);
 
   const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ct = checkoutType ?? "tradexpar";
+    if (!form.cityId || (ct !== "dropi" && ct !== "mixed")) {
+      setDropiCityHint(null);
+      return;
+    }
+    const row = cities.find((c) => c.id === form.cityId);
+    if (!row) {
+      setDropiCityHint(null);
+      return;
+    }
+    void api
+      .checkDropiCityMapping({
+        pagopar_code: row.pagopar_city_code,
+        city_name: `${row.name}, ${row.department}`,
+      })
+      .then((r) => {
+        if (cancelled) return;
+        if (r.ok === true) {
+          setDropiCityHint(null);
+          return;
+        }
+        if (r.reason === "missing_dropi_city_mapping" && r.strict_mode === true) {
+          setDropiCityHint(
+            "Esta ciudad requiere confirmación manual de envío. No disponible para envío automático con Dropi hasta mapear la ciudad."
+          );
+        } else {
+          setDropiCityHint(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDropiCityHint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.cityId, checkoutType, cities]);
 
   /**
    * Sin `forma_pago`, el POST usa el default del servidor (`PAGOPAR_FORMA_PAGO`, típicamente 9).
@@ -235,6 +276,7 @@ export default function CheckoutPage() {
       }
       const cityLabel = `${cityRow.name}, ${cityRow.department}`;
       const cityCode = cityRow.pagopar_city_code;
+      const cityNameForOrder = cityLabel;
       const location_url =
         form.locationUrl.trim() ||
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address.trim()}, ${cityLabel}, Paraguay`)}`;
@@ -255,6 +297,7 @@ export default function CheckoutPage() {
           document: form.document.trim(),
           address: form.address.trim(),
           city_code: cityCode,
+          city_name: cityNameForOrder,
           address_reference: form.addressReference.trim() || undefined,
         },
         location_url,
@@ -571,6 +614,11 @@ export default function CheckoutPage() {
           </div>
 
           <div className="lg:col-span-2 space-y-4">
+            {dropiCityHint && (
+              <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100 text-sm [text-wrap:balance]">
+                {dropiCityHint}
+              </div>
+            )}
             {error && (
               <div className="p-4 rounded-xl bg-destructive/10 text-destructive text-sm">{error}</div>
             )}

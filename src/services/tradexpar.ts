@@ -803,6 +803,8 @@ export const tradexpar = {
       p_customer_city_code: payload.customer.city_code?.trim() || null,
       p_customer_address_reference: payload.customer.address_reference?.trim() || null,
       p_shipping_option: payload.shipping_option ?? "48h",
+      p_customer_city_name: payload.customer.city_name?.trim() || null,
+      p_customer_dropi_city_code: payload.customer.dropi_city_code?.trim() || null,
     });
 
     if (error) throw new Error(error.message);
@@ -821,6 +823,8 @@ export const tradexpar = {
         document: cust.document ? String(cust.document) : undefined,
         address: cust.address ? String(cust.address) : undefined,
         city_code: cust.city_code ? String(cust.city_code) : undefined,
+        city_name: cust.city_name ? String(cust.city_name) : undefined,
+        dropi_city_code: cust.dropi_city_code ? String(cust.dropi_city_code) : undefined,
         address_reference: cust.address_reference ? String(cust.address_reference) : undefined,
       },
       items: payload.items,
