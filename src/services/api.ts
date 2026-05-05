@@ -92,7 +92,28 @@ function extractApiErrorMessage(body: string): string | null {
   }
 }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+/** Timeout duro client-side: evita que el navegador quede colgado si Node/nginx tardan. */
+const API_DEFAULT_TIMEOUT_MS = 25_000;
+
+function buildSignal(externalSignal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const t =
+    typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+      ? AbortSignal.timeout(timeoutMs)
+      : (() => {
+          const c = new AbortController();
+          setTimeout(() => c.abort(new Error("timeout")), timeoutMs);
+          return c.signal;
+        })();
+  if (!externalSignal) return t;
+  const anyFn = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
+  if (typeof anyFn === "function") return anyFn([externalSignal, t]);
+  return externalSignal;
+}
+
+async function apiFetch<T>(
+  path: string,
+  options?: RequestInit & { timeoutMs?: number }
+): Promise<T> {
   const url = buildPaymentsUrl(path);
   if (import.meta.env.DEV) {
     // Depuración local: URL efectiva hacia el server de pagos
@@ -100,10 +121,25 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     console.info("[payments-api] fetch", options?.method ?? "GET", absoluteUrlForMessage(url));
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...headers, ...options?.headers },
-  });
+  const timeoutMs = Math.max(2_000, Math.min(60_000, options?.timeoutMs ?? API_DEFAULT_TIMEOUT_MS));
+  const signal = buildSignal(options?.signal ?? undefined, timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: { ...headers, ...options?.headers },
+      signal,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("abort") || msg.toLowerCase().includes("timeout")) {
+      throw new Error(
+        `La API tardó más de ${Math.round(timeoutMs / 1000)} s en responder. Reintentá en un momento; si persiste, revisá el estado del backend.`
+      );
+    }
+    throw e instanceof Error ? e : new Error(msg);
+  }
   const text = await res.text().catch(() => "");
   if (!res.ok) {
     const friendly = extractApiErrorMessage(text);
@@ -314,4 +350,32 @@ export const api = {
       `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/invoice`,
       { method: "POST", body: "{}" }
     ),
+
+  /**
+   * Lectura masiva del mapa Dropi para varios pedidos a la vez. Máx. 200 ids;
+   * el endpoint setea `Cache-Control: private, max-age=15`.
+   */
+  getAdminOrdersDropiStatusBulk: (orderIds: string[]) => {
+    const ids = [...new Set(orderIds.filter((s) => typeof s === "string" && s.trim()))]
+      .slice(0, 200)
+      .join(",");
+    return apiFetch<{
+      ok: boolean;
+      statuses: Record<
+        string,
+        { ok: boolean; order_id: string; has_map: boolean; map: Record<string, unknown> | null }
+      >;
+    }>(`/api/admin/orders/dropi/status-bulk?ids=${encodeURIComponent(ids)}`);
+  },
+
+  /** Lectura masiva del mapa Fastrax (igual semántica que el bulk Dropi). */
+  getAdminOrdersFastraxStatusBulk: (orderIds: string[]) => {
+    const ids = [...new Set(orderIds.filter((s) => typeof s === "string" && s.trim()))]
+      .slice(0, 200)
+      .join(",");
+    return apiFetch<{
+      ok: boolean;
+      statuses: Record<string, AdminFastraxStatusResponse>;
+    }>(`/api/admin/orders/fastrax/status-bulk?ids=${encodeURIComponent(ids)}`);
+  },
 };

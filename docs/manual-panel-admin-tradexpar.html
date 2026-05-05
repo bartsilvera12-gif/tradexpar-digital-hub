@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manual de uso — Panel de administración Tradexpar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: hsl(213 63% 17%);
+      --navy-deep: hsl(213 63% 11%);
+      --celeste: hsl(195 89% 47%);
+      --celeste-deep: hsl(195 89% 38%);
+      --celeste-soft: hsl(195 89% 95%);
+      --text: hsl(213 63% 17%);
+      --muted: hsl(215 16% 47%);
+      --border: hsl(220 13% 91%);
+      --paper: hsl(220 20% 97%);
+      --white: #fff;
+      --success: hsl(142 72% 29%);
+      --warning: hsl(38 92% 50%);
+      --danger: hsl(0 72% 51%);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Montserrat", system-ui, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--paper);
+    }
+    @media print {
+      body { background: #fff; }
+      .no-print { display: none !important; }
+      a { color: inherit; text-decoration: none; }
+    }
+    /* PORTADA */
+    .cover {
+      min-height: 270mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 48px 44px;
+      background: linear-gradient(135deg, var(--navy-deep) 0%, var(--navy) 55%, hsl(195 89% 22%) 100%);
+      color: var(--white);
+      page-break-after: always;
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: "";
+      position: absolute;
+      top: -120px; right: -120px;
+      width: 420px; height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(125,211,252,0.35), transparent 65%);
+      pointer-events: none;
+    }
+    .cover::after {
+      content: "";
+      position: absolute;
+      bottom: -140px; left: -80px;
+      width: 360px; height: 360px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 60% 60%, rgba(34,211,238,0.28), transparent 65%);
+      pointer-events: none;
+    }
+    .cover-top { display: flex; align-items: center; justify-content: space-between; }
+    .cover-brand {
+      font-size: 22pt;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+    .cover-brand span { color: #7dd3fc; }
+    .cover-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.30);
+    }
+    .cover-center { position: relative; z-index: 1; }
+    .cover h1 {
+      margin: 0 0 18px;
+      font-size: 38pt;
+      font-weight: 900;
+      letter-spacing: -0.025em;
+      line-height: 1.08;
+      max-width: 520px;
+    }
+    .cover h1 .accent {
+      display: inline-block;
+      background: linear-gradient(90deg, #7dd3fc, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .cover-sub {
+      margin: 0 0 28px;
+      font-size: 13pt;
+      font-weight: 500;
+      opacity: 0.92;
+      max-width: 500px;
+      line-height: 1.55;
+    }
+    .cover-chips { display: flex; flex-wrap: wrap; gap: 10px; max-width: 540px; }
+    .cover-chip {
+      padding: 7px 14px;
+      font-size: 9pt;
+      font-weight: 600;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.22);
+    }
+    .cover-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      font-size: 10pt;
+      opacity: 0.88;
+      position: relative;
+      z-index: 1;
+    }
+    .cover-bottom p { margin: 0; }
+    .cover-bottom .tag { font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 9pt; opacity: 0.7; }
+    /* CONTENIDO */
+    .wrap {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 42px 38px 64px;
+    }
+    .intro {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 28px;
+      border-left: 5px solid var(--celeste);
+    }
+    .intro p { margin: 0 0 8px; }
+    .intro p:last-child { margin-bottom: 0; }
+    h2 {
+      font-size: 17pt;
+      font-weight: 800;
+      color: var(--navy);
+      margin: 40px 0 10px;
+      padding-bottom: 8px;
+      border-bottom: 3px solid var(--celeste);
+      letter-spacing: -0.01em;
+      page-break-after: avoid;
+    }
+    h2:first-of-type { margin-top: 0; }
+    .section-lead {
+      color: var(--muted);
+      font-size: 10pt;
+      margin: 4px 0 18px;
+    }
+    h3 {
+      font-size: 12.5pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 26px 0 8px;
+      page-break-after: avoid;
+    }
+    h4 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--navy-deep);
+      margin: 18px 0 6px;
+      page-break-after: avoid;
+    }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 8px 0 14px; padding-left: 22px; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--navy); }
+    /* ÍNDICE */
+    .toc {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 26px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 14px rgba(15, 42, 71, 0.04);
+    }
+    .toc h2 {
+      margin-top: 0;
+      border-bottom: none;
+      padding-bottom: 0;
+      font-size: 15pt;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toc h2::before {
+      content: "";
+      width: 6px; height: 22px;
+      background: var(--celeste);
+      border-radius: 4px;
+    }
+    .toc ol {
+      margin: 14px 0 0;
+      padding-left: 0;
+      list-style: none;
+      counter-reset: tocitem;
+    }
+    .toc ol li {
+      counter-increment: tocitem;
+      position: relative;
+      padding: 7px 0 7px 42px;
+      font-weight: 600;
+      border-top: 1px dashed var(--border);
+    }
+    .toc ol li:first-child { border-top: none; }
+    .toc ol li::before {
+      content: counter(tocitem, decimal-leading-zero);
+      position: absolute;
+      left: 0; top: 50%;
+      transform: translateY(-50%);
+      width: 30px;
+      text-align: left;
+      font-size: 11pt;
+      font-weight: 800;
+      color: var(--celeste);
+      font-variant-numeric: tabular-nums;
+    }
+    .toc a { color: var(--navy); text-decoration: none; }
+    .toc a:hover { color: var(--celeste); }
+    /* CALLOUTS */
+    .callout {
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-left: 5px solid var(--celeste);
+      background: var(--celeste-soft);
+      page-break-inside: avoid;
+    }
+    .callout p { margin: 0; }
+    .callout .tag {
+      display: block;
+      font-size: 9pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--celeste-deep);
+      margin-bottom: 4px;
+    }
+    .callout.warn {
+      background: hsl(38 92% 95%);
+      border-left-color: var(--warning);
+    }
+    .callout.warn .tag { color: hsl(32 80% 35%); }
+    .callout.danger {
+      background: hsl(0 72% 96%);
+      border-left-color: var(--danger);
+    }
+    .callout.danger .tag { color: hsl(0 65% 42%); }
+    .callout.success {
+      background: hsl(142 72% 94%);
+      border-left-color: var(--success);
+    }
+    .callout.success .tag { color: var(--success); }
+    /* KEYBOARD / PIL */
+    .kbd {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 9.5pt;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      background: hsl(220 14% 94%);
+      border: 1px solid var(--border);
+      color: var(--navy);
+    }
+    .pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      background: var(--celeste-soft);
+      color: var(--celeste-deep);
+      border: 1px solid hsl(195 89% 85%);
+    }
+    .pill.navy { background: hsl(213 63% 94%); color: var(--navy); border-color: hsl(213 63% 82%); }
+    .pill.warn { background: hsl(38 92% 93%); color: hsl(32 80% 35%); border-color: hsl(38 80% 80%); }
+    .pill.danger { background: hsl(0 72% 94%); color: hsl(0 65% 42%); border-color: hsl(0 60% 85%); }
+    .pill.ok { background: hsl(142 72% 92%); color: var(--success); border-color: hsl(142 60% 78%); }
+    /* TABLAS */
+    table.simple {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin: 14px 0;
+      page-break-inside: avoid;
+      background: var(--white);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(15, 42, 71, 0.04);
+    }
+    table.simple th, table.simple td {
+      border: 1px solid var(--border);
+      padding: 9px 11px;
+      text-align: left;
+      vertical-align: top;
+    }
+    table.simple th {
+      background: hsl(213 63% 96%);
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    table.simple tr:nth-child(even) td { background: hsl(220 20% 98%); }
+    /* CARDS */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin: 14px 0;
+      box-shadow: 0 2px 8px rgba(15, 42, 71, 0.04);
+      page-break-inside: avoid;
+    }
+    .card h4 { margin-top: 0; }
+    .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+    .cards-grid .card { margin: 0; }
+    .mini {
+      background: linear-gradient(135deg, hsl(213 63% 97%) 0%, var(--white) 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      page-break-inside: avoid;
+    }
+    .mini .label { font-size: 9pt; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .mini .value { font-size: 13pt; font-weight: 800; color: var(--navy); }
+    /* STEPS */
+    .pasos {
+      counter-reset: paso;
+      list-style: none;
+      padding-left: 0;
+      margin: 12px 0;
+    }
+    .pasos li {
+      position: relative;
+      padding: 4px 0 4px 38px;
+      margin-bottom: 10px;
+      min-height: 26px;
+    }
+    .pasos li::before {
+      counter-increment: paso;
+      content: counter(paso);
+      position: absolute;
+      left: 0; top: 0;
+      width: 26px; height: 26px;
+      line-height: 26px;
+      text-align: center;
+      font-size: 10pt;
+      font-weight: 800;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--celeste), var(--celeste-deep));
+      color: var(--white);
+      box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);
+    }
+    /* UI MOCK — simula captura del panel */
+    .ui-mock {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 14px 0 18px;
+      background: var(--white);
+      box-shadow: 0 4px 14px rgba(15, 42, 71, 0.06);
+      page-break-inside: avoid;
+    }
+    .ui-mock .bar {
+      background: var(--navy-deep);
+      color: #fff;
+      padding: 10px 14px;
+      font-size: 9pt;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: 0.04em;
+    }
+    .ui-mock .bar .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #7dd3fc; display: inline-block;
+    }
+    .ui-mock .body { padding: 14px 16px; font-size: 9.5pt; }
+    .ui-mock .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .ui-mock .row:last-child { border-bottom: none; }
+    .ui-mock .muted { color: var(--muted); }
+    .ui-mock strong { color: var(--navy); }
+    /* SIDEBAR MOCK */
+    .sidebar-mock {
+      background: linear-gradient(180deg, var(--navy-deep), var(--navy));
+      color: #fff;
+      border-radius: 14px;
+      padding: 16px 12px;
+      width: 220px;
+      margin: 10px auto 16px;
+      font-size: 9.5pt;
+      box-shadow: 0 4px 12px rgba(15, 42, 71, 0.18);
+    }
+    .sidebar-mock .brand { font-weight: 900; font-size: 12pt; padding: 4px 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 10px; }
+    .sidebar-mock .brand span { color: #7dd3fc; }
+    .sidebar-mock ul { list-style: none; padding: 0; margin: 0; }
+    .sidebar-mock li { padding: 8px 12px; border-radius: 10px; margin-bottom: 3px; display: flex; align-items: center; gap: 10px; }
+    .sidebar-mock li.active { background: linear-gradient(135deg, var(--celeste), var(--celeste-deep)); font-weight: 700; }
+    .sidebar-mock li .ico { width: 10px; height: 10px; border-radius: 3px; background: rgba(255,255,255,0.35); }
+    .sidebar-mock li.active .ico { background: #fff; }
+    /* UTIL */
+    .section-break { page-break-before: always; }
+    .footer-note {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 9pt;
+      color: var(--muted);
+    }
+    .print-hint {
+      font-size: 10pt;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin: 12px 0;
+    }
+    .note { color: var(--muted); font-size: 9.5pt; }
+    @media print {
+      .section-break { page-break-before: always; }
+      h2 { break-after: avoid; }
+      h3, h4 { break-after: avoid; }
+      .callout, .card, table.simple, .ui-mock, .cards-grid { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<!-- PORTADA -->
+<section class="cover">
+  <div class="cover-top">
+    <div class="cover-brand">TRADE<span>XPAR</span></div>
+    <div class="cover-badge">Uso interno · Equipo administrativo</div>
+  </div>
+  <div class="cover-center">
+    <h1>Manual del <span class="accent">Panel de Administración</span></h1>
+    <p class="cover-sub">Guía paso a paso para administrar la tienda: catálogo, pedidos, clientes y programa de distribuidores. Explicada sin tecnicismos, pensada para el equipo operativo.</p>
+    <div class="cover-chips">
+      <span class="cover-chip">Dashboard</span>
+      <span class="cover-chip">Productos</span>
+      <span class="cover-chip">Pedidos</span>
+      <span class="cover-chip">Usuarios</span>
+      <span class="cover-chip">Distribuidores Digitales</span>
+    </div>
+  </div>
+  <div class="cover-bottom">
+    <div>
+      <p class="tag">Tradexpar · Distribuidora digital</p>
+      <p>Manual de uso interno — Equipo administrativo</p>
+    </div>
+    <div style="text-align:right;">
+      <p class="tag">Versión impresa</p>
+      <p>Revisión 2026</p>
+    </div>
+  </div>
+</section>
+<div class="wrap">
+  <p class="print-hint no-print"><strong>Para imprimir en PDF:</strong> <em>Imprimir → Guardar como PDF</em>, o desde el proyecto ejecutá <span class="kbd">npm run docs:manual-admin-pdf</span>.</p>
+  <div class="intro">
+    <p><strong>¿Para quién es este manual?</strong> Para las personas del equipo que van a usar el panel de administración todos los días: cargar productos, responder consultas de clientes, revisar pedidos, aprobar distribuidores y seguir ventas. No necesitás conocimientos técnicos.</p>
+    <p><strong>¿Cómo leerlo?</strong> Podés ir directo al capítulo que te interese usando el índice. Cada capítulo tiene una explicación general al inicio y después el detalle, campo por campo y botón por botón, con recomendaciones para no cometer errores comunes.</p>
+    <p class="note" style="margin-top:6px;">Este manual <strong>no incluye el módulo de Configuraciones</strong> — ese apartado lo administra el área técnica.</p>
+  </div>
+  <nav class="toc" aria-label="Índice">
+    <h2>Índice del manual</h2>
+    <ol>
+      <li><a href="#acceso">Cómo entrar y salir del panel</a></li>
+      <li><a href="#navegacion">El menú lateral: dónde está cada cosa</a></li>
+      <li><a href="#dashboard">Dashboard: lo primero que ves al entrar</a></li>
+      <li><a href="#productos">Productos: administrar el catálogo de la tienda</a></li>
+      <li><a href="#pedidos">Pedidos: seguimiento y cierre de compras</a></li>
+      <li><a href="#usuarios">Usuarios: clientes registrados en la tienda</a></li>
+      <li><a href="#ddi">Distribuidores Digitales Independientes</a></li>
+      <li><a href="#buenas-practicas">Recomendaciones para el día a día</a></li>
+    </ol>
+  </nav>
+  <!-- 1. ACCESO -->
+  <h2 id="acceso">1. Cómo entrar y salir del panel</h2>
+  <p class="section-lead">Solo el personal autorizado puede ver precios, pedidos y datos de clientes. Protegé siempre tu usuario y contraseña.</p>
+
+  <h3>1.1 Ingresar al panel</h3>
+  <ol class="pasos">
+    <li>Abrí tu navegador (Chrome, Edge o Firefox actualizado) y entrá a la dirección web que te dio la empresa. Normalmente termina con <span class="kbd">/admin/login</span>.</li>
+    <li>Vas a ver una pantalla oscura con el logo <strong>TRADEXPAR</strong> y dos campos. Escribí el <strong>correo</strong> que te asignaron y la <strong>contraseña</strong>. Este usuario es <em>distinto</em> del que usan los clientes de la tienda.</li>
+    <li>Tocá el botón celeste <strong>Iniciar sesión</strong>. Si los datos son correctos, te lleva al Dashboard.</li>
+    <li>Si aparece el mensaje <span class="pill danger">Credenciales inválidas</span>, revisá mayúsculas, minúsculas y espacios. Si tu correo y contraseña están bien pero igual no entrás, avisá al área técnica: las cuentas se habilitan desde el sistema, no podés activarte solo.</li>
+  </ol>
+
+  <h3>1.2 Cerrar sesión al terminar</h3>
+  <p>Cuando termines tu turno, o si vas a dejar la computadora sola, <strong>cerrá sesión siempre</strong>. En el menú lateral, al final de todo, aparece la opción <strong>Cerrar sesión</strong>. Un clic y volvés a la pantalla de ingreso.</p>
+  <div class="callout warn">
+    <span class="tag">Importante</span>
+    <p>No cerrar sesión significa que cualquier persona que use tu PC tiene acceso a precios, pedidos, datos de clientes y al programa de distribuidores. La responsabilidad de lo que se haga con tu usuario es tuya.</p>
+  </div>
+
+  <!-- 2. NAVEGACIÓN -->
+  <h2 id="navegacion">2. El menú lateral: dónde está cada cosa</h2>
+  <p class="section-lead">La columna oscura a la izquierda es tu mapa. El ítem resaltado en celeste es la pantalla en la que estás parado.</p>
+
+  <div class="sidebar-mock">
+    <div class="brand">TRADE<span>XPAR</span></div>
+    <ul>
+      <li class="active"><span class="ico"></span> Dashboard</li>
+      <li><span class="ico"></span> Productos</li>
+      <li><span class="ico"></span> Pedidos</li>
+      <li><span class="ico"></span> Usuarios</li>
+      <li><span class="ico"></span> Distribuidores…</li>
+    </ul>
+  </div>
+
+  <p>Podés <strong>achicar el menú</strong> tocando la flecha que aparece al lado del logo: así gana espacio la pantalla cuando estás trabajando con tablas grandes. Con otro clic vuelve a expandirse.</p>
+
+  <table class="simple">
+    <thead>
+      <tr><th>Opción del menú</th><th>Qué hacés ahí</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Dashboard</strong></td><td>Ver de un vistazo el movimiento del negocio: ventas, pedidos, alertas de stock bajo y accesos rápidos.</td></tr>
+      <tr><td><strong>Productos</strong></td><td>Cargar, editar o eliminar artículos del catálogo. Incluye una pestaña especial para importar desde Fastrax e importar productos sueltos de Dropi.</td></tr>
+      <tr><td><strong>Pedidos</strong></td><td>Revisar cada compra hecha en la tienda: qué pagó el cliente, adónde va, el estado de cada producto del pedido y cuándo cerrar la venta.</td></tr>
+      <tr><td><strong>Usuarios</strong></td><td>Gestionar las cuentas de los <em>clientes</em> de la tienda: editar datos, cambiarles la contraseña o eliminar la cuenta.</td></tr>
+      <tr><td><strong>Distribuidores Digitales Independientes</strong></td><td>Administrar el programa de distribuidores: solicitudes nuevas, reglas de comisiones y descuentos, materiales para que vendan y reportes.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="tag">Dato útil</span>
+    <p>En el menú podés leer la frase completa “Distribuidores Digitales Independientes” o ver un ícono si achicaste el menú. Pasando el mouse sobre el ícono aparece el nombre.</p>
+  </div>
+
+  <div class="section-break"></div>
+
+  <!-- 3. DASHBOARD -->
+  <h2 id="dashboard">3. Dashboard: lo primero que ves al entrar</h2>
+  <p class="section-lead">Es tu tablero de control. Desde acá podés detectar urgencias antes de entrar a cada módulo en detalle.</p>
+
+  <h3>3.1 La campanita de alertas de stock</h3>
+  <p>Arriba a la derecha del Dashboard hay un <strong>ícono de campana</strong>. Si tiene un número rojo, significa que hay productos con <strong>stock bajo o sin stock</strong> (5 unidades o menos).</p>
+  <ul>
+    <li>Tocá la campana para ver la lista de productos con poco stock. Los que todavía no viste aparecen con un puntito celeste (son los "sin leer").</li>
+    <li>Si un producto está <span class="pill danger">Sin unidades</span>, la tienda no lo puede vender hasta que lo repongas.</li>
+    <li>Podés <strong>archivar</strong> una alerta haciendo clic encima para no verla más, o tocar <strong>Marcar como leídas</strong> para limpiar todas de una.</li>
+    <li>Cuando repongas stock desde el módulo de <strong>Productos</strong>, las alertas correspondientes desaparecen solas.</li>
+  </ul>
+  <div class="callout warn">
+    <span class="tag">Ojo</span>
+    <p>Archivar una alerta <em>no</em> repone el stock: solo la saca del listado. El producto sigue con pocas unidades hasta que lo edites en el módulo Productos.</p>
+  </div>
+
+  <h3>3.2 Las tarjetas de números (indicadores)</h3>
+  <p>Debajo del título vas a ver unas tarjetas grandes con métricas del negocio. Este es el resumen:</p>
+  <div class="cards-grid">
+    <div class="mini"><div class="label">Ventas del mes</div><div class="value">Gs. — —</div><p class="note" style="margin:6px 0 0;">Total facturado desde el 1º del mes hasta hoy.</p></div>
+    <div class="mini"><div class="label">Clientes registrados</div><div class="value">— cuentas</div><p class="note" style="margin:6px 0 0;">Personas que abrieron cuenta en la tienda.</p></div>
+    <div class="mini"><div class="label">Ingresos acumulados</div><div class="value">Gs. — —</div><p class="note" style="margin:6px 0 0;">Suma total histórica de todos los pedidos.</p></div>
+    <div class="mini"><div class="label">Productos activos</div><div class="value">—</div><p class="note" style="margin:6px 0 0;">Cantidad de artículos publicados.</p></div>
+    <div class="mini"><div class="label">Stock total</div><div class="value">— u.</div><p class="note" style="margin:6px 0 0;">Unidades disponibles sumando todo el catálogo.</p></div>
+    <div class="mini"><div class="label">Pedidos Dropi / Fastrax</div><div class="value">— / —</div><p class="note" style="margin:6px 0 0;">Pedidos enteramente del proveedor externo.</p></div>
+  </div>
+
+  <h3>3.3 Gráficos del Dashboard</h3>
+  <p>Debajo de las tarjetas aparecen dos gráficos:</p>
+  <ul>
+    <li><strong>Ventas por mes (últimos 6 meses):</strong> ayuda a ver si el negocio crece o cae.</li>
+    <li><strong>Productos por origen:</strong> muestra cuántos artículos hay de Tradexpar, Dropi y Fastrax. Sirve para saber qué tan cargado está cada canal.</li>
+  </ul>
+  <p class="note">Si los gráficos aparecen vacíos, puede ser que todavía no haya datos suficientes o que haya un problema de conexión. Volvé a entrar más tarde; si persiste, avisá al área técnica.</p>
+
+  <h3>3.4 Pedidos recientes</h3>
+  <p>Al costado de los gráficos hay una lista llamada <strong>Pedidos recientes</strong>: los últimos seis pedidos con el nombre del cliente, fecha, hora y el total facturado. Si tocás <strong>Ver todos</strong>, te lleva directo al módulo de Pedidos con el detalle completo.</p>
+
+  <div class="callout success">
+    <span class="tag">Rutina recomendada</span>
+    <p>Cuando llegues a tu turno, hacé este recorrido en el Dashboard antes de abrir cualquier otro módulo: <strong>1)</strong> miro la campana para ver alertas de stock, <strong>2)</strong> miro las tarjetas para saber si hay movimiento raro, <strong>3)</strong> miro los pedidos recientes para detectar algo pendiente. En 2 minutos sabés cómo está el negocio.</p>
+  </div>
+
+  <div class="section-break"></div>
+
+  <!-- 4. PRODUCTOS -->
+  <h2 id="productos">4. Productos: administrar el catálogo de la tienda</h2>
+  <p class="section-lead">Todo lo que el cliente ve en la tienda sale del módulo Productos. Mantenerlo prolijo es lo más importante del día a día.</p>
+
+  <p>El módulo tiene dos pestañas:</p>
+  <ul>
+    <li><strong>Catálogo:</strong> el listado maestro de productos (propios, Dropi y Fastrax), donde editás, creás y eliminás.</li>
+    <li><strong>Fastrax:</strong> un buscador contra el catálogo del proveedor Fastrax para traer productos nuevos a tu catálogo.</li>
+  </ul>
+
+  <h3>4.1 Pestaña Catálogo</h3>
+
+  <h4>Importar un producto de Dropi por ID</h4>
+  <p>Arriba del listado hay un recuadro con el título <strong>Importar producto Dropi por ID</strong>.</p>
+  <ol class="pasos">
+    <li>Pegá el <strong>número de ID</strong> que te da Dropi en la casilla "Ej: 14906".</li>
+    <li>Tocá <strong>Importar</strong>.</li>
+    <li>Vas a ver un aviso diciendo cuántos productos se crearon, actualizaron o si hubo errores.</li>
+  </ol>
+  <p class="note">Se importa de a un producto por vez. Si Dropi devuelve "Fallidos" revisá el ID y que la empresa tenga acceso al catálogo de ese producto.</p>
+
+  <h4>Buscar productos en el catálogo</h4>
+  <p>Debajo vas a encontrar la sección <strong>Buscar en catálogo</strong> con dos herramientas:</p>
+  <ul>
+    <li><strong>Buscador:</strong> escribí parte del nombre del producto o su SKU (código interno). Se filtra al instante.</li>
+    <li><strong>Origen:</strong> desplegable para ver solo los productos de un canal (Tradexpar, Dropi, Fastrax) o "Todos los orígenes".</li>
+  </ul>
+  <p>En la parte superior del listado aparece cuántos productos hay y en qué página estás. Podés elegir cuántos ver por página (10, 20, 50 o 100) y pasar páginas con las flechas.</p>
+
+  <h4>Leer la tabla de productos</h4>
+  <table class="simple">
+    <thead><tr><th>Columna</th><th>Qué indica</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Producto</strong></td><td>Foto miniatura y nombre. Lo que ve el cliente en la tienda.</td></tr>
+      <tr><td><strong>SKU</strong></td><td>Código interno único.</td></tr>
+      <tr><td><strong>Categoría</strong></td><td>A qué familia pertenece (Cocina, Hogar, etc.).</td></tr>
+      <tr><td><strong>Precio</strong></td><td>Precio final al cliente. Si hay descuento activo, muestra el precio tachado y el nuevo.</td></tr>
+      <tr><td><strong>Tipo</strong></td><td>De dónde viene el producto: <span class="pill navy">Tradexpar</span> <span class="pill">Dropi</span> <span class="pill warn">Fastrax</span>.</td></tr>
+      <tr><td><strong>Stock</strong></td><td>Cantidad disponible. Verde = hay, rojo = sin stock.</td></tr>
+      <tr><td><strong>Acciones</strong></td><td>Ícono de lápiz = editar · Ícono de papelera = eliminar.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Eliminar uno o varios productos a la vez</h4>
+  <p>Cada fila tiene una casilla a la izquierda. Podés marcar las que quieras y usar el botón rojo <strong>Eliminar seleccionados</strong>. Para marcar toda la página de un tirón, usá la casilla del encabezado.</p>
+  <div class="callout danger">
+    <span class="tag">Atención</span>
+    <p>Eliminar un producto lo saca de la tienda <em>al instante</em>. Si era un producto con ventas históricas, el registro del pedido se mantiene, pero nadie podrá comprar ese artículo hasta que lo vuelvas a cargar.</p>
+  </div>
+
+  <h4>Crear un producto nuevo</h4>
+  <p>Arriba a la derecha está el botón <strong>Nuevo producto</strong>. Al tocarlo se abre un formulario con todos los campos. Explicación de cada uno:</p>
+  <table class="simple">
+    <thead><tr><th>Campo</th><th>Para qué sirve</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre</strong></td><td>Cómo aparece en la tienda. Sé claro y descriptivo.</td></tr>
+      <tr><td><strong>SKU</strong></td><td>Código único interno. No lo repitas entre productos.</td></tr>
+      <tr><td><strong>Categoría</strong></td><td>Usá un nombre consistente (ej. "Cocina" siempre igual escrito).</td></tr>
+      <tr><td><strong>Precio (₲)</strong></td><td>Precio de venta al público, en guaraníes y sin signos. El sistema pone los puntos.</td></tr>
+      <tr><td><strong>Stock</strong></td><td>Cantidad inicial disponible. Puede ser 0 si todavía no llegó.</td></tr>
+      <tr><td><strong>Origen del catálogo</strong></td><td>Elegí <strong>Tradexpar</strong> para productos propios. <strong>Dropi</strong> y <strong>Fastrax</strong> son para casos muy puntuales (usá sus herramientas de importación).</td></tr>
+      <tr><td><strong>Stock mínimo / máximo</strong></td><td>Opcionales. Sirven como referencia interna de reposición. Dejalos vacíos si no los usás.</td></tr>
+      <tr><td><strong>Descripción</strong></td><td>El texto que convence al cliente. Contá beneficios, medidas, uso.</td></tr>
+      <tr><td><strong>Imágenes (URLs)</strong></td><td>Una o varias URLs. La <strong>primera</strong> es la principal; las demás forman la galería. Podés agregar más con <strong>+ Añadir URL</strong>.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Descuento promocional (opcional)</h4>
+  <p>Abajo del formulario hay un bloque celeste donde configurás descuentos. Elegí:</p>
+  <ul>
+    <li><strong>Sin descuento:</strong> no aplica promoción.</li>
+    <li><strong>Por porcentaje:</strong> escribí el porcentaje (ej. 15 = 15% off).</li>
+    <li><strong>Monto fijo (₲):</strong> descuenta esa cantidad en guaraníes.</li>
+  </ul>
+  <p>Los campos <strong>Inicio del descuento</strong> y <strong>Fin del descuento</strong> definen la ventana en la que se aplica. Si los dejás vacíos, el descuento aplica siempre que esté activo.</p>
+
+  <div class="callout success">
+    <span class="tag">Buena práctica</span>
+    <p>Revisá precio, stock y textos antes de tocar <strong>Guardar</strong>. Lo que guardás aparece de inmediato en la tienda pública.</p>
+  </div>
+
+  <h4>Editar un producto existente</h4>
+  <p>Tocá el ícono de lápiz al final de la fila. Se abre el mismo formulario, pero con los datos cargados. Cambiá lo que necesites y tocá <strong>Guardar</strong>. <strong>Cancelar</strong> descarta los cambios.</p>
+
+  <div class="callout warn">
+    <span class="tag">Productos de Dropi y Fastrax</span>
+    <p>Si editás un artículo con origen Dropi o Fastrax, tené presente que parte de la información (precio, stock) puede estar sincronizada desde el proveedor. Antes de hacer cambios grandes consultá con el responsable del área.</p>
+  </div>
+
+  <h3>4.2 Pestaña Fastrax: importar productos nuevos</h3>
+  <p>En la pestaña <strong>Fastrax</strong>, en vez de ver tu catálogo, consultás el catálogo del proveedor en la nube y elegís qué traer a la tienda.</p>
+  <ol class="pasos">
+    <li>En el buscador <strong>"Buscar (nombre o SKU)"</strong> escribí palabras clave.</li>
+    <li>Marcá la casilla <strong>Solo con stock</strong> si querés ver únicamente los que tienen disponibilidad.</li>
+    <li>Ajustá <strong>Cant./pág.</strong> entre 1 y 20 y tocá <strong>Buscar</strong>.</li>
+    <li>Revisá los resultados: vas a ver el SKU, nombre, stock, precio y un estado (<span class="pill ok">Vendible</span>, <span class="pill warn">Sin stock</span>, <span class="pill">Precio 0</span>).</li>
+    <li>Marcá con la casilla los SKUs que querés importar. La selección <strong>se mantiene</strong> aunque cambies de página o filtro.</li>
+    <li>Tocá <strong>Importar seleccionados</strong> para traerlos de una, o el botón <strong>Importar</strong> en la fila para importar solo ese.</li>
+    <li>Al terminar, recibís un aviso con cuántos se crearon y cuántos se actualizaron.</li>
+  </ol>
+  <div class="callout">
+    <span class="tag">Cómo funciona</span>
+    <p>Nada se guarda hasta que presionás Importar. Si la empresa decide agregar un producto Fastrax a la tienda, se hace desde acá, no a mano. Después podés ajustar precio/descripción desde el Catálogo.</p>
+  </div>
+
+  <div class="section-break"></div>
+
+  <!-- 5. PEDIDOS -->
+  <h2 id="pedidos">5. Pedidos: seguimiento y cierre de compras</h2>
+  <p class="section-lead">Cada venta de la tienda llega acá. Es la pantalla que más se mira durante el día para coordinar entregas y cerrar pedidos.</p>
+
+  <h3>5.1 Los filtros de arriba</h3>
+  <p>Hay dos grupos de filtros:</p>
+
+  <h4>Estado del pedido</h4>
+  <ul>
+    <li><span class="pill">Pendientes</span> — pedidos que todavía están en curso (es lo que ves por defecto).</li>
+    <li><span class="pill ok">Cerrados</span> — pedidos que ya se completaron o cancelaron.</li>
+    <li><span class="pill navy">Todos</span> — muestra todo sin filtrar.</li>
+  </ul>
+
+  <h4>Origen del pedido</h4>
+  <ul>
+    <li><span class="pill navy">Tradexpar</span> — todas las líneas del pedido son de stock propio.</li>
+    <li><span class="pill warn">Dropi</span> — todas las líneas se despachan desde Dropi.</li>
+    <li><span class="pill">Fastrax</span> — todas las líneas vienen de Fastrax.</li>
+    <li><span class="pill navy">Todos los orígenes</span> — incluye también los <strong>mixtos</strong> (pedidos con líneas de varios orígenes).</li>
+  </ul>
+  <p>A la derecha tenés el botón <strong>Actualizar</strong> para refrescar manualmente la lista.</p>
+
+  <h3>5.2 La tabla de pedidos</h3>
+  <p>Cada fila representa un pedido del cliente. Los más nuevos están arriba. Qué significa cada columna:</p>
+  <table class="simple">
+    <thead><tr><th>Columna</th><th>Qué muestra</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Pedido</strong></td><td>Un código corto del pedido. Sirve para identificarlo rápido.</td></tr>
+      <tr><td><strong>Cliente</strong></td><td>Nombre y correo (o teléfono) del comprador.</td></tr>
+      <tr><td><strong>Items</strong></td><td>Cuántos productos distintos lleva y cuántas unidades en total.</td></tr>
+      <tr><td><strong>Tipo</strong></td><td>Un badge de color: interno (celeste), Dropi (naranja), Fastrax (cian) o mixto (violeta).</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Estado general del pedido (pendiente, procesando, completado, cancelado…).</td></tr>
+      <tr><td><strong>Pago</strong></td><td>Si el cliente ya pagó o todavía está pendiente de confirmación.</td></tr>
+      <tr><td><strong>Total</strong></td><td>Monto total de la venta.</td></tr>
+      <tr><td><strong>Fecha</strong></td><td>Cuándo se generó el pedido.</td></tr>
+      <tr><td><strong>Acc.</strong></td><td>Ícono para abrir el pedido en el panel de Dropi, si corresponde.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 Ver el detalle de un pedido</h3>
+  <p>Tocá la flecha <strong>▼</strong> a la izquierda de la fila para expandir el pedido. Se despliega toda la información:</p>
+  <div class="ui-mock">
+    <div class="bar"><span class="dot"></span> Detalle del pedido</div>
+    <div class="body">
+      <div class="row"><span class="muted">Opción de envío</span><strong>Retiro en local / Envío a domicilio…</strong></div>
+      <div class="row"><span class="muted">Cargo envío</span><strong>Gs. —</strong></div>
+      <div class="row"><span class="muted">Líneas del pedido</span><strong>Lista de productos, cantidades y estado por cada uno</strong></div>
+      <div class="row"><span class="muted">Tracking Dropi</span><strong>Si aplica, estado del pedido en Dropi</strong></div>
+      <div class="row"><span class="muted">Tracking Fastrax</span><strong>Si aplica, estado del pedido en Fastrax</strong></div>
+    </div>
+  </div>
+
+  <h4>Líneas del pedido</h4>
+  <p>Cada producto del pedido es una línea. Para cada una podés ver: nombre, SKU, tipo (origen), cantidad, precio unitario, subtotal y un selector de <strong>Estado del ítem</strong>.</p>
+  <p>Los estados posibles dependen del origen:</p>
+  <ul>
+    <li><strong>Productos Dropi:</strong> aparecen estados vinculados al flujo de Dropi (preparación, en camino, entregada, etc.).</li>
+    <li><strong>Productos Tradexpar / Fastrax:</strong> estados de tu operación (pendiente, en preparación, entregada, cancelada).</li>
+  </ul>
+  <p>Si una línea tiene dos o más unidades iguales con estados distintos, al cambiar el estado se unifica en todas.</p>
+
+  <h4>Guardar los cambios de las líneas</h4>
+  <p>Cuando modificás el estado de una o varias líneas, arriba a la derecha del detalle se habilita el botón <strong>Guardar líneas</strong>. El texto <span class="pill warn">Cambios sin guardar</span> te recuerda que todavía no grabaste.</p>
+
+  <h4>Finalizar el pedido</h4>
+  <p>El botón <strong>Finalizar pedido</strong> se habilita cuando <em>todas</em> las líneas están en un estado final (entregada, cancelada o cerrada en Dropi). Al tocarlo, el pedido pasa a <span class="pill ok">completado</span> y sale de la lista de pendientes.</p>
+  <div class="callout warn">
+    <span class="tag">Regla</span>
+    <p>No se puede finalizar si alguna línea sigue en proceso. Primero guardá el estado de cada ítem; después cerrá el pedido.</p>
+  </div>
+
+  <h3>5.4 Tarjeta "Tracking Dropi"</h3>
+  <p>Aparece solo si el pedido tiene al menos una línea de Dropi. Te permite:</p>
+  <ul>
+    <li><strong>Crear pedido Dropi</strong> — genera la orden en el sistema de Dropi si todavía no existe.</li>
+    <li><strong>Reintentar pedido Dropi</strong> — si falló la creación la primera vez.</li>
+    <li><strong>Sincronizar estado</strong> — pide a Dropi el estado actualizado.</li>
+    <li><strong>Abrir en Dropi</strong> — abre el pedido directo en el panel de Dropi en otra pestaña.</li>
+  </ul>
+  <p>Abajo vas a ver datos como Estado Dropi, Dropi Order ID, ciudad del comprador y la fecha de última sincronización.</p>
+  <div class="callout warn">
+    <span class="tag">Avisos comunes</span>
+    <p><strong>Saldo insuficiente en wallet Dropi:</strong> significa que la cuenta de Dropi no tiene crédito para despachar. Avisá a quien administra Dropi.<br />
+    <strong>Pago ok — Dropi manual (ciudad sin mapeo):</strong> la ciudad del comprador no está vinculada al catálogo de Dropi. Revisá el detalle del error y, si es necesario, reintentá la creación.</p>
+  </div>
+
+  <h3>5.5 Tarjeta "Fastrax"</h3>
+  <p>Aparece solo si el pedido tiene líneas de Fastrax. Tiene tres botones posibles:</p>
+  <ul>
+    <li><strong>Crear pedido Fastrax</strong> — da de alta la orden en Fastrax.</li>
+    <li><strong>Sincronizar Fastrax</strong> — pide el estado actualizado.</li>
+    <li><strong>Facturar Fastrax</strong> / <strong>Reintentar facturación</strong> — dispara la facturación cuando corresponde.</li>
+  </ul>
+  <p>Arriba vas a ver un badge con el estado actual (en proceso, despachado, etc.) y abajo los códigos internos (<span class="kbd">ped</span> es tu número; <span class="kbd">pdc</span> es el número de Fastrax), además de la última sincronización.</p>
+
+  <div class="callout">
+    <span class="tag">Consejo</span>
+    <p>Si ves un error repetido en Dropi o Fastrax, <strong>anotá la hora y el código del pedido</strong> y pasalo al área técnica con ese detalle. Ayuda muchísimo a encontrar la causa.</p>
+  </div>
+
+  <div class="section-break"></div>
+
+  <!-- 6. USUARIOS -->
+  <h2 id="usuarios">6. Usuarios: clientes registrados en la tienda</h2>
+  <p class="section-lead">Acá gestionás las cuentas de los <strong>compradores</strong> de la tienda (no son usuarios del panel).</p>
+
+  <h3>6.1 Cuándo usar este módulo</h3>
+  <ul>
+    <li>Cuando un cliente te escribe diciendo que no encuentra su cuenta o no recuerda qué correo usó.</li>
+    <li>Cuando hay un dato mal cargado (nombre con errores, correo mal tipeado) y la empresa autoriza corregirlo.</li>
+    <li>Cuando un cliente pide recuperar la contraseña y no pudo hacerlo solo.</li>
+    <li>Cuando hay que dar de baja una cuenta por pedido del cliente o por política interna.</li>
+  </ul>
+
+  <h3>6.2 Buscar clientes</h3>
+  <p>Arriba del listado hay una casilla con la leyenda <strong>Buscar usuarios</strong>. Podés buscar por:</p>
+  <ul>
+    <li>Parte del <strong>nombre</strong>.</li>
+    <li>Parte del <strong>correo electrónico</strong>.</li>
+    <li>O el <strong>ID</strong> del cliente (el código corto que ves en la primera columna).</li>
+  </ul>
+
+  <h3>6.3 Leer la tabla de usuarios</h3>
+  <table class="simple">
+    <thead><tr><th>Columna</th><th>Qué significa</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ID</strong></td><td>Código único del cliente.</td></tr>
+      <tr><td><strong>Nombre</strong></td><td>Nombre completo que cargó al registrarse.</td></tr>
+      <tr><td><strong>Email</strong></td><td>Correo con el que inicia sesión.</td></tr>
+      <tr><td><strong>Origen</strong></td><td>De dónde viene la cuenta: contraseña propia de la tienda, <strong>Google</strong> o <strong>Facebook</strong>.</td></tr>
+      <tr><td><strong>Distrib. digital indep.</strong></td><td>Sí o No: indica si el cliente también es distribuidor.</td></tr>
+      <tr><td><strong>Creado</strong></td><td>Fecha en que abrió su cuenta.</td></tr>
+      <tr><td><strong>Acciones</strong></td><td>Tres íconos: editar, cambiar contraseña y eliminar.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.4 Editar los datos de un cliente</h3>
+  <p>Tocá el ícono de <strong>lápiz</strong>. Se abre una ventana con dos campos: <strong>Nombre</strong> y <strong>Correo</strong>.</p>
+  <ol class="pasos">
+    <li>Modificá el dato incorrecto.</li>
+    <li>Tocá <strong>Guardar</strong>. El cambio se aplica de inmediato.</li>
+    <li>Si tocás <strong>Cancelar</strong>, no se guarda nada.</li>
+  </ol>
+  <p class="note">Si cambiás el correo, el cliente tendrá que usar el correo nuevo la próxima vez que inicie sesión.</p>
+
+  <h3>6.5 Cambiar la contraseña de un cliente</h3>
+  <p>Tocá el ícono de <strong>llave</strong>. Se abre un formulario para asignarle una contraseña nueva.</p>
+  <ol class="pasos">
+    <li>Escribí la contraseña nueva (<strong>mínimo 6 caracteres</strong>).</li>
+    <li>Repetila en el segundo campo para confirmar.</li>
+    <li>Tocá <strong>Guardar contraseña</strong>.</li>
+    <li>Comunicale al cliente la nueva clave por un canal seguro y pedile que la cambie cuando ingrese.</li>
+  </ol>
+  <div class="callout warn">
+    <span class="tag">Clientes con Google o Facebook</span>
+    <p>Si el cliente entró usando su cuenta de Google o Facebook, <strong>no tiene contraseña en la tienda</strong>. El ícono de llave aparece desactivado y un mensaje te lo recuerda. En ese caso, el cliente tiene que ingresar siempre desde el mismo proveedor.</p>
+  </div>
+
+  <h3>6.6 Eliminar un cliente</h3>
+  <p>Tocá el ícono de <strong>papelera</strong>. Se abre una ventana de confirmación con información importante:</p>
+  <ul>
+    <li>Si el cliente <strong>no es distribuidor</strong>, se elimina directamente del listado de clientes.</li>
+    <li>Si el cliente <strong>es distribuidor sin ventas atribuidas</strong>, se borra también su perfil de distribuidor.</li>
+    <li>Si el cliente <strong>es distribuidor con ventas atribuidas</strong>, el sistema lo desvincula: el cliente se elimina, pero el perfil de distribuidor queda <span class="pill warn">suspendido</span> con los links desactivados, preservando el historial de comisiones.</li>
+  </ul>
+  <div class="callout danger">
+    <span class="tag">Cuidado</span>
+    <p>Eliminar un cliente es una acción definitiva. Hacelo solo cuando tu supervisor lo autoriza o cuando el cliente lo solicita formalmente. Sus pedidos anteriores se mantienen, pero pierde el acceso a la cuenta.</p>
+  </div>
+
+  <!-- 7. DISTRIBUIDORES DIGITALES INDEPENDIENTES -->
+  <h2 id="ddi">7. Distribuidores Digitales Independientes</h2>
+  <p class="section-lead">Módulo del programa comercial: personas que venden o promocionan Tradexpar con su propio enlace y ganan una comisión por cada venta.</p>
+
+  <div class="callout">
+    <span class="tag">Concepto</span>
+    <p>Los <strong>Distribuidores Digitales Independientes</strong> (abreviado como DDI o “distribuidores”) son personas externas aprobadas por la empresa que difunden la tienda. Cada uno tiene un <strong>código único</strong> y un <strong>enlace con <span class="kbd">?ref=CODIGO</span></strong>. Si un cliente compra usando ese enlace, la venta se atribuye al distribuidor, el comprador puede recibir un descuento y el distribuidor gana una comisión.</p>
+  </div>
+
+  <p>El módulo tiene seis pestañas, cada una para una tarea distinta: <strong>Solicitudes</strong>, <strong>Distribuidores</strong>, <strong>Ventas</strong>, <strong>Reglas</strong>, <strong>Materiales</strong> y <strong>Analítica</strong>.</p>
+
+  <h3>7.1 Pestaña Solicitudes</h3>
+  <p>Cuando una persona se postula desde la tienda para ser distribuidor, su pedido llega acá. Vas a ver una tabla con:</p>
+  <ul>
+    <li><strong>Nombre</strong>, <strong>Email</strong>, <strong>Teléfono</strong> y <strong>Documento</strong> del postulante.</li>
+    <li><strong>Estado</strong>: generalmente aparece como <span class="pill warn">pending</span> (pendiente) hasta que lo gestiones.</li>
+    <li><strong>Fecha</strong> en que envió la solicitud.</li>
+  </ul>
+  <p>En la columna <strong>Acciones</strong> tenés dos botones:</p>
+  <ol class="pasos">
+    <li><strong>Aprobar:</strong> crea la cuenta de distribuidor. El sistema genera automáticamente un código único y un enlace. El distribuidor puede empezar a promocionar.</li>
+    <li><strong>Rechazar:</strong> pide un motivo opcional (recomendable dejarlo escrito) y cierra la solicitud.</li>
+  </ol>
+  <div class="callout warn">
+    <span class="tag">Criterio</span>
+    <p>Aprobá siguiendo las reglas que defina la empresa (requisitos mínimos, documentación, etc.). Si no estás seguro, <strong>dejá la solicitud pendiente</strong> y consultá antes de aprobarla o rechazarla.</p>
+  </div>
+
+  <h3>7.2 Pestaña Distribuidores</h3>
+  <p>Listado de distribuidores ya aprobados. Arriba tenés filtros:</p>
+  <ul>
+    <li><strong>Buscar:</strong> por nombre, correo, código, ID o parte del enlace.</li>
+    <li><strong>Estado:</strong> <span class="pill navy">Todos</span>, <span class="pill ok">Activados</span> o <span class="pill warn">Desactivados</span>.</li>
+    <li>Botón <strong>Actualizar</strong>: refresca la lista.</li>
+  </ul>
+
+  <h4>La tabla de distribuidores</h4>
+  <table class="simple">
+    <thead><tr><th>Columna</th><th>Qué muestra</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre</strong></td><td>Nombre del distribuidor.</td></tr>
+      <tr><td><strong>Correo</strong></td><td>Email de contacto.</td></tr>
+      <tr><td><strong>Código</strong></td><td>El código único que aparece en su enlace. Es lo que identifica al distribuidor.</td></tr>
+      <tr><td><strong>Estado</strong></td><td>Activo (verde), Desactivado (gris) o Pendiente (amarillo). Al costado hay un <strong>switch</strong> para activar o desactivar.</td></tr>
+      <tr><td><strong>Comisión</strong></td><td>% que gana el distribuidor por venta atribuida (regla global).</td></tr>
+      <tr><td><strong>Desc. cliente</strong></td><td>% de descuento que reciben los compradores que usan el enlace del distribuidor.</td></tr>
+      <tr><td><strong>Pedidos</strong></td><td>Cantidad de pedidos atribuidos al distribuidor.</td></tr>
+      <tr><td><strong>Vendido</strong></td><td>Monto total vendido a través suyo.</td></tr>
+      <tr><td><strong>Comisión total</strong></td><td>Tres números: <strong>Pend.</strong> (aprobada pendiente de pago), <strong>Apr.</strong> (aprobada) y <strong>Pag.</strong> (ya pagada).</td></tr>
+      <tr><td><strong>Enlace (?ref)</strong></td><td>El enlace público del distribuidor, con un botón <strong>Copiar</strong> para enviárselo por WhatsApp/mail.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Activar o desactivar un distribuidor</h4>
+  <p>En la columna <strong>Estado</strong> hay un switch. Si lo apagás, el distribuidor queda <span class="pill warn">desactivado</span>: sus enlaces dejan de atribuir ventas hasta que lo reactives. No se pierden los datos históricos.</p>
+
+  <h3>7.3 Pestaña Ventas</h3>
+  <p>Listado de todas las ventas atribuidas a distribuidores, con el estado de la comisión de cada una.</p>
+
+  <h4>Filtros por estado de comisión</h4>
+  <p>Arriba tenés botones con contadores:</p>
+  <ul>
+    <li><span class="pill navy">Todas</span> — sin filtrar.</li>
+    <li><span class="pill warn">Pendientes</span> — comisiones aún no aprobadas; el pedido todavía puede cancelarse o revisarse.</li>
+    <li><span class="pill ok">Aprobadas</span> — el pedido se confirmó y la comisión quedó validada.</li>
+    <li><span class="pill ok">Pagadas</span> — ya se abonó al distribuidor (estado final).</li>
+    <li><span class="pill danger">Rechazadas</span> — se anula la comisión por algún motivo (estado final).</li>
+    <li><span class="pill warn">Canceladas</span> — el pedido se canceló; la comisión se anula.</li>
+  </ul>
+
+  <h4>La tabla de ventas atribuidas</h4>
+  <p>Muestra: distribuidor, pedido, fecha, productos, cantidad, subtotal del pedido, monto de comisión y un selector de <strong>Estado</strong> en la última columna.</p>
+
+  <h4>Cambiar el estado de una comisión</h4>
+  <ol class="pasos">
+    <li>Tocá el botón de estado en la fila. Se abre un buscador con los estados disponibles.</li>
+    <li>Elegí el estado nuevo (por ejemplo, pasar de "pendiente" a "aprobada" cuando ya se entregó el pedido).</li>
+    <li>Cuando pagás al distribuidor, marcá <strong>Pagada</strong>.</li>
+  </ol>
+  <div class="callout danger">
+    <span class="tag">Estados finales</span>
+    <p>Los estados <strong>Pagada</strong> y <strong>Rechazada</strong> <em>no se pueden modificar</em> después (el selector queda bloqueado). Revisá antes de confirmar.</p>
+  </div>
+
+  <h3>7.4 Pestaña Reglas</h3>
+  <p>Acá configurás cuánto gana cada distribuidor y cuánto descuento recibe el cliente que compra con su enlace.</p>
+
+  <h4>Elegir el distribuidor a configurar</h4>
+  <p>En la parte superior hay un buscador donde elegís a qué distribuidor querés editarle las reglas. Escribí nombre o código.</p>
+
+  <h4>Comisión y descuento globales</h4>
+  <p>Estas reglas aplican a <strong>todos los productos</strong> del distribuidor salvo que cargues una regla específica para un producto.</p>
+  <ul>
+    <li><strong>Comisión global:</strong> porcentaje que gana el distribuidor por la venta.</li>
+    <li><strong>Descuento para el comprador (global):</strong> porcentaje que rebaja el precio al cliente que compra con el enlace.</li>
+  </ul>
+  <p>Tocá <strong>Guardar globales</strong> para aplicar. Vas a ver un recuadro celeste con el título <strong>"Vigente en la tienda ahora"</strong>: ese es el porcentaje que realmente se está cobrando en este momento.</p>
+
+  <h4>Reglas por producto</h4>
+  <p>Si un producto necesita comisión o descuento <em>distinto</em> al global, acá lo indicás.</p>
+  <ol class="pasos">
+    <li>Elegí el producto en el desplegable.</li>
+    <li>Ajustá <strong>% de comisión</strong> y <strong>% de descuento</strong> para ese producto.</li>
+    <li>Tocá <strong>Guardar reglas del producto seleccionado</strong>.</li>
+  </ol>
+  <p>Abajo hay dos tablas que muestran todas las reglas ya cargadas por producto: una para comisiones y otra para descuentos. Al final de cada fila tenés una papelera para <strong>quitar la regla</strong> y volver al valor global.</p>
+  <div class="callout success">
+    <span class="tag">Orden de prioridad</span>
+    <p>Si hay regla por producto, gana sobre la global. Si no hay regla por producto, se usa el valor global del distribuidor.</p>
+  </div>
+
+  <h3>7.5 Pestaña Materiales</h3>
+  <p>Repositorio de material gráfico y de texto que los distribuidores pueden usar para promocionar la tienda (banners, videos cortos, PDF, guiones).</p>
+
+  <h4>Cargar un material nuevo</h4>
+  <ol class="pasos">
+    <li>En <strong>Título</strong> poné un nombre claro y descriptivo (ej.: "Banner promo día del padre 1080x1080").</li>
+    <li>En <strong>Tipo</strong> elegí <strong>Imagen</strong>, <strong>Video</strong>, <strong>Texto</strong> o <strong>PDF</strong>.</li>
+    <li>En <strong>Producto (opcional)</strong> asociá el material a un producto específico, o dejalo en "Ninguno" para un material general.</li>
+    <li>En <strong>URL del archivo</strong> pegá el enlace público del archivo ya subido a un servicio de almacenamiento (el archivo no se sube desde el panel).</li>
+    <li>Tocá <strong>Guardar</strong>. El material aparece en la tabla de abajo y ya queda disponible para los distribuidores.</li>
+  </ol>
+
+  <h4>Activar o desactivar un material</h4>
+  <p>En la tabla, al final de cada fila hay un botón <strong>Activar / Desactivar</strong>. Si lo desactivás, los distribuidores dejan de verlo.</p>
+
+  <h3>7.6 Pestaña Analítica</h3>
+  <p>Reportes para evaluar cómo rinde el programa de distribuidores.</p>
+
+  <h4>Embudo 30 días</h4>
+  <div class="cards-grid">
+    <div class="mini"><div class="label">Visitas</div><div class="value">—</div><p class="note" style="margin:6px 0 0;">Interacciones con enlaces de distribuidores en los últimos 30 días.</p></div>
+    <div class="mini"><div class="label">Atribuciones (ventas)</div><div class="value">—</div><p class="note" style="margin:6px 0 0;">Ventas contabilizadas con referido en el período.</p></div>
+  </div>
+  <p class="note">Además vas a ver la <strong>Conversión aprox.</strong>: qué porcentaje de las visitas terminaron en venta.</p>
+
+  <h4>Comisiones por estado</h4>
+  <p>Cinco tarjetas con los totales en guaraníes: <strong>Pendiente</strong>, <strong>Aprobada</strong>, <strong>Pagada</strong>, <strong>Cancelada</strong> y <strong>Rechazada</strong>. Te ayuda a saber cuánta plata falta pagar y cuánta está "volando" como comisión anulada.</p>
+
+  <h4>Top distribuidores</h4>
+  <p>Ranking de quiénes generan más ventas y más comisión. Útil para identificar a los más activos y reforzar el contacto con ellos.</p>
+
+  <h4>Productos más vendidos vía distribuidores</h4>
+  <p>Qué productos se mueven mejor a través del canal de distribuidores. Sirve para preparar materiales o ajustar reglas a los productos que más rinden.</p>
+
+  <h4>Devoluciones por distribuidor</h4>
+  <p>Cuántos pedidos atribuidos y cuántos reembolsos tuvo cada uno. Sirve para detectar anomalías (muchos reembolsos con un mismo distribuidor puede ser señal de un problema).</p>
+
+  <div class="callout">
+    <span class="tag">Botón Actualizar</span>
+    <p>Cada pestaña tiene su propio botón Actualizar (ícono de flechas circulares). Usalo cuando creas que la información cambió y querés ver la versión más reciente.</p>
+  </div>
+
+  <div class="section-break"></div>
+
+  <!-- 8. BUENAS PRÁCTICAS -->
+  <h2 id="buenas-practicas">8. Recomendaciones para el día a día</h2>
+  <p class="section-lead">Pequeñas costumbres que evitan errores grandes y problemas de seguridad.</p>
+
+  <div class="two-col">
+    <div class="card">
+      <h4>Seguridad de tu sesión</h4>
+      <ul>
+        <li>Cerrá sesión <strong>siempre</strong> antes de dejar la PC.</li>
+        <li>No compartas tu usuario ni contraseña con compañeros.</li>
+        <li>Si sospechás que alguien usó tu cuenta, avisá al área técnica y cambiá la contraseña.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Antes de guardar cambios</h4>
+      <ul>
+        <li>Revisá precios, stock y textos dos veces, sobre todo si hay descuentos o promociones.</li>
+        <li>Si vas a hacer un cambio grande, consultá con tu supervisor.</li>
+        <li>Un cambio guardado en Productos aparece en la tienda al instante.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Datos de clientes</h4>
+      <ul>
+        <li>La información de los clientes es confidencial. Usala solo para tu trabajo.</li>
+        <li>No compartas datos por canales inseguros.</li>
+        <li>Eliminar cuentas solo con autorización y por los motivos definidos.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Frente a errores</h4>
+      <ul>
+        <li>Si algo no carga o muestra error, <strong>anotá la hora, la pantalla y el ID</strong> del registro.</li>
+        <li>Pasá esa información al área técnica; no inventes datos ni repitas acciones a ciegas.</li>
+        <li>Probá actualizar la pestaña (<span class="kbd">F5</span>) como primer paso.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Rutina diaria sugerida</h3>
+  <ol class="pasos">
+    <li>Abro el panel y miro la <strong>campana de stock</strong> del Dashboard.</li>
+    <li>Reviso los <strong>pedidos pendientes</strong> y actualizo estados de líneas de cualquier pedido del día anterior.</li>
+    <li>Atiendo las <strong>solicitudes de distribuidores</strong> nuevas (si hay).</li>
+    <li>Reviso <strong>ventas atribuidas</strong> para pasar comisiones aprobadas a pagadas si corresponde.</li>
+    <li>Cierro pedidos completados con <strong>Finalizar pedido</strong>.</li>
+    <li>Al terminar, <strong>cierro sesión</strong>.</li>
+  </ol>
+
+  <div class="callout success">
+    <span class="tag">Recordá</span>
+    <p>Este manual describe el uso cotidiano del panel administrativo. Las pantallas pueden cambiar ligeramente con actualizaciones; si ves algo que no coincide con lo descrito, revisá si se aplicó una actualización o pedí la última versión de este instructivo.</p>
+  </div>
+
+  <p class="footer-note">Manual de uso interno — Panel de administración Tradexpar · Módulo de Configuraciones excluido por indicación.</p>
+
+</div>
+</body>
+</html>

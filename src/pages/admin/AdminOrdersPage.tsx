@@ -172,15 +172,23 @@ function isWalletInsufficient(map: Record<string, unknown> | null | undefined, e
   return /wallet/i.test(errDetail);
 }
 
-function OrderDropiCard({ o }: { o: Order }) {
+type DropiPrefetched = {
+  has_map: boolean;
+  map: Record<string, unknown> | null;
+};
+
+function OrderDropiCard({
+  o,
+  prefetched,
+}: {
+  o: Order;
+  prefetched?: DropiPrefetched | null;
+}) {
   if (!shouldShowDropiTrackingCard(o)) return null;
 
-  const [st, setSt] = useState<{
-    has_map: boolean;
-    map: Record<string, unknown> | null;
-  } | null>(null);
+  const [st, setSt] = useState<DropiPrefetched | null>(prefetched ?? null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(prefetched == null);
   const [syncing, setSyncing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [actErr, setActErr] = useState<string | null>(null);
@@ -203,8 +211,14 @@ function OrderDropiCard({ o }: { o: Order }) {
   }, [o.id]);
 
   useEffect(() => {
+    /** Si llegó precargado por el padre (bulk), evitamos un fetch por pedido. */
+    if (prefetched) {
+      setSt(prefetched);
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, prefetched]);
 
   if (loading) {
     return (
@@ -427,12 +441,18 @@ function fstrError(r: Record<string, unknown>, k: string): string {
   return typeof v === "string" ? v : "";
 }
 
-function OrderFastraxCard({ o }: { o: Order }) {
+function OrderFastraxCard({
+  o,
+  prefetched,
+}: {
+  o: Order;
+  prefetched?: AdminFastraxStatusResponse | null;
+}) {
   if (!shouldShowFastraxTrackingCard(o)) return null;
 
-  const [st, setSt] = useState<AdminFastraxStatusResponse | null>(null);
+  const [st, setSt] = useState<AdminFastraxStatusResponse | null>(prefetched ?? null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(prefetched == null);
   const [syncing, setSyncing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
@@ -456,8 +476,14 @@ function OrderFastraxCard({ o }: { o: Order }) {
   }, [o.id]);
 
   useEffect(() => {
+    /** Precarga del padre evita el fetch por pedido (bulk endpoint). */
+    if (prefetched) {
+      setSt(prefetched);
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, prefetched]);
 
   if (loading) {
     return (
@@ -653,6 +679,9 @@ export default function AdminOrdersPage() {
   const [lineDrafts, setLineDrafts] = useState<Record<string, Record<string, string>>>({});
   const [savingLinesOrderId, setSavingLinesOrderId] = useState<string | null>(null);
   const [finalizingOrderId, setFinalizingOrderId] = useState<string | null>(null);
+  /** Prefetch bulk del estado Fastrax/Dropi para evitar N requests por pedido al expandir cards. */
+  const [fastraxBulk, setFastraxBulk] = useState<Record<string, AdminFastraxStatusResponse>>({});
+  const [dropiBulk, setDropiBulk] = useState<Record<string, DropiPrefetched>>({});
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
@@ -667,6 +696,50 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
+
+  /**
+   * Cuando cambia la lista de pedidos, hacemos UNA llamada bulk para Fastrax y otra para Dropi.
+   * Esto reemplaza N peticiones (una por card al expandir) por dos. Las cards leen del bulk;
+   * solo si una orden no aparece en el bulk hace fallback al fetch individual.
+   */
+  useEffect(() => {
+    const fastraxIds: string[] = [];
+    const dropiIds: string[] = [];
+    for (const o of orders) {
+      if (shouldShowFastraxTrackingCard(o)) fastraxIds.push(o.id);
+      if (shouldShowDropiTrackingCard(o)) dropiIds.push(o.id);
+    }
+    if (fastraxIds.length === 0) {
+      setFastraxBulk({});
+    } else {
+      void (async () => {
+        try {
+          const r = await api.getAdminOrdersFastraxStatusBulk(fastraxIds);
+          if (r.ok && r.statuses) setFastraxBulk(r.statuses);
+        } catch {
+          /* fallback: cada card hará fetch propio */
+        }
+      })();
+    }
+    if (dropiIds.length === 0) {
+      setDropiBulk({});
+    } else {
+      void (async () => {
+        try {
+          const r = await api.getAdminOrdersDropiStatusBulk(dropiIds);
+          if (r.ok && r.statuses) {
+            const next: Record<string, DropiPrefetched> = {};
+            for (const [k, v] of Object.entries(r.statuses)) {
+              next[k] = { has_map: Boolean(v?.has_map), map: (v?.map as Record<string, unknown> | null) ?? null };
+            }
+            setDropiBulk(next);
+          }
+        } catch {
+          /* fallback: cada card hará fetch propio */
+        }
+      })();
+    }
+  }, [orders]);
 
   useEffect(() => {
     setLineDrafts((prev) => {
@@ -950,8 +1023,8 @@ export default function AdminOrdersPage() {
           {orderShippingSection}
           {sectionTitle}
           <p className="py-4 text-center text-sm text-muted-foreground">Sin líneas en este pedido.</p>
-          <OrderDropiCard o={o} />
-          <OrderFastraxCard o={o} />
+          <OrderDropiCard o={o} prefetched={dropiBulk[o.id] ?? null} />
+          <OrderFastraxCard o={o} prefetched={fastraxBulk[o.id] ?? null} />
         </>
       );
     }
@@ -1147,8 +1220,8 @@ export default function AdminOrdersPage() {
           </div>
         </div>
         {footerActions}
-        <OrderDropiCard o={o} />
-        <OrderFastraxCard o={o} />
+        <OrderDropiCard o={o} prefetched={dropiBulk[o.id] ?? null} />
+        <OrderFastraxCard o={o} prefetched={fastraxBulk[o.id] ?? null} />
       </>
     );
   };

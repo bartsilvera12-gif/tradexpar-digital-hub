@@ -154,17 +154,96 @@ function RequestsTab() {
     load();
   }, [load]);
 
+  /**
+   * Traduce el resultado de la RPC (o un error crudo de PostgREST) a un mensaje
+   * legible + el "tono" con que se debe notificar al usuario:
+   *  - "info":    situación esperada (no se puede aprobar por motivo válido)
+   *  - "warning": acción posible pero requiere intervención del admin
+   *  - "error":   fallo inesperado (red, permisos, bug)
+   */
+  const explainApproveResult = (
+    reason: string | undefined,
+    rawMessage?: string
+  ): { tone: "info" | "warning" | "error"; title: string; description?: string } => {
+    const r = (reason ?? "").toLowerCase();
+    const msg = (rawMessage ?? "").toLowerCase();
+
+    if (r === "request_not_found") {
+      return {
+        tone: "info",
+        title: "La solicitud ya no existe",
+        description: "Es probable que otro administrador la haya eliminado. Actualizá la lista.",
+      };
+    }
+    if (r === "not_pending") {
+      return {
+        tone: "info",
+        title: "La solicitud ya fue procesada",
+        description: "Esta solicitud ya estaba aprobada o rechazada previamente.",
+      };
+    }
+    if (r === "invalid_email") {
+      return {
+        tone: "warning",
+        title: "Correo inválido",
+        description: "La solicitud no tiene un correo válido. Pedile al solicitante que la reenvíe.",
+      };
+    }
+    if (
+      r === "email_already_affiliate" ||
+      msg.includes("affiliates_email_key") ||
+      msg.includes("duplicate key")
+    ) {
+      return {
+        tone: "warning",
+        title: `Ya existe un ${DDI.singular.toLowerCase()} con ese correo`,
+        description: `Buscalo en la pestaña ${DDI.plural}. Si está suspendido, reactivalo desde ahí.`,
+      };
+    }
+    if (r === "code_collision") {
+      return {
+        tone: "warning",
+        title: "No se pudo generar un código único",
+        description: "Reintentá la aprobación; si vuelve a fallar, avisá al equipo técnico.",
+      };
+    }
+    if (msg.includes("conflict") || msg.includes("409")) {
+      return {
+        tone: "warning",
+        title: `No se puede crear ${DDI.singular.toLowerCase()}`,
+        description: "Verificá si el correo ya pertenece a otro distribuidor.",
+      };
+    }
+    return {
+      tone: "error",
+      title: rawMessage || reason || "No se pudo aprobar",
+    };
+  };
+
+  /** Despacha al toast correspondiente según `tone`. */
+  const notifyApproveResult = (info: ReturnType<typeof explainApproveResult>) => {
+    const opts = info.description ? { description: info.description } : undefined;
+    if (info.tone === "info") toast.info(info.title, opts);
+    else if (info.tone === "warning") toast.warning(info.title, opts);
+    else toast.error(info.title, opts);
+  };
+
   const approve = async (id: string) => {
     try {
       const res = await approveAffiliateRequest(id);
       if (!res?.ok) {
-        toast.error(res?.reason || "No se pudo aprobar");
+        notifyApproveResult(explainApproveResult(res?.reason));
         return;
       }
-      toast.success(`${DDI.singular} creado. Código: ${res.code}`);
+      toast.success(
+        res.reactivated
+          ? `${DDI.singular} reactivado. Código: ${res.code}`
+          : `${DDI.singular} creado. Código: ${res.code}`
+      );
       load();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Error");
+      const msg = e instanceof Error ? e.message : String(e ?? "Error");
+      notifyApproveResult(explainApproveResult(undefined, msg));
     }
   };
 
@@ -173,7 +252,14 @@ function RequestsTab() {
     try {
       const res = await rejectAffiliateRequest(id, note);
       if (!res?.ok) {
-        toast.error(res?.reason || "No se pudo rechazar");
+        const r = (res?.reason ?? "").toLowerCase();
+        if (r === "not_pending_or_missing") {
+          toast.info("La solicitud ya fue procesada o no existe", {
+            description: "Actualizá la lista para ver el estado actual.",
+          });
+        } else {
+          toast.error(res?.reason || "No se pudo rechazar");
+        }
         return;
       }
       toast.success("Solicitud rechazada");

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Flame, Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { getDiscountPercentage, normalizeProductSource } from "@/lib/productHelpers";
@@ -38,6 +38,18 @@ export default function ProductsPage() {
   const setOffersFilter = (on: boolean) => {
     if (on) searchParams.set("offers", "1");
     else searchParams.delete("offers");
+    setSearchParams(searchParams);
+  };
+
+  /**
+   * "Los más virales" reutiliza el mismo criterio que la navbar superior:
+   * productos cuyo origen es Dropi (`source=dropi`). Así, si el usuario llega
+   * desde el menú "Los más virales", el chip aparece activo automáticamente.
+   */
+  const viralOnly = source === "dropi";
+  const setViralFilter = (on: boolean) => {
+    if (on) searchParams.set("source", "dropi");
+    else searchParams.delete("source");
     setSearchParams(searchParams);
   };
 
@@ -119,6 +131,23 @@ export default function ProductsPage() {
                 }`}
               >
                 Ofertas
+              </button>
+              {/*
+                "Los más virales": misma paleta naranja fuego que la navbar
+                (#FF4D00). Cuando está activo aplica `source=dropi` al filtrado.
+              */}
+              <button
+                type="button"
+                onClick={() => setViralFilter(!viralOnly)}
+                aria-pressed={viralOnly}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all inline-flex items-center gap-1.5 ${
+                  viralOnly
+                    ? "bg-[#FF4D00] text-white shadow-sm hover:bg-[#E65100]"
+                    : "border border-[#FF4D00]/30 text-[#FF4D00] hover:bg-[#FF4D00]/5 hover:border-[#FF4D00]/60"
+                }`}
+              >
+                <Flame className="h-3.5 w-3.5" aria-hidden />
+                Los más virales
               </button>
             </div>
           </div>

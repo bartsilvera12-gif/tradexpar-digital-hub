@@ -155,7 +155,15 @@ export async function approveAffiliateRequest(requestId: string) {
   const sb = getSupabaseData();
   const { data, error } = await sb.rpc("admin_approve_affiliate_request", { p_request_id: requestId });
   if (error) throw error;
-  return data as { ok?: boolean; affiliate_id?: string; code?: string; reason?: string };
+  return data as {
+    ok?: boolean;
+    affiliate_id?: string;
+    code?: string;
+    reason?: string;
+    /** true si el afiliado ya existía y fue reactivado en lugar de creado. */
+    reactivated?: boolean;
+    detail?: string;
+  };
 }
 
 export async function rejectAffiliateRequest(requestId: string, note?: string) {

@@ -1142,18 +1142,26 @@ export const tradexpar = {
     }
   },
 
-  adminGetOrders: async () => {
+  /**
+   * Listado de pedidos para el panel admin.
+   * Por defecto trae los últimos 200 (orden descendente por created_at) para mantener la
+   * página rápida con catálogos grandes; ajustable con `limit` (1-1000) y `offset` (paginar).
+   */
+  adminGetOrders: async (params?: { limit?: number; offset?: number }) => {
+    const limit = Math.max(1, Math.min(1000, Math.floor(Number(params?.limit ?? 200) || 200)));
+    const offset = Math.max(0, Math.floor(Number(params?.offset ?? 0) || 0));
     return withAdminFetchTimeout(
       (async () => {
         const sb = await txAdmin();
         const { data, error } = await sb
           .from("orders")
           .select("*, order_items(*)")
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1);
         if (error) throw new Error(error.message);
         const base = (data ?? []).map((r) => mapOrder(r as Record<string, unknown>));
         const orders = await enrichOrdersWithProductMeta(sb, base);
-        return { orders };
+        return { orders, limit, offset, returned: orders.length };
       })(),
       "Pedidos"
     );

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -60,6 +60,9 @@ export default function ProductDetailPage() {
   const [zooming, setZooming] = useState(false);
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [lensPos, setLensPos] = useState({ left: 0, top: 0 });
+  /** Cuando la imagen del zoom no carga (data:URI corrupto, 404, CORS, etc.) ocultamos el panel
+   *  en lugar de mostrarlo en blanco. Reset al cambiar de imagen. */
+  const [zoomImgError, setZoomImgError] = useState(false);
 
   const LENS_SIZE = 150; // px
   const ZOOM_FACTOR = 2.5;
@@ -67,6 +70,11 @@ export default function ProductDetailPage() {
   const fetchProduct = () => {
     void refetch();
   };
+
+  /** Reset del flag de error al cambiar de imagen o producto. */
+  useEffect(() => {
+    setZoomImgError(false);
+  }, [id, activeImg]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imgContainerRef.current) return;
@@ -180,18 +188,29 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Zoom preview panel (appears on hover, to the right) */}
-            {zooming && images.length > 0 && (
+            {/* Zoom preview panel (appears on hover, to the right).
+             *  Usamos <img> con object-fit + transform en lugar de background-image:
+             *  - background-image: url() sin comillas falla con data:URI largos o caracteres especiales.
+             *  - <img> reusa la imagen ya cacheada por el browser (no hay nueva network request).
+             *  - object-position + scale + origin reproducen el efecto del backgroundPosition/Size. */}
+            {zooming && images.length > 0 && !zoomImgError && (
               <div
                 className="hidden lg:block absolute left-[calc(100%+16px)] top-0 w-[400px] h-[400px] border rounded-2xl overflow-hidden bg-background shadow-xl z-30"
+                aria-hidden="true"
               >
-                <div
-                  className="w-full h-full"
+                <img
+                  src={images[activeImg]}
+                  alt=""
+                  draggable={false}
+                  loading="eager"
+                  decoding="async"
+                  onError={() => setZoomImgError(true)}
+                  className="w-full h-full pointer-events-none select-none"
                   style={{
-                    backgroundImage: `url(${images[activeImg]})`,
-                    backgroundSize: `${ZOOM_FACTOR * 100}%`,
-                    backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`,
-                    backgroundRepeat: "no-repeat",
+                    objectFit: "contain",
+                    objectPosition: `${zoomPos.x}% ${zoomPos.y}%`,
+                    transform: `scale(${ZOOM_FACTOR})`,
+                    transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
                   }}
                 />
               </div>

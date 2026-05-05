@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 
 /** `server/.env`, raíz `.env` / `.env.local` y alias VITE_* → mismo Supabase que el frontend en local. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -750,6 +751,24 @@ function resolvePagoparDescripcionResumen(orderId, mode) {
 }
 
 const app = express();
+app.disable("x-powered-by");
+/** Confianza en proxies (nginx) para X-Forwarded-For y rate limiting futuro. */
+app.set("trust proxy", true);
+/**
+ * Gzip/Deflate para JSON y texto. Reduce 60-90% el ancho de banda en respuestas grandes
+ * (listado de pedidos del admin, catálogos, etc.). `threshold: 1KB` evita gastar CPU
+ * comprimiendo respuestas chicas. Las imágenes (`/fastrax-products/*.jpg`) ya se sirven
+ * binarias y `compression` las omite por content-type.
+ */
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers["x-no-compression"]) return false;
+      return compression.filter(req, res);
+    },
+  })
+);
 app.use(
   cors({
     origin: true,
@@ -759,8 +778,18 @@ app.use(
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   })
 );
-/** Imágenes importadas Fastrax: `/fastrax-products/{sku}.jpg` */
-app.use(express.static(path.join(serverDir, "public"), { index: false }));
+/**
+ * Imágenes importadas Fastrax: `/fastrax-products/{sku}.jpg`. Cache pública de 7 días
+ * con immutable: estos archivos se nombran por SKU y no cambian salvo re-importación.
+ */
+app.use(
+  express.static(path.join(serverDir, "public"), {
+    index: false,
+    maxAge: "7d",
+    immutable: true,
+    fallthrough: true,
+  })
+);
 /** Webhook: body crudo a veces viene como JSON o x-www-form-urlencoded */
 app.use("/api/pagopar/webhook", express.json({ limit: "1mb" }));
 app.use("/api/pagopar/webhook", express.urlencoded({ extended: true, limit: "1mb" }));
@@ -1388,9 +1417,42 @@ try {
   process.exit(1);
 }
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   console.log(`[payments-api] listening on :${PORT} (orders → PostgREST schema "${ORDERS_SCHEMA}")`);
   console.log(
     `[payments-api] PagoPar: ORDER_WRAPPER default off (flat body). Depuración token en VPS: PAGOPAR_LOG_INICIAR_TRANSACCION=1 y PAGOPAR_LOG_TOKEN_DEBUG=1`
   );
 });
+
+/**
+ * Timeouts del HTTP server. Protegen ante conexiones colgadas y slowloris cuando el sitio
+ * recibe alto tráfico. Si nginx upstream timeout es 60s, dejamos algo más para el keep-alive.
+ *  - keepAliveTimeout 65s: nginx default proxy_read_timeout 60s; nuestro keep-alive debe ser mayor
+ *    para que cierre nginx primero (evita ECONNRESET intermitentes).
+ *  - headersTimeout > keepAliveTimeout (recomendación Node).
+ *  - requestTimeout 120s: cualquier pedido individual a nuestro Node se corta a 2 min máx.
+ */
+httpServer.keepAliveTimeout = 65_000;
+httpServer.headersTimeout = 70_000;
+httpServer.requestTimeout = 120_000;
+
+/**
+ * Apagado limpio (PM2/Docker SIGTERM): permite drenar requests en curso antes de salir.
+ */
+function gracefulShutdown(signal) {
+  console.info(`[payments-api] ${signal} recibido; cerrando servidor HTTP…`);
+  httpServer.close((err) => {
+    if (err) {
+      console.error("[payments-api] error al cerrar HTTP server", err);
+      process.exit(1);
+    }
+    console.info("[payments-api] cerrado limpiamente. Bye.");
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.warn("[payments-api] cierre forzado tras 15s.");
+    process.exit(1);
+  }, 15_000).unref();
+}
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

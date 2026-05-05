@@ -1,7 +1,26 @@
--- ARRAY 7 — RPC admin (SECURITY DEFINER; restringir en prod)
--- Aprobación robusta: si ya existe un afiliado con ese email, lo reactiva en lugar
--- de tirar 23505 (PostgREST 409). Captura unique_violation por code/email como red de
--- seguridad para que el panel siempre reciba un JSON `{ ok, reason }` legible.
+-- =============================================================================
+-- PATCH 2026-05-05 — Fix 409 (unique_violation) al aprobar solicitudes de afiliado
+-- -----------------------------------------------------------------------------
+-- Problema:
+--   Al aprobar una solicitud cuyo email ya existía en `tradexpar.affiliates`
+--   (por ejemplo, un distribuidor previamente suspendido o que se postuló dos
+--   veces), el INSERT rompía con `unique_violation` (Postgres 23505) y
+--   PostgREST devolvía HTTP 409, dejando la transacción a la mitad y al panel
+--   admin con un toast genérico ("Conflict").
+--
+-- Solución:
+--   Reescribir `tradexpar.admin_approve_affiliate_request(uuid)` para:
+--     1) Detectar emails duplicados (case-insensitive) ANTES de insertar.
+--     2) Si el afiliado ya existe → reactivarlo, asegurar regla de comisión
+--        global y un link activo, y vincularlo a la nueva request.
+--     3) Si por una carrera el email aparece después: capturar
+--        `unique_violation` y devolver `{ ok:false, reason:'email_already_affiliate' }`.
+--     4) Reintentar hasta 5 veces si la colisión es por `code` (también unique).
+--
+-- Aplicar en Supabase SQL Editor con el rol `postgres` (no anon).
+-- Idempotente: usa CREATE OR REPLACE.
+-- =============================================================================
+
 create or replace function tradexpar.admin_approve_affiliate_request(p_request_id uuid)
 returns jsonb
 language plpgsql
@@ -29,14 +48,12 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'invalid_email');
   end if;
 
-  -- ¿Ya existe afiliado con ese email? (case-insensitive)
   select * into v_existing
   from tradexpar.affiliates
   where lower(email) = v_email_norm
   limit 1;
 
   if found then
-    -- Reactivamos al afiliado existente y vinculamos a esta nueva request
     update tradexpar.affiliates
     set status        = 'active',
         name          = coalesce(nullif(trim(r.full_name), ''), name),
@@ -46,7 +63,6 @@ begin
         updated_at    = now()
     where id = v_existing.id;
 
-    -- Asegurar regla de comisión global por defecto si faltara
     insert into tradexpar.affiliate_commission_rules (affiliate_id, product_id, commission_percent)
     select v_existing.id, null, coalesce(v_existing.commission_rate, 10.00)
     where not exists (
@@ -54,7 +70,6 @@ begin
       where affiliate_id = v_existing.id and product_id is null
     );
 
-    -- Asegurar al menos un link activo
     insert into tradexpar.affiliate_links (affiliate_id, label, ref_token, is_active)
     select v_existing.id, 'Principal', v_existing.code, true
     where not exists (
@@ -74,7 +89,6 @@ begin
     );
   end if;
 
-  -- No existía: lo creamos. Reintento limitado por colisión de `code` (race).
   loop
     v_attempts := v_attempts + 1;
     v_code := tradexpar.generate_unique_affiliate_code();
@@ -85,7 +99,6 @@ begin
       exit;
     exception
       when unique_violation then
-        -- Si chocó por email (otra request creó al afiliado en paralelo): reintentar el flujo
         if exists (
           select 1 from tradexpar.affiliates where lower(email) = v_email_norm
         ) then
@@ -95,7 +108,6 @@ begin
             'detail', 'Ya existe un afiliado con ese correo. Recargá la lista.'
           );
         end if;
-        -- Choque por code: reintentar generando otro
         if v_attempts >= 5 then
           return jsonb_build_object('ok', false, 'reason', 'code_collision');
         end if;
@@ -116,93 +128,8 @@ begin
 end;
 $$;
 
-create or replace function tradexpar.admin_reject_affiliate_request(
-  p_request_id uuid,
-  p_note text default null
-) returns jsonb
-language plpgsql
-security definer
-set search_path = tradexpar, public
-as $$
-begin
-  update tradexpar.affiliate_requests
-  set status = 'rejected', admin_note = nullif(trim(p_note),''), reviewed_at = now()
-  where id = p_request_id and status = 'pending';
-  if not found then
-    return jsonb_build_object('ok', false, 'reason', 'not_pending_or_missing');
-  end if;
-  return jsonb_build_object('ok', true);
-end;
-$$;
+grant execute on function tradexpar.admin_approve_affiliate_request(uuid)
+  to anon, authenticated, service_role;
 
-create or replace function tradexpar.admin_set_commission_rule(
-  p_affiliate_id uuid,
-  p_product_id uuid,
-  p_percent numeric
-) returns void
-language plpgsql
-security definer
-set search_path = tradexpar, public
-as $$
-begin
-  delete from tradexpar.affiliate_commission_rules
-  where affiliate_id = p_affiliate_id and product_id is not distinct from p_product_id;
-  insert into tradexpar.affiliate_commission_rules (affiliate_id, product_id, commission_percent)
-  values (p_affiliate_id, p_product_id, p_percent);
-end;
-$$;
-
-create or replace function tradexpar.admin_set_discount_rule(
-  p_affiliate_id uuid,
-  p_product_id uuid,
-  p_percent numeric
-) returns void
-language plpgsql
-security definer
-set search_path = tradexpar, public
-as $$
-begin
-  delete from tradexpar.affiliate_discount_rules
-  where affiliate_id = p_affiliate_id and product_id is not distinct from p_product_id;
-  insert into tradexpar.affiliate_discount_rules (affiliate_id, product_id, discount_percent)
-  values (p_affiliate_id, p_product_id, p_percent);
-end;
-$$;
-
-create or replace function tradexpar.admin_set_attribution_commission_status(
-  p_attribution_id uuid,
-  p_status text
-) returns void
-language plpgsql
-security definer
-set search_path = tradexpar, public
-as $$
-begin
-  if p_status not in ('pending','approved','paid','cancelled') then
-    raise exception 'invalid commission status';
-  end if;
-  update tradexpar.affiliate_attributions
-  set commission_status = p_status
-  where id = p_attribution_id;
-end;
-$$;
-
-create or replace function tradexpar.admin_set_affiliate_globals(
-  p_affiliate_id uuid,
-  p_commission_percent numeric,
-  p_buyer_discount_percent numeric
-) returns void
-language plpgsql
-security definer
-set search_path = tradexpar, public
-as $$
-begin
-  update tradexpar.affiliates
-  set commission_rate = p_commission_percent,
-      default_buyer_discount_percent = p_buyer_discount_percent,
-      updated_at = now()
-  where id = p_affiliate_id;
-  perform tradexpar.admin_set_commission_rule(p_affiliate_id, null, p_commission_percent);
-  perform tradexpar.admin_set_discount_rule(p_affiliate_id, null, p_buyer_discount_percent);
-end;
-$$;
+-- Verificación rápida (opcional):
+-- select tradexpar.admin_approve_affiliate_request('<uuid-de-una-request-pending>');

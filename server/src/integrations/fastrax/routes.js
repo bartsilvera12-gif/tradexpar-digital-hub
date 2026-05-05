@@ -291,6 +291,41 @@ export function registerFastraxRoutes(app) {
   });
 
   /**
+   * GET /api/admin/orders/fastrax/status-bulk?ids=uuid1,uuid2,...
+   * Lectura masiva de `fastrax_order_map` para evitar N peticiones cuando el panel admin
+   * expande varias filas a la vez. Limitado a 200 ids por request.
+   */
+  app.get("/api/admin/orders/fastrax/status-bulk", requireApiKey, async (req, res) => {
+    const idsRaw = String(req.query?.ids ?? "").trim();
+    if (!idsRaw) return res.status(400).json({ ok: false, error: "ids requerido" });
+    const ids = [...new Set(idsRaw.split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 200);
+    if (ids.length === 0) return res.json({ ok: true, statuses: {} });
+    try {
+      const sb = supabaseService();
+      const { data: maps, error: me } = await sb
+        .from("fastrax_order_map")
+        .select("*")
+        .in("order_id", ids);
+      if (me) throw me;
+      /** @type {Record<string, ReturnType<typeof buildFastraxAdminStatusPayload>>} */
+      const statuses = {};
+      const byOrder = new Map();
+      for (const m of maps ?? []) {
+        if (m && m.order_id != null) byOrder.set(String(m.order_id), m);
+      }
+      for (const oid of ids) {
+        const map = byOrder.get(oid) ?? null;
+        statuses[oid] = buildFastraxAdminStatusPayload(oid, map);
+      }
+      res.setHeader("Cache-Control", "private, max-age=15");
+      return res.json({ ok: true, statuses });
+    } catch (e) {
+      console.error("[fastrax/status-bulk]", e);
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /**
    * GET /api/admin/orders/:orderId/fastrax/status
    * - Sin `?live=1`: lee `fastrax_order_map` + `tracking` unificado.
    * - Con `?live=1`: ope=13, actualiza mapa, mismo JSON que POST /fastrax/sync-status.

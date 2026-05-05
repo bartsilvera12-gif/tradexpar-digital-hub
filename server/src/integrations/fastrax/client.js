@@ -364,9 +364,14 @@ export async function fastraxPost(ope, extra = {}) {
   }
   const form = buildFormParams(ope, extra);
   const bodyStr = form.toString();
+  /**
+   * Timeout default 30s (suficiente para ope 2/4/12/13/15 en condiciones normales).
+   * Antes era 90s, demasiado para una API que el frontend admin invoca en cascada bajo carga.
+   * Sobrescribible con `FASTRAX_REQUEST_TIMEOUT_MS`.
+   */
   const timeoutMs = Math.min(
     180_000,
-    Math.max(5_000, Number(process.env.FASTRAX_REQUEST_TIMEOUT_MS || 90_000) || 90_000)
+    Math.max(5_000, Number(process.env.FASTRAX_REQUEST_TIMEOUT_MS || 30_000) || 30_000)
   );
   logFastraxOpe(ope);
   let r;

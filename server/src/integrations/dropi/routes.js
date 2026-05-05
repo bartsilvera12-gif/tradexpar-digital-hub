@@ -341,6 +341,40 @@ export function registerDropiRoutes(app) {
   });
 
   /**
+   * GET /api/admin/orders/dropi/status-bulk?ids=uuid1,uuid2,...
+   * Lectura masiva de `dropi_order_map` para evitar N peticiones cuando el panel admin
+   * carga muchas filas simultáneas. Máx. 200 ids por petición.
+   */
+  app.get("/api/admin/orders/dropi/status-bulk", requireApiKey, async (req, res) => {
+    const idsRaw = String(req.query?.ids ?? "").trim();
+    if (!idsRaw) return res.status(400).json({ ok: false, error: "ids requerido" });
+    const ids = [...new Set(idsRaw.split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 200);
+    if (ids.length === 0) return res.json({ ok: true, statuses: {} });
+    try {
+      const sb = supabaseService();
+      const { data: maps, error: me } = await sb
+        .from("dropi_order_map")
+        .select("*")
+        .in("order_id", ids);
+      if (me) throw me;
+      const byOrder = new Map();
+      for (const m of maps ?? []) {
+        if (m && m.order_id != null) byOrder.set(String(m.order_id), m);
+      }
+      const statuses = {};
+      for (const oid of ids) {
+        const map = byOrder.get(oid) ?? null;
+        statuses[oid] = { ok: true, order_id: oid, has_map: Boolean(map), map: map ?? null };
+      }
+      res.setHeader("Cache-Control", "private, max-age=15");
+      return res.json({ ok: true, statuses });
+    } catch (e) {
+      console.error("[dropi/status-bulk]", e);
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /**
    * Estado de Dropi guardado (sin llamar a bridge). `x-api-key`.
    * GET /api/admin/orders/:id/dropi/status
    */
