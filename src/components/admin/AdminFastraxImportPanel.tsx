@@ -76,8 +76,12 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
       setLastDurationMs(null);
       try {
         if (searchMode === "global" && appliedSearch) {
+          const normalizedSearch = appliedSearch.trim();
+          const isExactSku =
+            /^[0-9A-Za-z_-]{2,30}$/.test(normalizedSearch) && !normalizedSearch.includes(" ");
           const r = await searchFastraxAllPagesForAdmin({
-            q: appliedSearch,
+            q: isExactSku ? undefined : normalizedSearch,
+            sku: isExactSku ? normalizedSearch : undefined,
             only_stock: onlyStock,
             max_pages: 20,
             page_size: 50,
