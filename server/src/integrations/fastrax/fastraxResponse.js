@@ -133,16 +133,45 @@ export function evaluateFastraxBusinessEnvelope(parsed) {
 }
 
 /**
- * Tras ope=12, localizar ped (ecommerce) y pdc (Fastrax).
+ * Tras ope=12, localizar `pdc` (id generado por Fastrax) y conservar el `ped`
+ * ecommerce que enviamos. Cuidado: Fastrax a veces NO devuelve la clave `pdc`
+ * y entrega el id generado bajo `ped` numérico en el cuerpo de la respuesta
+ * (segundo elemento del vector). Por eso:
+ *   1) saltamos el header (estatus/cestatus) usando `evaluateFastraxBusinessEnvelope`
+ *      para que la búsqueda no matchee claves del encabezado;
+ *   2) buscamos primero alias de `pdc`;
+ *   3) si no aparece, usamos como `pdc` el `ped` del cuerpo SOLO si difiere del
+ *      `sentPed` (lo que sugiere que es el id Fastrax y no un eco).
+ * `ped` retornado es siempre el ecommerce que enviamos (`sentPed`); nunca se
+ * devuelve el número generado por Fastrax como `ped`.
+ *
  * @param {unknown} parsed
  * @param {string} sentPed
  */
 export function extractFastraxPedPdc(parsed, sentPed) {
-  const pdc = findFirstStringKeyDeep(parsed, ["pdc", "Pdc", "nPdc", "nro_pdc", "id_pdc", "PDC"]) || null;
-  const ped = findFirstStringKeyDeep(parsed, ["ped", "Ped", "nro_ped", "nPed", "id_ped", "nroext"]) || sentPed;
+  const sent = str(sentPed);
+  const env = evaluateFastraxBusinessEnvelope(parsed);
+  const dataRoot = env && env.dataRoot != null ? env.dataRoot : parsed;
+
+  let pdc = findFirstStringKeyDeep(dataRoot, ["pdc", "Pdc", "nPdc", "nro_pdc", "id_pdc", "PDC"]);
+
+  if (!pdc) {
+    const dataPed = findFirstStringKeyDeep(dataRoot, ["ped", "Ped", "nro_ped", "nPed", "id_ped", "nroext"]);
+    if (dataPed != null) {
+      const dataPedStr = str(dataPed);
+      if (dataPedStr && (!sent || dataPedStr !== sent)) {
+        pdc = dataPedStr;
+      }
+    }
+  }
+
+  if (pdc && sent && str(pdc) === sent) {
+    pdc = null;
+  }
+
   return {
-    pdc: pdc || null,
-    ped: str(ped) || str(sentPed) || null,
+    pdc: pdc ? str(pdc) : null,
+    ped: sent || null,
   };
 }
 
