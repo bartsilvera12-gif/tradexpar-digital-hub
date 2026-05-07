@@ -5,7 +5,12 @@ import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./c
 import { supabaseService } from "./db.js";
 import {
   importFastraxItemsToProducts,
+  importFastraxPageRangeWithBatch,
+  importFastraxPageWithBatch,
   importFastraxSkusToProducts,
+  loadFastraxBatchDetailsForSkus,
+  searchFastraxAllPagesOpe4Global,
+  searchFastraxFastListOpe4Only,
   searchFastraxReadonlyOpe4Ope2,
 } from "./controlledCatalog.js";
 import { runFastraxProductSync } from "./sync-products.js";
@@ -222,6 +227,156 @@ export function registerFastraxRoutes(app) {
     return res.status(502).json(
       r && typeof r === "object" ? { ...r, ok: false } : { ok: false, error: "fastrax_search_failed" }
     );
+  });
+
+  /**
+   * GET /api/admin/fastrax/products/list-fast — solo ope=4, sin ope=2.
+   * Útil para paginar rápido en el admin; los detalles se cargan después con
+   * `/products/details-batch` cuando el admin lo pida.
+   */
+  app.get("/api/admin/fastrax/products/list-fast", requireApiKeyOrAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    const size = Math.max(1, Math.min(500, Math.floor(Number(req.query.size) || 50)));
+    const onlyQ = String(req.query.only_stock ?? "").toLowerCase();
+    const only_stock = onlyQ === "1" || onlyQ === "true" || onlyQ === "yes" || onlyQ === "y";
+    const q = req.query.q != null && String(req.query.q).trim() ? String(req.query.q) : undefined;
+    const r = await searchFastraxFastListOpe4Only({ page, size, only_stock, q });
+    if (r && r.ok) {
+      return res.json(r);
+    }
+    return res.status(502).json(
+      r && typeof r === "object" ? { ...r, ok: false } : { ok: false, error: "fastrax_list_fast_failed" }
+    );
+  });
+
+  /**
+   * POST /api/admin/fastrax/products/details-batch — ope=2 en lote para los SKUs
+   * recibidos (max 500 por request). No persiste nada.
+   * Body: { skus: string[], batch_size?: number, concurrency?: number }
+   */
+  app.post("/api/admin/fastrax/products/details-batch", requireApiKeyOrAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const rawSkus = Array.isArray(body.skus) ? body.skus : [];
+    const skus = rawSkus.map((s) => (s == null ? "" : String(s).trim())).filter(Boolean).slice(0, 500);
+    if (skus.length === 0) {
+      return res.status(400).json({ ok: false, error: "skus requerido (array no vacío, hasta 500)" });
+    }
+    const batchSizeIn = body.batch_size != null ? Number(body.batch_size) : undefined;
+    const concurrencyIn = body.concurrency != null ? Number(body.concurrency) : undefined;
+    try {
+      const r = await loadFastraxBatchDetailsForSkus(skus, {
+        batchSize: Number.isFinite(batchSizeIn) ? batchSizeIn : undefined,
+        concurrency: Number.isFinite(concurrencyIn) ? concurrencyIn : undefined,
+      });
+      return res.json(r);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  });
+
+  /**
+   * GET /api/admin/fastrax/products/search-global — recorre páginas ope=4 (cap
+   * duro 30) buscando q/sku, y enriquece con un único batch ope=2 final.
+   */
+  app.get("/api/admin/fastrax/products/search-global", requireApiKeyOrAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const q = req.query.q != null && String(req.query.q).trim() ? String(req.query.q) : undefined;
+    const sku = req.query.sku != null && String(req.query.sku).trim() ? String(req.query.sku).trim() : undefined;
+    const onlyQ = String(req.query.only_stock ?? "").toLowerCase();
+    const only_stock = onlyQ === "1" || onlyQ === "true" || onlyQ === "yes" || onlyQ === "y";
+    const max_pages = req.query.max_pages != null ? Number(req.query.max_pages) : undefined;
+    const page_size = req.query.page_size != null ? Number(req.query.page_size) : undefined;
+    const max_results = req.query.max_results != null ? Number(req.query.max_results) : undefined;
+    try {
+      const r = await searchFastraxAllPagesOpe4Global({
+        q,
+        sku,
+        only_stock,
+        max_pages,
+        page_size,
+        max_results,
+      });
+      return res.json(r);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  });
+
+  /**
+   * POST /api/admin/fastrax/products/import-page — ope=4 + ope=2 batch + upsert.
+   * Body: { page?: number, size?: number, batch_size?: number, concurrency?: number }
+   */
+  app.post("/api/admin/fastrax/products/import-page", requireAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const page = body.page != null ? Number(body.page) : undefined;
+    const size = body.size != null ? Number(body.size) : undefined;
+    const batch_size = body.batch_size != null ? Number(body.batch_size) : undefined;
+    const concurrency = body.concurrency != null ? Number(body.concurrency) : undefined;
+    try {
+      const sb = supabaseService();
+      const r = await importFastraxPageWithBatch(sb, { page, size, batch_size, concurrency });
+      return res.json(r);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  });
+
+  /**
+   * POST /api/admin/fastrax/products/import-range — varias páginas con tope duro.
+   * Body: { from_page: number, to_page: number, size?: number, batch_size?: number,
+   *         concurrency?: number, max_pages?: number }
+   */
+  app.post("/api/admin/fastrax/products/import-range", requireAdmin, async (req, res) => {
+    if (!fastraxEnabled() || !fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const from_page = body.from_page != null ? Number(body.from_page) : undefined;
+    const to_page = body.to_page != null ? Number(body.to_page) : undefined;
+    if (!Number.isFinite(from_page) || !Number.isFinite(to_page)) {
+      return res.status(400).json({ ok: false, error: "from_page y to_page requeridos (números)" });
+    }
+    const size = body.size != null ? Number(body.size) : undefined;
+    const batch_size = body.batch_size != null ? Number(body.batch_size) : undefined;
+    const concurrency = body.concurrency != null ? Number(body.concurrency) : undefined;
+    const max_pages = body.max_pages != null ? Number(body.max_pages) : undefined;
+    try {
+      const sb = supabaseService();
+      const r = await importFastraxPageRangeWithBatch(sb, {
+        from_page,
+        to_page,
+        size,
+        batch_size,
+        concurrency,
+        max_pages,
+      });
+      return res.json(r);
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   });
 
   /** Buscador → `tradexpar.products` (items con datos y raw_detail; Bearer admin). */

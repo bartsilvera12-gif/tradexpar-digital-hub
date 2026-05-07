@@ -84,6 +84,8 @@ export type FastraxAdminListItem = {
   status: number;
   /** Fila ope=2 (sin tocar), o `_ope2_error` si falló ope=2. */
   raw_detail?: Record<string, unknown> | null;
+  /** "ope4_ok" | "pendiente_detalle" | undefined (modo rápido). */
+  detail_state?: string;
 };
 
 /** Respuesta búsqueda: el backend puede enviar u omitir `page` / `size` / `total_pages` / `source_count`. */
@@ -207,5 +209,187 @@ export async function syncFastraxAllProductsOnServer(args?: { max_pages?: number
   return fastraxAdminJson<FastraxSyncMassiveResult>("/api/admin/fastrax/sync-products", {
     method: "POST",
     body: JSON.stringify({ max_pages: args?.max_pages, merge_ope_98: args?.merge_ope_98 }),
+  });
+}
+
+/** Listado rápido: solo ope=4, sin per-SKU ope=2. */
+export type FastraxFastListResult =
+  | {
+      ok: true;
+      mode?: "list_fast";
+      page?: number;
+      size?: number;
+      total_pages?: number;
+      source_count?: number;
+      items: FastraxAdminListItem[];
+      duration_ms?: number;
+    }
+  | { ok: false; message?: string; error?: string };
+
+export async function listFastraxProductsFastForAdmin(args: {
+  page?: number;
+  size?: number;
+  q?: string;
+  only_stock?: boolean;
+}): Promise<FastraxFastListResult> {
+  const params = new URLSearchParams();
+  params.set("page", String(args.page ?? 1));
+  params.set("size", String(Math.max(1, Math.min(500, Math.floor(Number(args.size) || 50)))));
+  if (args.q && args.q.trim()) params.set("q", args.q.trim());
+  if (typeof args.only_stock === "boolean") params.set("only_stock", args.only_stock ? "true" : "false");
+  return fastraxAdminJson<FastraxFastListResult>(`/api/admin/fastrax/products/list-fast?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+/** Carga detalles ope=2 en lote para una lista de SKUs. */
+export type FastraxBatchDetailsResult =
+  | {
+      ok: true;
+      items: FastraxAdminListItem[];
+      missing: string[];
+      failed: string[];
+      stats: {
+        skus: number;
+        batches: number;
+        batches_split: number;
+        ok_rows: number;
+        missing: number;
+        failed: number;
+        duration_ms: number;
+      };
+      duration_ms?: number;
+    }
+  | { ok: false; message?: string; error?: string };
+
+export async function loadFastraxDetailsBatch(skus: string[], opts?: {
+  batch_size?: number;
+  concurrency?: number;
+}): Promise<FastraxBatchDetailsResult> {
+  return fastraxAdminJson<FastraxBatchDetailsResult>(`/api/admin/fastrax/products/details-batch`, {
+    method: "POST",
+    body: JSON.stringify({
+      skus,
+      batch_size: opts?.batch_size,
+      concurrency: opts?.concurrency,
+    }),
+  });
+}
+
+/** Búsqueda global: recorre páginas ope=4 y enriquece con un único batch ope=2. */
+export type FastraxSearchGlobalResult =
+  | {
+      ok: true;
+      mode?: "global" | "global_exact_sku";
+      q?: string | null;
+      pages_scanned?: number;
+      total_pages?: number | null;
+      source_count?: number;
+      items: FastraxAdminListItem[];
+      duration_ms?: number;
+    }
+  | { ok: false; message?: string; error?: string };
+
+export async function searchFastraxAllPagesForAdmin(args: {
+  q?: string;
+  sku?: string;
+  only_stock?: boolean;
+  max_pages?: number;
+  page_size?: number;
+  max_results?: number;
+}): Promise<FastraxSearchGlobalResult> {
+  const params = new URLSearchParams();
+  if (args.q && args.q.trim()) params.set("q", args.q.trim());
+  if (args.sku && args.sku.trim()) params.set("sku", args.sku.trim());
+  if (typeof args.only_stock === "boolean") params.set("only_stock", args.only_stock ? "true" : "false");
+  if (Number.isFinite(args.max_pages)) params.set("max_pages", String(args.max_pages));
+  if (Number.isFinite(args.page_size)) params.set("page_size", String(args.page_size));
+  if (Number.isFinite(args.max_results)) params.set("max_results", String(args.max_results));
+  return fastraxAdminJson<FastraxSearchGlobalResult>(
+    `/api/admin/fastrax/products/search-global?${params.toString()}`,
+    { method: "GET" }
+  );
+}
+
+/** Importación eficiente de una página completa (ope=4 + ope=2 batch + upsert). */
+export type FastraxImportPageStats = {
+  skus_found: number;
+  blocked: number;
+  detail_batches: number;
+  detail_failed: number;
+  imported: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  duration_ms: number;
+};
+export type FastraxImportPageResult =
+  | {
+      ok: true;
+      page: number;
+      size: number;
+      total_pages?: number;
+      stats: FastraxImportPageStats;
+      results: { sku: string; ok: boolean; action?: string; id?: string; skipped?: boolean; reason?: string; error?: string; used_ope2?: boolean }[];
+    }
+  | { ok: false; page?: number; size?: number; error?: string; message?: string };
+
+export async function importFastraxPageOnServer(args: {
+  page: number;
+  size?: number;
+  batch_size?: number;
+  concurrency?: number;
+}): Promise<FastraxImportPageResult> {
+  return fastraxAdminJson<FastraxImportPageResult>(`/api/admin/fastrax/products/import-page`, {
+    method: "POST",
+    body: JSON.stringify({
+      page: args.page,
+      size: args.size,
+      batch_size: args.batch_size,
+      concurrency: args.concurrency,
+    }),
+  });
+}
+
+/** Importación de un rango de páginas con tope duro. */
+export type FastraxImportRangeResult =
+  | {
+      ok: true;
+      from_page: number;
+      to_page: number;
+      size: number;
+      totals: {
+        pages_processed: number;
+        skus_found: number;
+        detail_batches: number;
+        detail_failed: number;
+        imported: number;
+        updated: number;
+        skipped: number;
+        failed: number;
+      };
+      pages: { page: number; ok: boolean; stats?: FastraxImportPageStats; error?: string }[];
+      duration_ms: number;
+    }
+  | { ok: false; error?: string; message?: string };
+
+export async function importFastraxPageRangeOnServer(args: {
+  from_page: number;
+  to_page: number;
+  size?: number;
+  batch_size?: number;
+  concurrency?: number;
+  max_pages?: number;
+}): Promise<FastraxImportRangeResult> {
+  return fastraxAdminJson<FastraxImportRangeResult>(`/api/admin/fastrax/products/import-range`, {
+    method: "POST",
+    body: JSON.stringify({
+      from_page: args.from_page,
+      to_page: args.to_page,
+      size: args.size,
+      batch_size: args.batch_size,
+      concurrency: args.concurrency,
+      max_pages: args.max_pages,
+    }),
   });
 }

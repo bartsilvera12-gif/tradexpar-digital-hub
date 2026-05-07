@@ -7,6 +7,38 @@
 import https from "node:https";
 import { URL } from "node:url";
 import { withFastraxBusinessGate, logFastraxOpe } from "./fastraxResponse.js";
+import { extractProductRows } from "./mapper.js";
+
+const FASTRAX_DETAIL_BATCH_DEFAULT = 20;
+const FASTRAX_DETAIL_BATCH_MAX = 50;
+const FASTRAX_DETAIL_CONCURRENCY_DEFAULT = 2;
+const FASTRAX_DETAIL_CONCURRENCY_MAX = 4;
+
+export function fastraxDetailBatchSize() {
+  const raw = Number(envTrim("FASTRAX_DETAIL_BATCH_SIZE") || FASTRAX_DETAIL_BATCH_DEFAULT) || FASTRAX_DETAIL_BATCH_DEFAULT;
+  return Math.max(1, Math.min(FASTRAX_DETAIL_BATCH_MAX, Math.floor(raw)));
+}
+
+export function fastraxDetailConcurrency() {
+  const raw = Number(envTrim("FASTRAX_DETAIL_CONCURRENCY") || FASTRAX_DETAIL_CONCURRENCY_DEFAULT) || FASTRAX_DETAIL_CONCURRENCY_DEFAULT;
+  return Math.max(1, Math.min(FASTRAX_DETAIL_CONCURRENCY_MAX, Math.floor(raw)));
+}
+
+export function fastraxOpe4DefaultPageSize() {
+  const raw = Number(envTrim("FASTRAX_OPE4_PAGE_SIZE") || 50) || 50;
+  return Math.max(1, Math.min(500, Math.floor(raw)));
+}
+
+const SKU_KEYS = ["sku", "SKU", "codigo", "cod_art", "CodArt", "COD_ART", "articulo", "codigo_articulo", "ref", "Ref"];
+
+function pickSkuFromRow(row) {
+  if (!row || typeof row !== "object") return "";
+  for (const k of SKU_KEYS) {
+    const v = /** @type {Record<string, unknown>} */ (row)[k];
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
 
 function envTrim(key) {
   const v = process.env[key];
@@ -474,6 +506,108 @@ export async function getProductDetails(skus) {
 
 export async function getStockPrice(extra = {}) {
   return fastraxPost(11, extra);
+}
+
+/**
+ * ope=2 en lote: agrupa SKUs en batches (FASTRAX_DETAIL_BATCH_SIZE, max 50) y
+ * los consulta con un único request `sku=A,B,C`. Concurrencia limitada
+ * (FASTRAX_DETAIL_CONCURRENCY, max 4). Si un batch falla con HTTP/ok=false, se
+ * divide a la mitad recursivamente; si una sub-llamada de un solo SKU falla,
+ * ese SKU queda como `failed`. Si el batch responde ok=true pero no aparece un
+ * SKU pedido, ese SKU queda como `missing` (no se reintenta individual para no
+ * degradar a 1×SKU).
+ *
+ * @param {(string|number)[]} skus
+ * @param {{ batchSize?: number, concurrency?: number }} [opts]
+ * @returns {Promise<{ ok: boolean, bySku: Map<string, Record<string, unknown>>, missing: string[], failed: string[], stats: { skus: number, batches: number, batches_split: number, ok_rows: number, missing: number, failed: number, duration_ms: number } }>}
+ */
+export async function getProductDetailsBatch(skus, opts = {}) {
+  const t0 = Date.now();
+  const list = Array.isArray(skus) ? skus.map((s) => String(s ?? "").trim()).filter(Boolean) : [];
+  const uniq = [...new Set(list)];
+  const stats = { skus: uniq.length, batches: 0, batches_split: 0, ok_rows: 0, missing: 0, failed: 0, duration_ms: 0 };
+  /** @type {Map<string, Record<string, unknown>>} */
+  const bySku = new Map();
+  if (uniq.length === 0) {
+    return { ok: true, bySku, missing: [], failed: [], stats };
+  }
+
+  const batchSize = Math.max(
+    1,
+    Math.min(FASTRAX_DETAIL_BATCH_MAX, Math.floor(Number(opts.batchSize) || fastraxDetailBatchSize()))
+  );
+  const concurrency = Math.max(
+    1,
+    Math.min(FASTRAX_DETAIL_CONCURRENCY_MAX, Math.floor(Number(opts.concurrency) || fastraxDetailConcurrency()))
+  );
+
+  /** @type {string[][]} */
+  const batches = [];
+  for (let i = 0; i < uniq.length; i += batchSize) {
+    batches.push(uniq.slice(i, i + batchSize));
+  }
+
+  const missing = new Set();
+  const failed = new Set();
+
+  /**
+   * @param {string[]} batch
+   */
+  const processBatch = async (batch) => {
+    stats.batches += 1;
+    const r = await getProductDetails(batch);
+    if (!r || r.ok === false) {
+      if (batch.length > 1) {
+        stats.batches_split += 1;
+        const mid = Math.floor(batch.length / 2);
+        await processBatch(batch.slice(0, mid));
+        await processBatch(batch.slice(mid));
+        return;
+      }
+      failed.add(batch[0]);
+      return;
+    }
+    const rows = extractProductRows(/** @type {unknown} */ (r.parsed));
+    for (const raw of rows) {
+      if (!raw || typeof raw !== "object") continue;
+      const sku = pickSkuFromRow(raw);
+      if (!sku) continue;
+      const found = batch.find((s) => s === sku || s.toLowerCase() === sku.toLowerCase());
+      const key = found || sku;
+      if (!bySku.has(key)) {
+        bySku.set(key, /** @type {Record<string, unknown>} */ (raw));
+        stats.ok_rows += 1;
+      }
+    }
+    for (const s of batch) {
+      if (!bySku.has(s)) missing.add(s);
+    }
+  };
+
+  let cursor = 0;
+  const workers = new Array(Math.min(concurrency, batches.length)).fill(0).map(async () => {
+    while (true) {
+      const idx = cursor;
+      cursor += 1;
+      if (idx >= batches.length) return;
+      await processBatch(batches[idx]);
+    }
+  });
+  await Promise.all(workers);
+
+  stats.missing = missing.size;
+  stats.failed = failed.size;
+  stats.duration_ms = Date.now() - t0;
+  console.info("[fastrax/batch] ope=2", {
+    skus: stats.skus,
+    batches: stats.batches,
+    batches_split: stats.batches_split,
+    ok_rows: stats.ok_rows,
+    missing: stats.missing,
+    failed: stats.failed,
+    duration_ms: stats.duration_ms,
+  });
+  return { ok: true, bySku, missing: [...missing], failed: [...failed], stats };
 }
 
 /**
