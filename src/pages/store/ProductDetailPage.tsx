@@ -256,8 +256,6 @@ export default function ProductDetailPage() {
           ) : null}
 
           <div className="flex flex-wrap items-center gap-x-2.5 sm:gap-x-3 gap-y-1.5 mb-2 text-xs sm:text-sm text-muted-foreground">
-            <span className="break-words [overflow-wrap:anywhere] min-w-0">SKU: {product.sku}</span>
-            <span className="hidden sm:inline text-muted-foreground/50" aria-hidden>•</span>
             <span
               className={`shrink-0 ${
                 product.stock > 0 ? "text-green-600" : "text-destructive"
