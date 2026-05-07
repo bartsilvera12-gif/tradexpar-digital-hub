@@ -49,6 +49,62 @@ function pickExternalSku(p) {
   return str(p.sku) || "";
 }
 
+const FASTRAX_PED_MAX_LEN = 20;
+
+/**
+ * Fastrax ope=12: `ped` es caracter(20). Genera referencia corta y estable
+ * a partir del UUID interno cuando no hay un número de pedido público corto.
+ * Formato: `FX-<16 hex MAYÚSCULAS>` => 19 caracteres como mucho.
+ * Si `oid` es muy corto, igualmente se trunca a 20.
+ * @param {string} oid
+ */
+function generateFastraxPedFromOid(oid) {
+  const compact = str(oid).replace(/-/g, "").toUpperCase();
+  const candidate = `FX-${compact.slice(0, 16)}`;
+  return candidate.slice(0, FASTRAX_PED_MAX_LEN);
+}
+
+/**
+ * Devuelve un `ped` válido (≤20 chars) para enviar a Fastrax sin tocar el id
+ * interno real. Prioriza:
+ *  1) `existingPed` ya guardado en `fastrax_order_map` si es válido.
+ *  2) Una columna corta de `orders` (`order_number`, `order_code`, `reference`,
+ *     `order_ref`, `public_id`) si existe en el esquema y trae valor ≤20.
+ *  3) Fallback derivado del UUID con `generateFastraxPedFromOid`.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} sb
+ * @param {string} orderId
+ * @param {string | null | undefined} existingPed
+ */
+async function resolveFastraxPed(sb, orderId, existingPed) {
+  const oid = str(orderId).trim();
+  const reused = str(existingPed).trim();
+  if (reused && reused.length > 0 && reused.length <= FASTRAX_PED_MAX_LEN) {
+    return reused;
+  }
+
+  const candidateCols = ["order_number", "order_code", "reference", "order_ref", "public_id"];
+  for (const col of candidateCols) {
+    try {
+      const { data, error } = await sb
+        .from("orders")
+        .select(`id, ${col}`)
+        .eq("id", oid)
+        .maybeSingle();
+      if (error) continue;
+      const v = data ? data[col] : null;
+      if (v == null) continue;
+      const s = str(v).trim();
+      if (s && s.length > 0 && s.length <= FASTRAX_PED_MAX_LEN) {
+        return s;
+      }
+    } catch (_e) {
+    }
+  }
+
+  return generateFastraxPedFromOid(oid);
+}
+
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {string} message
@@ -181,9 +237,16 @@ export async function createFastraxOrderForInternalOrder(sb, orderId, options = 
     return { ok: true, skipped: true, reason: "no_fastrax_lines" };
   }
 
+  const fastraxPed = await resolveFastraxPed(sb, oid, mapEx?.fastrax_ped);
+  if (!fastraxPed || fastraxPed.length === 0 || fastraxPed.length > FASTRAX_PED_MAX_LEN) {
+    const errText = `Fastrax ped inválido (length=${fastraxPed ? fastraxPed.length : 0}); debe ser ≤${FASTRAX_PED_MAX_LEN} caracteres`;
+    await recordFailure(sb, oid, errText, { reason: "ped_too_long", fastrax_ped: fastraxPed }, null);
+    return { ok: false, order_id: oid, error: errText };
+  }
+
   const pgt = pgtForOrder();
   const orderPayload = {
-    ped: oid,
+    ped: fastraxPed,
     sku: skus.join(","),
     qtd: qtds.join(","),
     gra: buildGra(skus),
@@ -195,7 +258,7 @@ export async function createFastraxOrderForInternalOrder(sb, orderId, options = 
     order_id: oid,
     status: "pending",
     fastrax_status: "pending",
-    fastrax_ped: oid,
+    fastrax_ped: fastraxPed,
     payload: orderPayload,
     error: null,
     last_error: null,
@@ -224,7 +287,7 @@ export async function createFastraxOrderForInternalOrder(sb, orderId, options = 
     return { ok: false, order_id: oid, error: msg, cestatus: msg };
   }
 
-  const { pdc, ped } = extractFastraxPedPdc(r.parsed, oid);
+  const { pdc, ped } = extractFastraxPedPdc(r.parsed, fastraxPed);
   if (!pdc) {
     const errText = "Fastrax: ope=12 ok pero sin pdc en respuesta; se guarda response. ped=ecommerce, pdc=id Fastrax.";
     await upsertMap(sb, {
