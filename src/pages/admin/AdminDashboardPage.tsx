@@ -1,25 +1,44 @@
 import { motion } from "framer-motion";
 import {
+  AlertTriangle,
   Bell,
   CheckCheck,
   Cpu,
   DollarSign,
   Package,
+  RotateCcw,
   ShoppingCart,
   Truck,
   TrendingUp,
   Users,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { tradexpar } from "@/services/tradexpar";
 import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { ADMIN_PANEL } from "@/lib/adminModuleLayout";
+import { STORE_CATALOG_QUERY_KEY } from "@/hooks/useStoreCatalog";
 import { cn } from "@/lib/utils";
 import type { CustomerUser, Order, Product } from "@/types";
+
+/** Token literal que el admin debe tipear para confirmar el reset destructivo. */
+const RESET_CONFIRM_TOKEN = "RESETEAR";
 
 const AdminDashboardChartsLazy = lazy(() => import("./AdminDashboardChartsLazy"));
 
@@ -53,35 +72,50 @@ function startOfCurrentMonth(): Date {
 }
 
 export default function AdminDashboardPage() {
+  const queryClient = useQueryClient();
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<CustomerUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [stockPopoverOpen, setStockPopoverOpen] = useState(false);
   const [dismissedStockIds, setDismissedStockIds] = useState<Set<string>>(() => loadDismissedStockIds());
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  const fetchDashboardBundle = useCallback(async (): Promise<{
+    products: Product[];
+    orders: Order[];
+    users: CustomerUser[];
+  }> => {
     const bundle = Promise.all([
       tradexpar.getProducts().catch(() => [] as Product[]),
       tradexpar.adminGetOrders().catch(() => ({ orders: [] as Order[] })),
       tradexpar.adminGetUsers().catch(() => ({ users: [] as CustomerUser[] })),
     ]);
-    Promise.race([
+    const result = (await Promise.race([
       bundle,
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), DASHBOARD_FETCH_MS)),
-    ])
-      .then((result) => {
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("timeout")), DASHBOARD_FETCH_MS),
+      ),
+    ])) as [Product[], { orders: Order[] }, { users: CustomerUser[] }];
+    const [prods, ordersRes, usersRes] = result;
+    return {
+      products: Array.isArray(prods) ? prods : [],
+      orders: ordersRes.orders ?? [],
+      users: usersRes.users ?? [],
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchDashboardBundle()
+      .then((data) => {
         if (cancelled) return;
-        const [prods, ordersRes, usersRes] = result as [
-          Product[],
-          { orders: Order[] },
-          { users: CustomerUser[] },
-        ];
-        setProducts(Array.isArray(prods) ? prods : []);
-        setOrders(ordersRes.orders ?? []);
-        setUsers(usersRes.users ?? []);
+        setProducts(data.products);
+        setOrders(data.orders);
+        setUsers(data.users);
       })
       .catch(() => {
         if (!cancelled) {
@@ -96,7 +130,50 @@ export default function AdminDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchDashboardBundle]);
+
+  const handleReset = async () => {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      const r = await tradexpar.adminResetDashboard();
+      setResetOpen(false);
+      setResetConfirmText("");
+      setProducts([]);
+      setOrders([]);
+      setDismissedStockIds(new Set());
+      saveDismissedStockIds(new Set());
+      try {
+        await queryClient.invalidateQueries({ queryKey: STORE_CATALOG_QUERY_KEY });
+      } catch {
+        /* invalidación best-effort: no rompe el flujo si falla */
+      }
+      toast({
+        title: "Dashboard reseteado",
+        description: `Se eliminaron ${r.products_deleted} productos, ${r.orders_deleted} pedidos y ${r.items_deleted} líneas.`,
+      });
+      setLoading(true);
+      try {
+        const data = await fetchDashboardBundle();
+        setProducts(data.products);
+        setOrders(data.orders);
+        setUsers(data.users);
+      } catch {
+        setProducts([]);
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({
+        title: "No se pudo resetear",
+        description: msg,
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
 
   useEffect(() => {
     setDismissedStockIds((prev) => {
@@ -261,9 +338,24 @@ export default function AdminDashboardPage() {
       title="Dashboard"
       description="Resumen operativo: inventario, pedidos y clientes en un solo vistazo."
       actions={
-        <Popover open={stockPopoverOpen} onOpenChange={setStockPopoverOpen}>
-          <PopoverTrigger asChild>
-            <div className="fixed right-4 top-4 z-50 sm:static sm:right-auto sm:top-auto">
+        <div className="fixed right-4 top-4 z-50 flex items-center gap-2 sm:static sm:right-auto sm:top-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setResetOpen(true)}
+            className={cn(
+              "h-11 shrink-0 gap-2 rounded-2xl border-destructive/40 bg-card px-3 text-destructive shadow-sm",
+              "hover:border-destructive/60 hover:bg-destructive/[0.06] hover:text-destructive",
+              "focus-visible:ring-destructive/30",
+            )}
+            aria-label="Resetear pedidos y productos"
+          >
+            <RotateCcw className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+            <span className="hidden sm:inline">Resetear</span>
+          </Button>
+          <Popover open={stockPopoverOpen} onOpenChange={setStockPopoverOpen}>
+            <PopoverTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
@@ -286,8 +378,7 @@ export default function AdminDashboardPage() {
                   </span>
                 ) : null}
               </Button>
-            </div>
-          </PopoverTrigger>
+            </PopoverTrigger>
           <PopoverContent
             className={cn(
               "w-[min(22rem,calc(100vw-2rem))] p-0 overflow-hidden rounded-2xl border-border/60",
@@ -394,8 +485,61 @@ export default function AdminDashboardPage() {
             ) : null}
           </PopoverContent>
         </Popover>
+        </div>
       }
     >
+      <AlertDialog
+        open={resetOpen}
+        onOpenChange={(open) => {
+          if (resetting && !open) return;
+          setResetOpen(open);
+          if (!open) setResetConfirmText("");
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <div className="mx-auto sm:mx-0 mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive ring-1 ring-destructive/20">
+              <AlertTriangle className="h-6 w-6" strokeWidth={1.9} aria-hidden />
+            </div>
+            <AlertDialogTitle>Resetear panel</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <span className="block">
+                Vas a borrar <strong>todos los productos</strong>, <strong>todos los pedidos</strong> y
+                sus líneas, junto con los mapeos a Dropi y atribuciones de afiliados.
+              </span>
+              <span className="block">
+                <strong>No se borran</strong> clientes, afiliados, ciudades ni perfiles admin. La acción
+                es <strong>irreversible</strong>.
+              </span>
+              <span className="block pt-2">
+                Para confirmar, escribí <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">{RESET_CONFIRM_TOKEN}</code> y presioná Resetear.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={resetConfirmText}
+            onChange={(e) => setResetConfirmText(e.target.value)}
+            placeholder={RESET_CONFIRM_TOKEN}
+            autoFocus
+            disabled={resetting}
+            aria-label="Texto de confirmación"
+            className="mt-1"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleReset();
+              }}
+              disabled={resetting || resetConfirmText.trim() !== RESET_CONFIRM_TOKEN}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/40"
+            >
+              {resetting ? "Reseteando..." : "Resetear"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {loading ? (
         <Loader text="Cargando datos..." />
       ) : (

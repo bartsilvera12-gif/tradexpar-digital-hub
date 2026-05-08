@@ -1341,6 +1341,29 @@ export const tradexpar = {
     return { ok: true };
   },
 
+  /**
+   * Reset operativo del dashboard: borra productos y pedidos (con sus tablas
+   * dependientes: order_items, dropi_order_map, affiliate_*). Solo super admin.
+   * La RPC vive en `tradexpar.admin_reset_dashboard()` (SECURITY DEFINER).
+   */
+  adminResetDashboard: async (): Promise<{
+    orders_deleted: number;
+    items_deleted: number;
+    products_deleted: number;
+    reset_at: string;
+  }> => {
+    const sb = await txAdmin();
+    const { data, error } = await sb.rpc("admin_reset_dashboard");
+    if (error) throw new Error(error.message);
+    const o = (data ?? {}) as Record<string, unknown>;
+    return {
+      orders_deleted: Number(o.orders_deleted ?? 0) || 0,
+      items_deleted: Number(o.items_deleted ?? 0) || 0,
+      products_deleted: Number(o.products_deleted ?? 0) || 0,
+      reset_at: typeof o.reset_at === "string" ? o.reset_at : new Date().toISOString(),
+    };
+  },
+
   syncStoreCustomer: async (): Promise<CustomerUser | null> => {
     if (!isSupabaseConfigured()) {
       clearOAuthReturnPending();
