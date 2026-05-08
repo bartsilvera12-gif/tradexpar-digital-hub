@@ -65,52 +65,57 @@ BEGIN
         `to_regclass` para no fallar si la tabla aún no existe en este
         entorno. */
 
+  /* `WHERE true` explícito: Supabase activa la extensión `pg_safeupdate` por
+     defecto, que rechaza DELETE/UPDATE sin WHERE con SQLSTATE 21000
+     ("DELETE requires a WHERE clause"). El WHERE constante satisface al
+     guardia y mantiene el DELETE total intencional. */
+
   IF to_regclass('tradexpar.affiliate_order_items') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_order_items;
+    DELETE FROM tradexpar.affiliate_order_items WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.affiliate_commission_adjustments') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_commission_adjustments;
+    DELETE FROM tradexpar.affiliate_commission_adjustments WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.affiliate_commissions') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_commissions;
+    DELETE FROM tradexpar.affiliate_commissions WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.affiliate_attributions') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_attributions;
+    DELETE FROM tradexpar.affiliate_attributions WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.dropi_order_map') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_order_map;
+    DELETE FROM tradexpar.dropi_order_map WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.order_items') IS NOT NULL THEN
-    DELETE FROM tradexpar.order_items;
+    DELETE FROM tradexpar.order_items WHERE true;
     GET DIAGNOSTICS v_n = ROW_COUNT;
     v_items_deleted := v_n;
   END IF;
 
   IF to_regclass('tradexpar.orders') IS NOT NULL THEN
-    DELETE FROM tradexpar.orders;
+    DELETE FROM tradexpar.orders WHERE true;
     GET DIAGNOSTICS v_n = ROW_COUNT;
     v_orders_deleted := v_n;
   END IF;
 
   IF to_regclass('tradexpar.dropi_image_queue') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_image_queue;
+    DELETE FROM tradexpar.dropi_image_queue WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.dropi_product_map') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_product_map;
+    DELETE FROM tradexpar.dropi_product_map WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.dropi_source_products_raw') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_source_products_raw;
+    DELETE FROM tradexpar.dropi_source_products_raw WHERE true;
   END IF;
 
   IF to_regclass('tradexpar.products') IS NOT NULL THEN
-    DELETE FROM tradexpar.products;
+    DELETE FROM tradexpar.products WHERE true;
     GET DIAGNOSTICS v_n = ROW_COUNT;
     v_products_deleted := v_n;
   END IF;
