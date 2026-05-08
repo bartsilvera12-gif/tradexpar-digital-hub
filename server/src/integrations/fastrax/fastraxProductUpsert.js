@@ -3,7 +3,68 @@
  */
 
 import { FASTRAX_SOURCE, mapFastraxRowToProduct } from "./mapper.js";
-import { saveLocalFastraxProductImageIfNeeded } from "./localFastraxImage.js";
+import { saveLocalFastraxProductImagesIfNeeded } from "./localFastraxImage.js";
+
+/**
+ * Indica si la columna `images` (jsonb) de tradexpar.products faltó en algún
+ * insert/update previo en este proceso. Si fue así, evitamos enviarla en
+ * llamadas posteriores para no repetir el round-trip que falla.
+ */
+let SKIP_IMAGES_COLUMN = false;
+
+/**
+ * Detecta el típico error de PostgREST cuando la columna no existe, p. ej.
+ *   "Could not find the 'images' column of 'products' in the schema cache"
+ *   "column \"images\" of relation \"products\" does not exist"
+ * @param {{ message?: unknown } | null | undefined} err
+ */
+function isMissingImagesColumnError(err) {
+  if (!err) return false;
+  const msg = String(err.message || "").toLowerCase();
+  if (!msg) return false;
+  return (
+    msg.includes("'images'") ||
+    msg.includes('"images"') ||
+    msg.includes(" images ") ||
+    /column .*images.* does not exist/.test(msg)
+  );
+}
+
+/**
+ * Ejecuta `update`/`insert` con `images` jsonb; si la columna no existe en la
+ * BD, reintenta sin ese campo y deja un log para que la próxima ejecución no
+ * lo siga intentando.
+ *
+ * @template {{ images?: unknown }} R
+ * @param {R} row
+ * @param {(row: R) => Promise<{ data?: unknown, error?: { message?: unknown } | null }>} run
+ */
+async function runWithImagesFallback(row, run) {
+  const send = SKIP_IMAGES_COLUMN ? stripImages(row) : row;
+  const r = await run(/** @type {R} */ (send));
+  if (r && r.error && isMissingImagesColumnError(r.error)) {
+    if (!SKIP_IMAGES_COLUMN) {
+      console.warn(
+        "[fastrax/upsert] columna products.images ausente; reintentando sin gallery (fallback)"
+      );
+      SKIP_IMAGES_COLUMN = true;
+    }
+    return run(/** @type {R} */ (stripImages(row)));
+  }
+  return r;
+}
+
+/**
+ * @template {{ images?: unknown }} R
+ * @param {R} row
+ * @returns {R}
+ */
+function stripImages(row) {
+  if (!row || typeof row !== "object" || !("images" in row)) return row;
+  const copy = { ...row };
+  delete (/** @type {Record<string, unknown>} */(copy)).images;
+  return /** @type {R} */ (copy);
+}
 
 function str(v) {
   if (v == null) return "";
@@ -71,7 +132,7 @@ export async function upsertFastraxFromImportItem(sb, item) {
   const dbc = descBrandCatFromFastraxDetail(rawPayload);
 
   const now = new Date().toISOString();
-  const localImg = await saveLocalFastraxProductImageIfNeeded(extSku, rawPayload);
+  const { mainImage, gallery } = await saveLocalFastraxProductImagesIfNeeded(extSku, rawPayload);
   const row = {
     name,
     sku: extSku,
@@ -80,7 +141,8 @@ export async function upsertFastraxFromImportItem(sb, item) {
     brand: dbc.brand,
     price,
     stock,
-    image: localImg || "",
+    image: mainImage || "",
+    images: gallery.length > 0 ? gallery : null,
     product_source_type: FASTRAX_SOURCE,
     external_provider: FASTRAX_SOURCE,
     external_sku: extSku,
@@ -102,18 +164,23 @@ export async function upsertFastraxFromImportItem(sb, item) {
   }
 
   if (existing?.id) {
-    const { error: eUp } = await sb.from("products").update({ ...row }).eq("id", existing.id);
-    if (eUp) {
-      return { ok: false, error: eUp.message };
+    const r = await runWithImagesFallback(row, (payload) =>
+      sb.from("products").update({ ...payload }).eq("id", existing.id)
+    );
+    if (r && r.error) {
+      return { ok: false, error: String(r.error.message || "update fallo") };
     }
     return { ok: true, action: "updated", id: String(existing.id) };
   }
 
-  const { data: ins, error: eIn } = await sb.from("products").insert([{ ...row }]).select("id").maybeSingle();
-  if (eIn) {
-    return { ok: false, error: eIn.message };
+  const r = await runWithImagesFallback(row, (payload) =>
+    sb.from("products").insert([{ ...payload }]).select("id").maybeSingle()
+  );
+  if (r && r.error) {
+    return { ok: false, error: String(r.error.message || "insert fallo") };
   }
-  return { ok: true, action: "inserted", id: ins?.id ? String(ins.id) : undefined };
+  const insData = /** @type {{ id?: unknown } | null} */ (r && "data" in r ? r.data : null);
+  return { ok: true, action: "inserted", id: insData?.id ? String(insData.id) : undefined };
 }
 
 /**
@@ -136,7 +203,7 @@ export async function upsertFastraxFromRawRow(sb, raw) {
  */
 export async function upsertFastraxMappedRow(sb, m) {
   const now = new Date().toISOString();
-  const localImg = await saveLocalFastraxProductImageIfNeeded(
+  const { mainImage, gallery } = await saveLocalFastraxProductImagesIfNeeded(
     m.external_sku,
     m.external_payload && typeof m.external_payload === "object" && !Array.isArray(m.external_payload)
       ? /** @type {Record<string, unknown>} */ (m.external_payload)
@@ -150,7 +217,8 @@ export async function upsertFastraxMappedRow(sb, m) {
     brand: m.brand,
     price: m.price,
     stock: m.stock,
-    image: localImg || m.image || null,
+    image: mainImage || m.image || null,
+    images: gallery.length > 0 ? gallery : null,
     product_source_type: FASTRAX_SOURCE,
     external_provider: FASTRAX_SOURCE,
     external_sku: m.external_sku,
@@ -189,15 +257,20 @@ export async function upsertFastraxMappedRow(sb, m) {
   }
 
   if (exId) {
-    const { error: eUp } = await sb.from("products").update({ ...row }).eq("id", exId);
-    if (eUp) {
-      return { ok: false, error: eUp.message };
+    const r = await runWithImagesFallback(row, (payload) =>
+      sb.from("products").update({ ...payload }).eq("id", exId)
+    );
+    if (r && r.error) {
+      return { ok: false, error: String(r.error.message || "update fallo") };
     }
     return { ok: true, action: "updated", id: exId };
   }
-  const { data: ins, error: eIn } = await sb.from("products").insert([{ ...row }]).select("id").maybeSingle();
-  if (eIn) {
-    return { ok: false, error: eIn.message };
+  const r = await runWithImagesFallback(row, (payload) =>
+    sb.from("products").insert([{ ...payload }]).select("id").maybeSingle()
+  );
+  if (r && r.error) {
+    return { ok: false, error: String(r.error.message || "insert fallo") };
   }
-  return { ok: true, action: "inserted", id: ins?.id ? String(ins.id) : undefined };
+  const insData = /** @type {{ id?: unknown } | null} */ (r && "data" in r ? r.data : null);
+  return { ok: true, action: "inserted", id: insData?.id ? String(insData.id) : undefined };
 }
