@@ -31,6 +31,31 @@ function isMissingImagesColumnError(err) {
 }
 
 /**
+ * Detecta el error típico cuando la check constraint del catálogo no acepta
+ * 'fastrax' (BD vieja sin la migración Fastrax aplicada). Devuelve un mensaje
+ * accionable para el admin en lugar del críptico de Postgres.
+ * @param {{ message?: unknown } | null | undefined} err
+ */
+function describeKnownUpsertError(err) {
+  if (!err) return "";
+  const msg = String(err.message || "");
+  const low = msg.toLowerCase();
+  if (low.includes("products_source_type_chk") || /violates check constraint/i.test(msg)) {
+    return (
+      "BD bloquea product_source_type='fastrax' (constraint products_source_type_chk vieja). " +
+      "Aplicá supabase/patches/2026_05_08_ensure_fastrax_in_public_catalog.sql en el SQL Editor."
+    );
+  }
+  if (/column .*does not exist/i.test(msg) || /could not find the .* column/i.test(msg)) {
+    return (
+      `Columna ausente en tradexpar.products (${msg}). ` +
+      "Aplicá supabase/patches/2026_05_08_ensure_fastrax_in_public_catalog.sql en el SQL Editor."
+    );
+  }
+  return msg;
+}
+
+/**
  * Ejecuta `update`/`insert` con `images` jsonb; si la columna no existe en la
  * BD, reintenta sin ese campo y deja un log para que la próxima ejecución no
  * lo siga intentando.
@@ -168,7 +193,7 @@ export async function upsertFastraxFromImportItem(sb, item) {
       sb.from("products").update({ ...payload }).eq("id", existing.id)
     );
     if (r && r.error) {
-      return { ok: false, error: String(r.error.message || "update fallo") };
+      return { ok: false, error: describeKnownUpsertError(r.error) || "update fallo" };
     }
     return { ok: true, action: "updated", id: String(existing.id) };
   }
@@ -177,7 +202,7 @@ export async function upsertFastraxFromImportItem(sb, item) {
     sb.from("products").insert([{ ...payload }]).select("id").maybeSingle()
   );
   if (r && r.error) {
-    return { ok: false, error: String(r.error.message || "insert fallo") };
+    return { ok: false, error: describeKnownUpsertError(r.error) || "insert fallo" };
   }
   const insData = /** @type {{ id?: unknown } | null} */ (r && "data" in r ? r.data : null);
   return { ok: true, action: "inserted", id: insData?.id ? String(insData.id) : undefined };
@@ -261,7 +286,7 @@ export async function upsertFastraxMappedRow(sb, m) {
       sb.from("products").update({ ...payload }).eq("id", exId)
     );
     if (r && r.error) {
-      return { ok: false, error: String(r.error.message || "update fallo") };
+      return { ok: false, error: describeKnownUpsertError(r.error) || "update fallo" };
     }
     return { ok: true, action: "updated", id: exId };
   }
@@ -269,7 +294,7 @@ export async function upsertFastraxMappedRow(sb, m) {
     sb.from("products").insert([{ ...payload }]).select("id").maybeSingle()
   );
   if (r && r.error) {
-    return { ok: false, error: String(r.error.message || "insert fallo") };
+    return { ok: false, error: describeKnownUpsertError(r.error) || "insert fallo" };
   }
   const insData = /** @type {{ id?: unknown } | null} */ (r && "data" in r ? r.data : null);
   return { ok: true, action: "inserted", id: insData?.id ? String(insData.id) : undefined };

@@ -218,10 +218,13 @@ export async function importFastraxSkusToProducts(sb, skus, opts = {}) {
       results.push({ sku, ok: true, action: u.action, id: u.id });
     } else {
       results.push({ sku, ok: false, error: u.error || "upsert" });
+      console.warn(`[fastrax/import] upsert fallo sku=${sku}: ${u.error || "(sin detalle)"}`);
     }
   }
 
   const failed = results.filter((r) => !r.ok && !r.skipped).length;
+  const firstError =
+    results.find((r) => !r.ok && !r.skipped && r.error)?.error || "";
   const dur = Date.now() - t0;
   console.info("[fastrax/import] from_skus", {
     total: uniq.length,
@@ -233,6 +236,7 @@ export async function importFastraxSkusToProducts(sb, skus, opts = {}) {
     detail_batches: batch.stats.batches,
     detail_failed: batch.stats.failed,
     duration_ms: dur,
+    ...(firstError ? { first_error: firstError } : {}),
   });
   return {
     ok: true,
@@ -243,6 +247,7 @@ export async function importFastraxSkusToProducts(sb, skus, opts = {}) {
     skipped,
     results,
     duration_ms: dur,
+    ...(firstError ? { first_error: firstError } : {}),
   };
 }
 
@@ -271,6 +276,8 @@ export async function importFastraxItemsToProducts(sb, items) {
   let updated = 0;
   let failed = 0;
   let skipped = 0;
+  /** Primer error real del upsert para devolverlo arriba (diagnóstico admin). */
+  let firstError = "";
   for (const it of list) {
     if (!it || typeof it !== "object") {
       failed += 1;
@@ -298,10 +305,12 @@ export async function importFastraxItemsToProducts(sb, items) {
       if (u.action === "updated") updated += 1;
     } else {
       failed += 1;
+      if (!firstError) firstError = String(u.error || "upsert");
+      console.warn(`[fastrax/import] upsert fallo sku=${sku}: ${u.error || "(sin detalle)"}`);
     }
   }
   const dur = Date.now() - t0;
-  console.info("[fastrax/import] from_items", {
+  const summary = {
     total: list.length,
     blocked: blocked.size,
     inserted,
@@ -309,8 +318,20 @@ export async function importFastraxItemsToProducts(sb, items) {
     skipped,
     failed,
     duration_ms: dur,
-  });
-  return { ok: true, inserted, updated, failed, skipped, duration_ms: dur };
+  };
+  if (firstError) {
+    /** @type {Record<string, unknown>} */ (summary).first_error = firstError;
+  }
+  console.info("[fastrax/import] from_items", summary);
+  return {
+    ok: true,
+    inserted,
+    updated,
+    failed,
+    skipped,
+    duration_ms: dur,
+    ...(firstError ? { first_error: firstError } : {}),
+  };
 }
 
 /**
