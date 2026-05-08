@@ -43,7 +43,23 @@ DECLARE
   v_orders_deleted   integer := 0;
   v_items_deleted    integer := 0;
   v_products_deleted integer := 0;
-  v_n                integer;
+  v_existing         text[] := ARRAY[]::text[];
+  v_targets          text[] := ARRAY[
+    /* Orden no es relevante: usamos TRUNCATE multi-tabla en una sola
+       sentencia, Postgres maneja las dependencias entre las listadas. */
+    'tradexpar.affiliate_order_items',
+    'tradexpar.affiliate_commission_adjustments',
+    'tradexpar.affiliate_commissions',
+    'tradexpar.affiliate_attributions',
+    'tradexpar.dropi_order_map',
+    'tradexpar.order_items',
+    'tradexpar.orders',
+    'tradexpar.dropi_image_queue',
+    'tradexpar.dropi_product_map',
+    'tradexpar.dropi_source_products_raw',
+    'tradexpar.products'
+  ];
+  t text;
 BEGIN
   /* 1) Validación: usuario autenticado y super admin. */
   v_user_id := auth.uid();
@@ -61,63 +77,35 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  /* 2) Borrado en orden de dependencias. Cada bloque protegido con
-        `to_regclass` para no fallar si la tabla aún no existe en este
-        entorno. */
-
-  /* `WHERE true` explícito: Supabase activa la extensión `pg_safeupdate` por
-     defecto, que rechaza DELETE/UPDATE sin WHERE con SQLSTATE 21000
-     ("DELETE requires a WHERE clause"). El WHERE constante satisface al
-     guardia y mantiene el DELETE total intencional. */
-
-  IF to_regclass('tradexpar.affiliate_order_items') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_order_items WHERE true;
-  END IF;
-
-  IF to_regclass('tradexpar.affiliate_commission_adjustments') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_commission_adjustments WHERE true;
-  END IF;
-
-  IF to_regclass('tradexpar.affiliate_commissions') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_commissions WHERE true;
-  END IF;
-
-  IF to_regclass('tradexpar.affiliate_attributions') IS NOT NULL THEN
-    DELETE FROM tradexpar.affiliate_attributions WHERE true;
-  END IF;
-
-  IF to_regclass('tradexpar.dropi_order_map') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_order_map WHERE true;
-  END IF;
-
-  IF to_regclass('tradexpar.order_items') IS NOT NULL THEN
-    DELETE FROM tradexpar.order_items WHERE true;
-    GET DIAGNOSTICS v_n = ROW_COUNT;
-    v_items_deleted := v_n;
-  END IF;
-
+  /* 2) Counts antes de borrar (para devolverle al frontend cuántos registros
+        se eliminaron). */
   IF to_regclass('tradexpar.orders') IS NOT NULL THEN
-    DELETE FROM tradexpar.orders WHERE true;
-    GET DIAGNOSTICS v_n = ROW_COUNT;
-    v_orders_deleted := v_n;
+    EXECUTE 'SELECT count(*) FROM tradexpar.orders' INTO v_orders_deleted;
   END IF;
-
-  IF to_regclass('tradexpar.dropi_image_queue') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_image_queue WHERE true;
+  IF to_regclass('tradexpar.order_items') IS NOT NULL THEN
+    EXECUTE 'SELECT count(*) FROM tradexpar.order_items' INTO v_items_deleted;
   END IF;
-
-  IF to_regclass('tradexpar.dropi_product_map') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_product_map WHERE true;
-  END IF;
-
-  IF to_regclass('tradexpar.dropi_source_products_raw') IS NOT NULL THEN
-    DELETE FROM tradexpar.dropi_source_products_raw WHERE true;
-  END IF;
-
   IF to_regclass('tradexpar.products') IS NOT NULL THEN
-    DELETE FROM tradexpar.products WHERE true;
-    GET DIAGNOSTICS v_n = ROW_COUNT;
-    v_products_deleted := v_n;
+    EXECUTE 'SELECT count(*) FROM tradexpar.products' INTO v_products_deleted;
+  END IF;
+
+  /* 3) Filtro: solo tablas existentes en este entorno. */
+  FOREACH t IN ARRAY v_targets LOOP
+    IF to_regclass(t) IS NOT NULL THEN
+      v_existing := array_append(v_existing, t);
+    END IF;
+  END LOOP;
+
+  /* 4) TRUNCATE en una sola sentencia. Razones:
+        - Evita la extensión `pg_safeupdate` (Supabase) que rechaza
+          DELETE/UPDATE sin WHERE real, incluyendo `WHERE true`.
+        - Postgres resuelve las FK entre las tablas listadas; agregamos
+          CASCADE por si alguna tabla externa al set apunta a éstas.
+        - RESTART IDENTITY reinicia secuencias de PKs auto-incremento. */
+  IF cardinality(v_existing) > 0 THEN
+    EXECUTE 'TRUNCATE TABLE '
+            || array_to_string(v_existing, ', ')
+            || ' RESTART IDENTITY CASCADE';
   END IF;
 
   RETURN jsonb_build_object(
