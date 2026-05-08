@@ -4,6 +4,7 @@
 
 import { FASTRAX_SOURCE, mapFastraxRowToProduct } from "./mapper.js";
 import { saveLocalFastraxProductImagesIfNeeded } from "./localFastraxImage.js";
+import { formatFastraxDescription } from "./fastraxDescriptionFormatter.js";
 
 /**
  * Indica si la columna `images` (jsonb) de tradexpar.products faltó en algún
@@ -103,27 +104,14 @@ function numV(v) {
 }
 
 /**
- * Nombre o descripción con URL encoding típico (PHP) — mismo criterio que búsqueda ope=2.
- * @param {unknown} raw
- */
-function decodeFastraxTextField(raw) {
-  if (raw == null) return "";
-  const s0 = String(raw).replace(/\+/g, " ");
-  try {
-    return decodeURIComponent(s0).trim();
-  } catch {
-    return s0.trim();
-  }
-}
-
-/**
  * @param {Record<string, unknown>} raw
  */
 function descBrandCatFromFastraxDetail(raw) {
-  const dRaw = raw.des ?? raw.bre ?? raw.descripcion;
-  const description = dRaw != null && String(dRaw) !== "" ? decodeFastraxTextField(dRaw) : "";
+  const desRaw = raw.des ?? raw.descripcion ?? "";
+  const breRaw = raw.bre ?? "";
+  const description = formatFastraxDescription(desRaw, breRaw);
   return {
-    description: description,
+    description,
     brand: str(raw.mar ?? raw.Mar ?? raw.marca),
     category: str(raw.cat ?? raw.caw ?? raw.rubro),
   };
@@ -228,16 +216,22 @@ export async function upsertFastraxFromRawRow(sb, raw) {
  */
 export async function upsertFastraxMappedRow(sb, m) {
   const now = new Date().toISOString();
-  const { mainImage, gallery } = await saveLocalFastraxProductImagesIfNeeded(
-    m.external_sku,
+  const payloadRecord =
     m.external_payload && typeof m.external_payload === "object" && !Array.isArray(m.external_payload)
       ? /** @type {Record<string, unknown>} */ (m.external_payload)
-      : null
+      : null;
+  const { mainImage, gallery } = await saveLocalFastraxProductImagesIfNeeded(
+    m.external_sku,
+    payloadRecord
+  );
+  const formattedDesc = formatFastraxDescription(
+    payloadRecord?.des ?? payloadRecord?.descripcion ?? m.description ?? "",
+    payloadRecord?.bre ?? ""
   );
   const row = {
     name: m.name,
     sku: m.external_sku,
-    description: m.description,
+    description: formattedDesc || m.name,
     category: m.category,
     brand: m.brand,
     price: m.price,
