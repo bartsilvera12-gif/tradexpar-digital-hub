@@ -109,6 +109,7 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
       `id, total, status, created_at, checkout_type, affiliate_ref, external_order_url,
        payment_status,
        customer_name, customer_email, customer_phone,
+       customer_document, customer_address, customer_address_reference,
        customer_city_code, customer_city_name, customer_dropi_city_code,
        order_items(*)`
     )
@@ -136,6 +137,9 @@ export async function listOrdersForAdmin(): Promise<Order[]> {
         name: String(r.customer_name ?? ""),
         email: r.customer_email ? String(r.customer_email) : undefined,
         phone: r.customer_phone ? String(r.customer_phone) : undefined,
+        document: r.customer_document ? String(r.customer_document) : undefined,
+        address: r.customer_address ? String(r.customer_address) : undefined,
+        address_reference: r.customer_address_reference ? String(r.customer_address_reference) : undefined,
         city_code: r.customer_city_code != null ? String(r.customer_city_code) : undefined,
         city_name: r.customer_city_name != null ? String(r.customer_city_name) : undefined,
         dropi_city_code: r.customer_dropi_city_code != null ? String(r.customer_dropi_city_code) : undefined,

@@ -913,6 +913,75 @@ export default function AdminOrdersPage() {
     const shippingFeeNum =
       typeof o.shipping_fee === "number" && Number.isFinite(o.shipping_fee) ? o.shipping_fee : null;
 
+    const customerName = o.customer?.name?.trim() || "";
+    const customerEmail = o.customer?.email?.trim() || "";
+    const customerPhone = o.customer?.phone?.trim() || "";
+    const customerDocument = o.customer?.document?.trim() || "";
+    const customerAddress = o.customer?.address?.trim() || "";
+    const customerAddressRef = o.customer?.address_reference?.trim() || "";
+    const customerCity = o.customer?.city_name?.trim() || "";
+
+    const orderCustomerSection = (
+      <div className="rounded-lg border border-border/80 bg-card/60 px-3 py-3 mb-4 text-xs sm:text-sm">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          Datos del cliente
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+          <div>
+            <span className="block text-[10px] text-muted-foreground">Nombre</span>
+            <span className="text-foreground font-medium break-words">
+              {customerName || <span className="text-muted-foreground font-normal">—</span>}
+            </span>
+          </div>
+          <div>
+            <span className="block text-[10px] text-muted-foreground">Teléfono</span>
+            {customerPhone ? (
+              <a
+                href={`tel:${customerPhone}`}
+                className="text-foreground font-medium break-all hover:underline"
+              >
+                {customerPhone}
+              </a>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </div>
+          {customerEmail && (
+            <div className="sm:col-span-2">
+              <span className="block text-[10px] text-muted-foreground">Email</span>
+              <a
+                href={`mailto:${customerEmail}`}
+                className="text-foreground font-medium break-all hover:underline"
+              >
+                {customerEmail}
+              </a>
+            </div>
+          )}
+          {customerDocument && (
+            <div>
+              <span className="block text-[10px] text-muted-foreground">Documento</span>
+              <span className="text-foreground font-medium break-all">{customerDocument}</span>
+            </div>
+          )}
+          {customerCity && (
+            <div>
+              <span className="block text-[10px] text-muted-foreground">Ciudad</span>
+              <span className="text-foreground font-medium break-words">{customerCity}</span>
+            </div>
+          )}
+          {(customerAddress || customerAddressRef) && (
+            <div className="sm:col-span-2">
+              <span className="block text-[10px] text-muted-foreground">Dirección</span>
+              <span className="text-foreground font-medium break-words">
+                {customerAddress || "—"}
+                {customerAddressRef ? ` · ${customerAddressRef}` : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
     const orderShippingSection = (
       <div className="rounded-lg border border-border/80 bg-card/60 px-3 py-3 mb-4 text-xs sm:text-sm">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -1020,6 +1089,7 @@ export default function AdminOrdersPage() {
     if (o.items.length === 0) {
       return (
         <>
+          {orderCustomerSection}
           {orderShippingSection}
           {sectionTitle}
           <p className="py-4 text-center text-sm text-muted-foreground">Sin líneas en este pedido.</p>
@@ -1031,6 +1101,7 @@ export default function AdminOrdersPage() {
 
     return (
       <>
+        {orderCustomerSection}
         {orderShippingSection}
         {sectionTitle}
         <div className="grid gap-2 lg:hidden">
@@ -1397,9 +1468,30 @@ export default function AdminOrdersPage() {
                           <div className="font-medium text-foreground text-xs sm:text-sm truncate" title={o.customer?.name}>
                             {o.customer?.name || "—"}
                           </div>
-                          <div className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5">
-                            {o.customer?.email || o.customer?.phone || ""}
-                          </div>
+                          {o.customer?.email && (
+                            <div
+                              className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5"
+                              title={o.customer.email}
+                            >
+                              {o.customer.email}
+                            </div>
+                          )}
+                          {o.customer?.phone && (
+                            <div
+                              className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5"
+                              title={o.customer.phone}
+                            >
+                              <a
+                                href={`tel:${o.customer.phone}`}
+                                className="hover:text-foreground hover:underline"
+                              >
+                                {o.customer.phone}
+                              </a>
+                            </div>
+                          )}
+                          {!o.customer?.email && !o.customer?.phone && (
+                            <div className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5">—</div>
+                          )}
                         </td>
                         <td className="py-3 px-3 sm:px-4 align-middle text-muted-foreground leading-snug">
                           {productGroups === 0 ? (
