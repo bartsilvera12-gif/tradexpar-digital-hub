@@ -20,6 +20,8 @@ import {
 } from "@/lib/productHelpers";
 import { resolveProductImageSrc } from "@/lib/productImageUrl";
 import { productDescriptionPlainText } from "@/lib/productDescriptionText";
+import { parseFastraxDescription } from "@/lib/fastraxDescriptionParser";
+import { FastraxTechnicalSpecs } from "@/components/store/FastraxTechnicalSpecs";
 import { withAffiliateRef } from "@/lib/affiliate";
 
 function getProductImages(product: Product): string[] {
@@ -102,6 +104,7 @@ export default function ProductDetailPage() {
   const images = getProductImages(product);
   const maxQty = product.stock > 0 ? product.stock : 1;
   const descriptionText = productDescriptionPlainText(product.description);
+  const fastraxSpecs = parseFastraxDescription(descriptionText);
   const discountPct = getDiscountPercentage(product);
   const effectivePrice = getEffectivePrice(product);
   const affiliateBuyerPct = aff.buyerPercentForProduct(product.id);
@@ -249,7 +252,11 @@ export default function ProductDetailPage() {
           <h1 className="text-[clamp(1.25rem,3vw+0.6rem,2.5rem)] sm:text-3xl lg:text-4xl font-bold text-foreground mb-3 sm:mb-4 break-words [text-wrap:balance]">
             {product.name}
           </h1>
-          {descriptionText ? (
+          {fastraxSpecs ? (
+            <div className="mb-5 sm:mb-6">
+              <FastraxTechnicalSpecs sections={fastraxSpecs} />
+            </div>
+          ) : descriptionText ? (
             <p className="text-muted-foreground text-sm sm:text-base mb-5 sm:mb-6 leading-relaxed whitespace-pre-line">
               {descriptionText}
             </p>
