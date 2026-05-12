@@ -1039,12 +1039,14 @@ export default function AdminOrdersPage() {
               </a>
             </div>
           )}
-          {customerDocument && (
-            <div>
-              <span className="block text-[10px] text-muted-foreground">Documento</span>
+          <div>
+            <span className="block text-[10px] text-muted-foreground">Cédula</span>
+            {customerDocument ? (
               <span className="text-foreground font-medium break-all">{customerDocument}</span>
-            </div>
-          )}
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </div>
           {customerCity && (
             <div>
               <span className="block text-[10px] text-muted-foreground">Ciudad</span>
