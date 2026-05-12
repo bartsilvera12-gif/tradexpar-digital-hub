@@ -358,6 +358,32 @@ function mapOrder(row: Record<string, unknown>): Order {
       name: String(row.customer_name ?? ""),
       email: row.customer_email != null ? String(row.customer_email) : undefined,
       phone: row.customer_phone != null ? String(row.customer_phone) : undefined,
+      document:
+        row.customer_document != null && String(row.customer_document).trim() !== ""
+          ? String(row.customer_document)
+          : undefined,
+      address:
+        row.customer_address != null && String(row.customer_address).trim() !== ""
+          ? String(row.customer_address)
+          : undefined,
+      address_reference:
+        row.customer_address_reference != null &&
+        String(row.customer_address_reference).trim() !== ""
+          ? String(row.customer_address_reference)
+          : undefined,
+      city_code:
+        row.customer_city_code != null && String(row.customer_city_code).trim() !== ""
+          ? String(row.customer_city_code)
+          : undefined,
+      city_name:
+        row.customer_city_name != null && String(row.customer_city_name).trim() !== ""
+          ? String(row.customer_city_name)
+          : undefined,
+      dropi_city_code:
+        row.customer_dropi_city_code != null &&
+        String(row.customer_dropi_city_code).trim() !== ""
+          ? String(row.customer_dropi_city_code)
+          : undefined,
     },
   };
 }
