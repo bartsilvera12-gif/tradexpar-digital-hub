@@ -39,11 +39,8 @@ import {
 } from "@/components/ui/select";
 import { ADMIN_CARD, ADMIN_FORM_CONTROL, ADMIN_TABLE_SCROLL } from "@/lib/adminModuleLayout";
 import { api, type AdminFastraxStatusResponse } from "@/services/api";
-import { ChevronDown, ExternalLink, Loader2, Package, RefreshCw, CheckCircle2, Save, Truck } from "lucide-react";
-
-function shortId(id: string) {
-  return id.length > 10 ? `${id.slice(0, 8)}…` : id;
-}
+import { Input } from "@/components/ui/input";
+import { ChevronDown, ExternalLink, Loader2, Package, RefreshCw, CheckCircle2, Save, Search, Truck, X } from "lucide-react";
 
 function OrderKindBadge({ kind }: { kind: ReturnType<typeof deriveOrderKind> }) {
   const cls =
@@ -668,9 +665,82 @@ function OrderFastraxCard({
 
 type LifecycleFilter = "all" | "open" | "closed";
 
+/** Quita acentos/diacríticos y baja a minúsculas para matchear en español. */
+function normalizeText(v: unknown): string {
+  if (v == null) return "";
+  return String(v)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+/** Sólo dígitos: para que "595981490285" matchee "+595 981 490285". */
+function digitsOnly(v: unknown): string {
+  if (v == null) return "";
+  return String(v).replace(/\D+/g, "");
+}
+
+/**
+ * Construye el "haystack" (texto normalizado) y los dígitos de cada pedido.
+ * Cubre código, cliente, dirección, productos, IDs externos, estados y total.
+ */
+function buildOrderSearchIndex(o: Order): { text: string; digits: string } {
+  const parts: string[] = [
+    o.id ?? "",
+    o.status ?? "",
+    o.payment_status ?? "",
+    o.checkout_type ?? "",
+    o.order_kind ?? "",
+    o.shipping_option ?? "",
+    o.external_order_url ?? "",
+    String(o.total ?? ""),
+    String(o.shipping_fee ?? ""),
+    o.customer?.name ?? "",
+    o.customer?.email ?? "",
+    o.customer?.phone ?? "",
+    o.customer?.document ?? "",
+    o.customer?.address ?? "",
+    o.customer?.address_reference ?? "",
+    o.customer?.city_code ?? "",
+    o.customer?.city_name ?? "",
+    o.customer?.dropi_city_code ?? "",
+  ];
+  for (const it of o.items ?? []) {
+    parts.push(
+      it.product_name ?? "",
+      it.sku ?? "",
+      it.line_status ?? "",
+      it.product_source_type ?? "",
+      it.external_provider ?? "",
+      it.external_product_id ?? "",
+      it.external_order_id ?? "",
+      it.external_status ?? "",
+      it.external_url ?? "",
+    );
+  }
+  const text = normalizeText(parts.join(" \u0001 "));
+  const digits = digitsOnly([o.customer?.phone, o.customer?.document, o.id, o.total].join(" "));
+  return { text, digits };
+}
+
+/** AND entre tokens: cada token debe aparecer en texto o (si es numérico) en dígitos. */
+function orderMatchesQuery(idx: { text: string; digits: string }, tokens: string[]): boolean {
+  if (tokens.length === 0) return true;
+  for (const raw of tokens) {
+    const t = normalizeText(raw);
+    if (!t) continue;
+    const tDigits = digitsOnly(raw);
+    const inText = idx.text.includes(t);
+    const inDigits = tDigits.length >= 3 && idx.digits.includes(tDigits);
+    if (!inText && !inDigits) return false;
+  }
+  return true;
+}
+
 export default function AdminOrdersPage() {
   const [orderType, setOrderType] = useState<"all" | "tradexpar" | "dropi" | "fastrax">("all");
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("open");
+  const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -761,24 +831,36 @@ export default function AdminOrdersPage() {
     });
   }, [expanded, orders]);
 
-  const filtered = useMemo(
-    () =>
-      orders.filter((o) => {
-        const kind = o.order_kind ?? deriveOrderKind(o.items);
-        const typeOk =
-          orderType === "all" ||
-          (orderType === "tradexpar" && kind === "internal") ||
-          (orderType === "dropi" && kind === "dropi") ||
-          (orderType === "fastrax" && kind === "fastrax");
-        const closed = isOrderClosed(o.status);
-        const lifeOk =
-          lifecycle === "all" ||
-          (lifecycle === "closed" && closed) ||
-          (lifecycle === "open" && !closed);
-        return typeOk && lifeOk;
-      }),
-    [orders, orderType, lifecycle]
+  /** Índice de búsqueda por pedido (memoizado: sólo se recalcula al cambiar `orders`). */
+  const searchIndex = useMemo(() => {
+    const m = new Map<string, { text: string; digits: string }>();
+    for (const o of orders) m.set(o.id, buildOrderSearchIndex(o));
+    return m;
+  }, [orders]);
+
+  const searchTokens = useMemo(
+    () => searchQuery.trim().split(/\s+/).filter(Boolean),
+    [searchQuery]
   );
+
+  const filtered = useMemo(() => {
+    return orders.filter((o) => {
+      const kind = o.order_kind ?? deriveOrderKind(o.items);
+      const typeOk =
+        orderType === "all" ||
+        (orderType === "tradexpar" && kind === "internal") ||
+        (orderType === "dropi" && kind === "dropi") ||
+        (orderType === "fastrax" && kind === "fastrax");
+      const closed = isOrderClosed(o.status);
+      const lifeOk =
+        lifecycle === "all" ||
+        (lifecycle === "closed" && closed) ||
+        (lifecycle === "open" && !closed);
+      const idx = searchIndex.get(o.id) ?? { text: "", digits: "" };
+      const queryOk = orderMatchesQuery(idx, searchTokens);
+      return typeOk && lifeOk && queryOk;
+    });
+  }, [orders, orderType, lifecycle, searchTokens, searchIndex]);
 
   const toggleExpand = (orderId: string) => {
     setExpanded((prev) => {
@@ -1390,6 +1472,53 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
+        <div className="space-y-3 w-full" role="search" aria-label="Buscador inteligente de pedidos">
+          <div className="flex items-baseline justify-between gap-2 border-b border-border pb-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Buscar pedidos
+            </p>
+            {searchTokens.length > 0 && (
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground tabular-nums">
+                {filtered.length} de {orders.length} {orders.length === 1 ? "pedido" : "pedidos"}
+              </p>
+            )}
+          </div>
+          <div className="relative w-full sm:max-w-xl">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden />
+            <Input
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              spellCheck={false}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && searchQuery) {
+                  e.preventDefault();
+                  setSearchQuery("");
+                }
+              }}
+              placeholder="Buscá por código, cliente, teléfono, email, documento, ciudad, SKU, producto…"
+              aria-label="Buscar pedidos"
+              className="pl-9 pr-9 text-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Limpiar búsqueda"
+                title="Limpiar (Esc)"
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-relaxed">
+            Tip: separá términos con espacios para refinar (ej. <span className="font-mono">dropi rodrigo</span> ó <span className="font-mono">595981 abonado</span>). Ignora mayúsculas, acentos y formato del teléfono.
+          </p>
+        </div>
+
         <div className="flex justify-end pt-2 border-t border-border/70 w-full">
           <Button
             type="button"
@@ -1415,23 +1544,30 @@ export default function AdminOrdersPage() {
         />
       )}
       {!loading && !error && filtered.length === 0 && (
-        <EmptyState title="Sin pedidos" description="No hay pedidos para los filtros seleccionados (estado y origen)." />
+        <EmptyState
+          title={searchTokens.length > 0 ? "Sin coincidencias" : "Sin pedidos"}
+          description={
+            searchTokens.length > 0
+              ? `Ningún pedido coincide con «${searchQuery.trim()}» dentro de los filtros activos.`
+              : "No hay pedidos para los filtros seleccionados (estado y origen)."
+          }
+        />
       )}
       {!loading && !error && filtered.length > 0 && (
         <div className={ADMIN_CARD}>
           <div className={ADMIN_TABLE_SCROLL}>
-            <table className="w-full min-w-[980px] text-xs sm:text-sm border-collapse">
+            <table className="w-full min-w-[1100px] text-xs sm:text-sm border-collapse">
               <thead>
                 <tr className="bg-muted/30 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-border/80">
                   <th className="py-3.5 pl-3 pr-1 sm:pl-4 w-10" aria-hidden />
-                  <th className="py-3.5 px-3 sm:px-4 font-medium w-[10%]">Pedido</th>
+                  <th className="py-3.5 px-3 sm:px-4 font-medium w-[18%] min-w-[200px]">Pedido</th>
                   <th className="py-3.5 px-3 sm:px-4 font-medium min-w-[140px]">Cliente</th>
-                  <th className="py-3.5 px-3 sm:px-4 font-medium w-[11%]">Items</th>
-                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[11%]">Tipo</th>
-                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[12%]">Estado</th>
-                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[11%]">Pago</th>
-                  <th className="py-3.5 px-3 sm:px-4 text-right font-medium whitespace-nowrap w-[12%]">Total</th>
-                  <th className="py-3.5 px-3 sm:px-4 font-medium w-[14%]">Fecha</th>
+                  <th className="py-3.5 px-3 sm:px-4 font-medium w-[10%]">Items</th>
+                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[10%]">Tipo</th>
+                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[11%]">Estado</th>
+                  <th className="py-3.5 px-3 sm:px-4 text-center font-medium w-[10%]">Pago</th>
+                  <th className="py-3.5 px-3 sm:px-4 text-right font-medium whitespace-nowrap w-[11%]">Total</th>
+                  <th className="py-3.5 px-3 sm:px-4 font-medium w-[12%]">Fecha</th>
                   <th className="py-3.5 pl-3 pr-4 sm:pr-5 text-center font-medium w-[72px]">Acc.</th>
                 </tr>
               </thead>
@@ -1460,8 +1596,11 @@ export default function AdminOrdersPage() {
                           </Button>
                         </td>
                         <td className="py-3 px-3 sm:px-4 align-middle min-w-0">
-                          <span className="font-mono text-[10px] sm:text-xs text-foreground truncate block" title={o.id}>
-                            {shortId(o.id)}
+                          <span
+                            className="font-mono text-[10px] sm:text-[11px] text-foreground break-all block leading-snug select-all"
+                            title={o.id}
+                          >
+                            {o.id}
                           </span>
                         </td>
                         <td className="py-3 px-3 sm:px-4 align-middle min-w-0">
