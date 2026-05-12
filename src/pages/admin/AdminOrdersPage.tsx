@@ -1040,7 +1040,7 @@ export default function AdminOrdersPage() {
             </div>
           )}
           <div>
-            <span className="block text-[10px] text-muted-foreground">Cédula</span>
+            <span className="block text-[10px] text-muted-foreground">Documento (CI / RUC)</span>
             {customerDocument ? (
               <span className="text-foreground font-medium break-all">{customerDocument}</span>
             ) : (
