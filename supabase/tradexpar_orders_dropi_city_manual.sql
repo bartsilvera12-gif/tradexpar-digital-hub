@@ -80,11 +80,11 @@ begin
 
   v_so := lower(trim(coalesce(p_shipping_option, '48h')));
   if v_so = '24h' then
-    v_ship := 25000;
-    v_ship_label := 'Entrega en 24 horas – Gs. 25.000';
+    v_ship := 30000;
+    v_ship_label := 'Entrega en 24 horas – Gs. 30.000';
   else
-    v_ship := 0;
-    v_ship_label := 'Entrega en 48 horas – Gratis';
+    v_ship := 25000;
+    v_ship_label := 'Entrega en 48 horas – Gs. 25.000';
   end if;
 
   if p_checkout_client_ip is not null and trim(p_checkout_client_ip) <> '' then

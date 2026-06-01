@@ -22,8 +22,9 @@ import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/af
 import type { CustomerLocation, ParaguayCity } from "@/types";
 import { PAGOPAR_CIUDADES_PY } from "@/config/pagoparCiudadesPy";
 
-/** Costo envío 24 h (debe coincidir con la RPC `create_checkout_order` en Supabase). */
-const SHIPPING_24H_PYG = 25_000;
+/** Costos de envío (deben coincidir con la RPC `create_checkout_order` en Supabase). */
+const SHIPPING_48H_PYG = 25_000;
+const SHIPPING_24H_PYG = 30_000;
 
 const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -57,7 +58,7 @@ export default function CheckoutPage() {
   const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
   const totalPrice = cartTotal(items);
   const [shippingOption, setShippingOption] = useState<"24h" | "48h">("48h");
-  const shippingFee = shippingOption === "24h" ? SHIPPING_24H_PYG : 0;
+  const shippingFee = shippingOption === "24h" ? SHIPPING_24H_PYG : SHIPPING_48H_PYG;
   const orderGrandTotal = totalPrice + shippingFee;
   const { user } = useCustomerAuth();
   const location = useLocation();
@@ -459,8 +460,8 @@ export default function CheckoutPage() {
                     <SelectValue placeholder="Seleccioná el envío" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="48h">Entrega en 48 horas — Gratis</SelectItem>
-                    <SelectItem value="24h">Entrega en 24 horas — Gs. 25.000</SelectItem>
+                    <SelectItem value="48h">Entrega en 48 horas — Gs. 25.000</SelectItem>
+                    <SelectItem value="24h">Entrega en 24 horas — Gs. 30.000</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

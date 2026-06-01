@@ -1,27 +1,8 @@
--- Datos de envío / facturación para checkout (PagoPar: documento, dirección, ciudad).
--- Opción de envío (24 h / 48 h) y columnas shipping_fee / shipping_option.
--- Ejecutar en SQL Editor (Neura / Supabase) después de tradexpar_catalog_orders o tradexpar_affiliates_pro.
-
-alter table tradexpar.orders
-  add column if not exists customer_document text,
-  add column if not exists customer_address text,
-  add column if not exists customer_city_code text,
-  add column if not exists customer_address_reference text;
-
-alter table tradexpar.orders
-  add column if not exists shipping_fee numeric(14, 2) not null default 0,
-  add column if not exists shipping_option text;
-
-comment on column tradexpar.orders.customer_address_reference is
-  'Referencia de dirección (opcional): entre calles, piso, timbre, etc.';
-comment on column tradexpar.orders.shipping_fee is 'Costo de envío en PYG incluido en orders.total.';
-comment on column tradexpar.orders.shipping_option is 'Etiqueta legible de la opción elegida (24 h / 48 h).';
-
--- Una sola firma: eliminar overloads previos (incl. la nueva con envío).
-drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text, text);
-drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text);
-drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text);
-drop function if exists tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb);
+-- Ajuste de costos de envío:
+--   48 horas: Gs. 25.000 (antes Gratis)
+--   24 horas: Gs. 30.000 (antes Gs. 25.000)
+-- Debe coincidir con SHIPPING_48H_PYG / SHIPPING_24H_PYG en src/pages/store/CheckoutPage.tsx.
+-- Re-crea la función viva (firma 17 parámetros); solo cambia el bloque de envío.
 
 create or replace function tradexpar.create_checkout_order(
   p_checkout_type text,
@@ -38,7 +19,9 @@ create or replace function tradexpar.create_checkout_order(
   p_customer_address text default null,
   p_customer_city_code text default null,
   p_customer_address_reference text default null,
-  p_shipping_option text default '48h'
+  p_shipping_option text default '48h',
+  p_customer_city_name text default null,
+  p_customer_dropi_city_code text default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -96,6 +79,7 @@ begin
     affiliate_ref, customer_name, customer_email, customer_phone,
     checkout_client_ip, affiliate_campaign_slug,
     customer_document, customer_address, customer_city_code,
+    customer_city_name, customer_dropi_city_code,
     customer_address_reference,
     shipping_fee, shipping_option
   ) values (
@@ -113,6 +97,8 @@ begin
     nullif(trim(p_customer_document), ''),
     nullif(trim(p_customer_address), ''),
     nullif(trim(p_customer_city_code), ''),
+    nullif(trim(p_customer_city_name), ''),
+    nullif(trim(p_customer_dropi_city_code), ''),
     nullif(trim(p_customer_address_reference), ''),
     round(v_ship, 2),
     v_ship_label
@@ -158,6 +144,8 @@ begin
       'document', coalesce(nullif(trim(p_customer_document), ''), ''),
       'address', coalesce(nullif(trim(p_customer_address), ''), ''),
       'city_code', coalesce(nullif(trim(p_customer_city_code), ''), ''),
+      'city_name', coalesce(nullif(trim(p_customer_city_name), ''), ''),
+      'dropi_city_code', coalesce(nullif(trim(p_customer_dropi_city_code), ''), ''),
       'address_reference', coalesce(nullif(trim(p_customer_address_reference), ''), '')
     ),
     'items', coalesce(p_items, '[]'::jsonb)
@@ -165,4 +153,4 @@ begin
 end;
 $$;
 
-grant execute on function tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text, text) to anon, authenticated;
+grant execute on function tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text, text, text, text) to anon, authenticated;

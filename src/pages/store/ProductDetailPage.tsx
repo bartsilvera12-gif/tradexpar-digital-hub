@@ -104,7 +104,11 @@ export default function ProductDetailPage() {
   const images = getProductImages(product);
   const maxQty = product.stock > 0 ? product.stock : 1;
   const descriptionText = productDescriptionPlainText(product.description);
-  const fastraxSpecs = parseFastraxDescription(descriptionText);
+  // La ficha técnica estructurada es solo para Fastrax. Otros orígenes (Dropi,
+  // tradexpar) renderizan texto plano: su descripción puede parecerse al patrón
+  // "Etiqueta: valor" y romper el layout del grid si se parsea como Fastrax.
+  const fastraxSpecs =
+    product.product_source_type === "fastrax" ? parseFastraxDescription(descriptionText) : null;
   const discountPct = getDiscountPercentage(product);
   const effectivePrice = getEffectivePrice(product);
   const affiliateBuyerPct = aff.buyerPercentForProduct(product.id);
