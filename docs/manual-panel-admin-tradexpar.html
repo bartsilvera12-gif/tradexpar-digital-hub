@@ -888,9 +888,84 @@
     <p>Los <strong>Distribuidores Digitales Independientes</strong> (abreviado como DDI o “distribuidores”) son personas externas aprobadas por la empresa que difunden la tienda. Cada uno tiene un <strong>código único</strong> y un <strong>enlace con <span class="kbd">?ref=CODIGO</span></strong>. Si un cliente compra usando ese enlace, la venta se atribuye al distribuidor, el comprador puede recibir un descuento y el distribuidor gana una comisión.</p>
   </div>
 
-  <p>El módulo tiene seis pestañas, cada una para una tarea distinta: <strong>Solicitudes</strong>, <strong>Distribuidores</strong>, <strong>Ventas</strong>, <strong>Reglas</strong>, <strong>Materiales</strong> y <strong>Analítica</strong>.</p>
+  <p>El módulo tiene seis pestañas, cada una para una tarea distinta: <strong>Solicitudes</strong>, <strong>Distribuidores</strong>, <strong>Ventas</strong>, <strong>Reglas</strong>, <strong>Materiales</strong> y <strong>Analítica</strong>. Antes de meternos en cada una, conviene entender cómo se da de alta un distribuidor en el sistema, porque es el punto de partida de todo lo demás.</p>
 
-  <h3>7.1 Pestaña Solicitudes</h3>
+  <h3>7.1 Cómo se registra un distribuidor en el sistema</h3>
+  <p>El alta de un distribuidor pasa por <strong>tres etapas</strong> bien diferenciadas. Las dos primeras las completa el postulante desde la tienda; la tercera la hacés desde el panel de administración. El resultado final es una cuenta de distribuidor con su <strong>código único</strong> y su <strong>enlace personal</strong> con <span class="kbd">?ref=CODIGO</span> listo para promocionar.</p>
+
+  <div class="ui-mock">
+    <div class="bar"><span class="dot"></span> Recorrido del registro</div>
+    <div class="body">
+      <div class="row"><span class="muted">Etapa 1 — Tienda pública</span><strong>El postulante completa el formulario "Ser Distribuidor Digital Independiente"</strong></div>
+      <div class="row"><span class="muted">Etapa 2 — Cuenta del cliente</span><strong>Se crea o usa una cuenta en la tienda con el mismo correo</strong></div>
+      <div class="row"><span class="muted">Etapa 3 — Panel admin</span><strong>Aprobás la solicitud y el sistema genera código y enlace</strong></div>
+    </div>
+  </div>
+
+  <h4>Etapa 1 — La persona se postula desde la tienda</h4>
+  <p>El interesado entra a la tienda y abre la pantalla <strong>"Ser Distribuidor Digital Independiente"</strong>, accesible desde el pie de página o desde la sección de afiliados. Encuentra un formulario con los siguientes campos:</p>
+  <table class="simple">
+    <thead><tr><th>Campo</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nombre completo</strong></td><td>Obligatorio. Nombre y apellido reales tal como figuran en su documento.</td></tr>
+      <tr><td><strong>Correo</strong></td><td>Obligatorio. Es el dato más importante: con este mismo correo el postulante deberá registrarse o iniciar sesión en la tienda para entrar al panel del distribuidor.</td></tr>
+      <tr><td><strong>Teléfono</strong></td><td>Opcional, pero muy recomendable para poder contactarlo si hace falta validar algún dato.</td></tr>
+      <tr><td><strong>Documento de identidad</strong></td><td>Opcional. Útil para identificar al titular y para temas de facturación de comisiones.</td></tr>
+      <tr><td><strong>Mensaje</strong></td><td>Opcional. Permite al postulante contar quién es, qué red tiene o por qué quiere sumarse.</td></tr>
+    </tbody>
+  </table>
+  <p>Al tocar <strong>Enviar solicitud</strong>, el sistema guarda los datos como <span class="pill warn">pending</span> (pendiente). El postulante recibe un aviso en pantalla confirmando el envío.</p>
+
+  <div class="callout warn">
+    <span class="tag">Importante</span>
+    <p>El formulario público <strong>no crea una cuenta ni una contraseña</strong>. Solo registra la solicitud. Si el postulante quiere acceder al panel del distribuidor más adelante, tiene que pasar por la etapa 2.</p>
+  </div>
+
+  <h4>Etapa 2 — El postulante crea cuenta o inicia sesión en la tienda</h4>
+  <p>Para que el sistema lo reconozca como distribuidor (después de aprobado), el postulante debe tener una <strong>cuenta de cliente</strong> en la tienda con el <strong>mismo correo</strong> que usó en la solicitud. Esta etapa puede hacerse antes o después de que vos lo apruebes; lo importante es que coincida el correo.</p>
+  <ul>
+    <li>Si <strong>no tiene cuenta</strong>: entra a <strong>Crear cuenta</strong> en la tienda y se registra normalmente con su correo.</li>
+    <li>Si <strong>ya es cliente</strong>: simplemente inicia sesión con su cuenta existente.</li>
+    <li>Si entra con <strong>Google</strong> o <strong>Facebook</strong>, asegurate de que el correo asociado a esa red social sea el mismo que figuraba en la solicitud. Si es distinto, el panel del distribuidor no lo va a reconocer.</li>
+  </ul>
+
+  <h4>Etapa 3 — Aprobás la solicitud desde el panel admin</h4>
+  <p>Cuando llega la solicitud, vas a verla en la pestaña <strong>Solicitudes</strong> del módulo Distribuidores. El paso a paso para darle el alta definitiva es muy simple:</p>
+  <ol class="pasos">
+    <li>Entrá a <strong>Distribuidores Digitales Independientes</strong> en el menú lateral.</li>
+    <li>Quedate en la pestaña <strong>Solicitudes</strong> (es la primera).</li>
+    <li>Identificá la fila del postulante por su nombre o correo. Tiene el estado <span class="pill warn">pending</span>.</li>
+    <li>Verificá los datos: nombre completo, correo, teléfono y documento. Si algo no coincide con lo conversado o falta, contactá al postulante antes de aprobar.</li>
+    <li>Tocá el botón <strong>Aprobar</strong>. El sistema crea automáticamente:
+      <ul>
+        <li>El <strong>perfil del distribuidor</strong> en la pestaña Distribuidores.</li>
+        <li>Un <strong>código único</strong> (lo que va después de <span class="kbd">?ref=</span>).</li>
+        <li>Un <strong>enlace público</strong> listo para compartir.</li>
+        <li>El distribuidor queda con la <strong>comisión global</strong> y el <strong>descuento global</strong> que estén configurados por defecto en la pestaña Reglas. Si necesita un porcentaje distinto, ajustalo después.</li>
+      </ul>
+    </li>
+    <li>Si decidís no aceptar la postulación, tocá <strong>Rechazar</strong> y, en la ventana que aparece, escribí el motivo (no es obligatorio, pero sí muy recomendable: queda registrado para futuras consultas).</li>
+  </ol>
+
+  <div class="callout success">
+    <span class="tag">Listo</span>
+    <p>Una vez aprobado, el distribuidor ya puede entrar a la tienda con su correo, abrir el <strong>panel del distribuidor</strong> y ver su código, su enlace, sus ventas atribuidas y sus comisiones. También vas a verlo en la pestaña Distribuidores con todos los reportes y herramientas para gestionarlo.</p>
+  </div>
+
+  <h4>Qué comunicarle al distribuidor recién aprobado</h4>
+  <p>Cuando le aprobás el alta, conviene mandarle un mensaje (mail o WhatsApp) con tres datos clave para que arranque sin dudas:</p>
+  <ol class="pasos">
+    <li>Confirmación de que la solicitud fue aprobada.</li>
+    <li>Recordatorio de que debe entrar a la tienda con el <strong>mismo correo</strong> de la solicitud (o registrarse con ese correo si todavía no lo hizo).</li>
+    <li>Aviso de que dentro del panel encontrará su <strong>código</strong> y su <strong>enlace personal</strong>, además de los materiales gráficos disponibles para promocionar.</li>
+  </ol>
+
+  <div class="callout warn">
+    <span class="tag">Si la persona no aparece en Solicitudes</span>
+    <p>Si te dicen que se postularon pero no figura ninguna solicitud nueva, puede deberse a tres motivos comunes: (1) tocaron el botón pero la conexión falló y no se registró, (2) usaron un correo distinto al que te dieron, o (3) la solicitud ya fue gestionada antes. Pedile al postulante que vuelva a enviar el formulario y, si persiste, avisá al área técnica.</p>
+  </div>
+
+  <h3>7.2 Pestaña Solicitudes</h3>
   <p>Cuando una persona se postula desde la tienda para ser distribuidor, su pedido llega acá. Vas a ver una tabla con:</p>
   <ul>
     <li><strong>Nombre</strong>, <strong>Email</strong>, <strong>Teléfono</strong> y <strong>Documento</strong> del postulante.</li>
@@ -907,7 +982,7 @@
     <p>Aprobá siguiendo las reglas que defina la empresa (requisitos mínimos, documentación, etc.). Si no estás seguro, <strong>dejá la solicitud pendiente</strong> y consultá antes de aprobarla o rechazarla.</p>
   </div>
 
-  <h3>7.2 Pestaña Distribuidores</h3>
+  <h3>7.3 Pestaña Distribuidores</h3>
   <p>Listado de distribuidores ya aprobados. Arriba tenés filtros:</p>
   <ul>
     <li><strong>Buscar:</strong> por nombre, correo, código, ID o parte del enlace.</li>
@@ -935,7 +1010,7 @@
   <h4>Activar o desactivar un distribuidor</h4>
   <p>En la columna <strong>Estado</strong> hay un switch. Si lo apagás, el distribuidor queda <span class="pill warn">desactivado</span>: sus enlaces dejan de atribuir ventas hasta que lo reactives. No se pierden los datos históricos.</p>
 
-  <h3>7.3 Pestaña Ventas</h3>
+  <h3>7.4 Pestaña Ventas</h3>
   <p>Listado de todas las ventas atribuidas a distribuidores, con el estado de la comisión de cada una.</p>
 
   <h4>Filtros por estado de comisión</h4>
@@ -963,7 +1038,7 @@
     <p>Los estados <strong>Pagada</strong> y <strong>Rechazada</strong> <em>no se pueden modificar</em> después (el selector queda bloqueado). Revisá antes de confirmar.</p>
   </div>
 
-  <h3>7.4 Pestaña Reglas</h3>
+  <h3>7.5 Pestaña Reglas</h3>
   <p>Acá configurás cuánto gana cada distribuidor y cuánto descuento recibe el cliente que compra con su enlace.</p>
 
   <h4>Elegir el distribuidor a configurar</h4>
@@ -990,7 +1065,7 @@
     <p>Si hay regla por producto, gana sobre la global. Si no hay regla por producto, se usa el valor global del distribuidor.</p>
   </div>
 
-  <h3>7.5 Pestaña Materiales</h3>
+  <h3>7.6 Pestaña Materiales</h3>
   <p>Repositorio de material gráfico y de texto que los distribuidores pueden usar para promocionar la tienda (banners, videos cortos, PDF, guiones).</p>
 
   <h4>Cargar un material nuevo</h4>
@@ -1005,7 +1080,7 @@
   <h4>Activar o desactivar un material</h4>
   <p>En la tabla, al final de cada fila hay un botón <strong>Activar / Desactivar</strong>. Si lo desactivás, los distribuidores dejan de verlo.</p>
 
-  <h3>7.6 Pestaña Analítica</h3>
+  <h3>7.7 Pestaña Analítica</h3>
   <p>Reportes para evaluar cómo rinde el programa de distribuidores.</p>
 
   <h4>Embudo 30 días</h4>

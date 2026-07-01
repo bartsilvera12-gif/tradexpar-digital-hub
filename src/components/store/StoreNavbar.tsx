@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ShoppingCart, Menu, X, Search, ChevronDown, Heart, User, Briefcase } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
@@ -34,7 +34,6 @@ export function StoreNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Product[]>([]);
   const { data: allProducts = [] } = useStoreCatalog();
   const [showResults, setShowResults] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
@@ -53,16 +52,21 @@ export function StoreNavbar() {
     searchParams.get("source") === "dropi" &&
     !searchParams.get("category");
 
-  useEffect(() => {
-    if (query.trim().length === 0) { setResults([]); return; }
-    const q = query.toLowerCase();
+  /**
+   * Resultados derivados (no estado): evita el bucle de re-render que provocaba
+   * `setResults([])` dentro de un efecto dependiente de `allProducts`, cuyo
+   * default `[]` cambia de referencia en cada render mientras carga el catálogo.
+   */
+  const { results, totalMatches } = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return { results: [] as Product[], totalMatches: 0 };
     const filtered = allProducts.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.category?.toLowerCase().includes(q) ||
         p.sku?.toLowerCase().includes(q)
     );
-    setResults(filtered.slice(0, 6));
+    return { results: filtered.slice(0, 8), totalMatches: filtered.length };
   }, [query, allProducts]);
 
   useEffect(() => {
@@ -110,6 +114,19 @@ export function StoreNavbar() {
     navigate(withAffiliateRef("/products?source=dropi", refForNav));
   };
 
+  /** Navega al catálogo con la búsqueda actual para ver TODOS los resultados (no solo la vista previa). */
+  const goToResults = useCallback(() => {
+    const q = query.trim();
+    setShowResults(false);
+    setMobileOpen(false);
+    navigate(withAffiliateRef(q ? `/products?q=${encodeURIComponent(q)}` : "/products", refForNav));
+  }, [query, navigate, refForNav]);
+
+  const handleSearchSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    goToResults();
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 pt-[env(safe-area-inset-top)]">
       <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 md:gap-0 md:flex-row md:items-center md:h-16 px-3 sm:px-5 md:px-8 lg:px-10 xl:px-12 py-2.5 md:py-0 md:gap-4 lg:gap-5 xl:gap-6 max-w-full">
@@ -131,7 +148,10 @@ export function StoreNavbar() {
           className="hidden md:flex flex-1 min-w-0 justify-center px-2 lg:px-4 xl:px-6"
         >
           <div className="w-full max-w-md lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
-            <div className="flex w-full min-w-0 border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow">
+            <form
+              onSubmit={handleSearchSubmit}
+              className="flex w-full min-w-0 border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow"
+            >
               <input
                 type="search"
                 inputMode="search"
@@ -144,13 +164,13 @@ export function StoreNavbar() {
                 className="min-w-0 flex-1 px-4 py-2 text-sm bg-card text-foreground placeholder:text-muted-foreground outline-none"
               />
               <button
-                type="button"
+                type="submit"
                 className="shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 bg-primary text-primary-foreground inline-flex items-center justify-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors"
               >
                 <Search className="h-4 w-4 shrink-0" />
                 Buscar
               </button>
-            </div>
+            </form>
 
             <AnimatePresence>
               {showResults && results.length > 0 && (
@@ -190,6 +210,13 @@ export function StoreNavbar() {
                     </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    onClick={goToResults}
+                    className="w-full text-center px-4 py-3 text-sm font-semibold text-primary hover:bg-muted/40 transition-colors border-t border-border/60"
+                  >
+                    Ver todos los resultados ({totalMatches})
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -250,7 +277,7 @@ export function StoreNavbar() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-full right-0 mt-2 min-w-[13rem] w-max max-w-[min(18rem,calc(100vw-2rem))] bg-card border rounded-xl shadow-lg overflow-hidden z-50"
+                    className="absolute top-full right-0 mt-2 min-w-[13rem] w-max max-w-[min(18rem,calc(100vw-2rem))] max-h-[min(70vh,28rem)] overflow-y-auto overscroll-contain bg-card border rounded-xl shadow-lg z-50"
                   >
                     <button
                       type="button"
@@ -403,7 +430,10 @@ export function StoreNavbar() {
           className="w-full md:hidden shrink-0"
         >
           <div className="relative">
-            <div className="flex w-full min-w-0 border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-ring shadow-sm">
+            <form
+              onSubmit={handleSearchSubmit}
+              className="flex w-full min-w-0 border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-ring shadow-sm"
+            >
               <input
                 type="search"
                 inputMode="search"
@@ -416,14 +446,14 @@ export function StoreNavbar() {
                 className="min-w-0 flex-1 min-h-12 px-3 sm:px-4 py-2.5 text-base sm:text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none"
               />
               <button
-                type="button"
+                type="submit"
                 className="shrink-0 whitespace-nowrap px-3 min-[380px]:px-4 min-h-12 bg-primary text-primary-foreground inline-flex items-center justify-center gap-1.5 text-sm font-medium active:bg-primary/90"
                 aria-label="Buscar"
               >
                 <Search className="h-4 w-4 shrink-0" />
                 <span className="hidden min-[380px]:inline">Buscar</span>
               </button>
-            </div>
+            </form>
             <AnimatePresence>
               {showResults && results.length > 0 && (
                 <motion.div
@@ -462,6 +492,13 @@ export function StoreNavbar() {
                     </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    onClick={goToResults}
+                    className="w-full text-center min-h-12 px-4 py-3 text-sm font-semibold text-primary hover:bg-muted/40 active:bg-muted/60 transition-colors border-t border-border/60"
+                  >
+                    Ver todos los resultados ({totalMatches})
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>

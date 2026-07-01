@@ -15,13 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { tradexpar } from "@/services/tradexpar";
 import {
   affiliatesAvailable,
@@ -859,6 +852,81 @@ function RulesAffiliateCombobox({
   );
 }
 
+/** Selector de producto con el mismo aspecto que el Select admin + búsqueda por nombre/SKU (cmdk). */
+function RulesProductCombobox({
+  products,
+  value,
+  onChange,
+}: {
+  products: Product[];
+  value: string;
+  onChange: (productId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = products.find((p) => p.id === value);
+  const label = selected ? selected.name : "Seleccionar producto…";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            ADMIN_FORM_CONTROL,
+            "cursor-pointer text-left justify-between gap-2 ring-offset-background",
+            open && "bg-background ring-2 ring-primary/25"
+          )}
+        >
+          <span className={cn("truncate", !selected && "text-muted-foreground/80")}>{label}</span>
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="z-50 w-[var(--radix-popover-trigger-width)] min-w-[min(100vw-2rem,20rem)] max-w-[min(100vw-2rem,32rem)] p-0"
+        align="start"
+      >
+        <Command>
+          <CommandInput placeholder="Buscar por nombre o SKU…" className="h-9" />
+          <CommandList>
+            <CommandEmpty>Sin coincidencias.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="seleccionar ninguno"
+                onSelect={() => {
+                  onChange("");
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn("mr-2 h-4 w-4 shrink-0", value ? "opacity-0" : "opacity-100")} />
+                <span className="text-muted-foreground">Seleccionar producto…</span>
+              </CommandItem>
+              {products.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={`${p.name} ${p.sku ?? ""} ${p.id}`}
+                  onSelect={() => {
+                    onChange(p.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn("mr-2 h-4 w-4 shrink-0", value === p.id ? "opacity-100" : "opacity-0")}
+                  />
+                  <span className="truncate">{p.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function RulesTab() {
   const [affiliates, setAffiliates] = useState<AffiliateRow[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1095,19 +1163,7 @@ function RulesTab() {
         <div className="grid sm:grid-cols-2 gap-3">
           <div className={ADMIN_FORM_FIELD}>
             <Label className={ADMIN_FORM_LABEL}>Producto</Label>
-            <Select value={prodId || "__none"} onValueChange={(v) => setProdId(v === "__none" ? "" : v)}>
-              <SelectTrigger className={ADMIN_FORM_CONTROL}>
-                <SelectValue placeholder="Seleccionar producto" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none">Seleccionar producto…</SelectItem>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <RulesProductCombobox products={products} value={prodId} onChange={setProdId} />
           </div>
         </div>
         <div className="grid sm:grid-cols-2 gap-3">

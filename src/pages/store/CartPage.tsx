@@ -158,7 +158,7 @@ export default function CartPage() {
             className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-semibold rounded-xl transition-colors"
           >
             <WhatsAppIcon className="h-5 w-5 text-white" />
-            Solicitar a un Asesor
+            PAGO CONTRAENTREGA - Click Aqui y Paga al recibir.
           </button>
         </div>
       </div>

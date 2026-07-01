@@ -8,9 +8,15 @@ import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 export default function ProductsPage() {
   const { data: products = [], isPending: loading, error: queryError, refetch } = useStoreCatalog();
   const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
-  const [search, setSearch] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
+  /** La búsqueda vive en la URL (`?q=`) para que el botón "Buscar" de la navbar la abra ya aplicada. */
+  const search = searchParams.get("q") ?? "";
+  const setSearch = (value: string) => {
+    if (value) searchParams.set("q", value);
+    else searchParams.delete("q");
+    setSearchParams(searchParams, { replace: true });
+  };
   const category = searchParams.get("category") || "all";
   const source = searchParams.get("source") || "all";
   const offersOnly = searchParams.get("offers") === "1";
