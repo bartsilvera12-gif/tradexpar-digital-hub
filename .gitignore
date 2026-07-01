@@ -41,3 +41,6 @@ playwright-report/
 # Cache imágenes Fastrax en el servidor de pagos (solo .gitkeep versionado)
 server/public/fastrax-products/*
 !server/public/fastrax-products/.gitkeep
+
+# Claude Code local config y worktrees
+.claude/
