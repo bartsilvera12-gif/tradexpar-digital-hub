@@ -747,6 +747,9 @@ Deno.serve(async (req) => {
     try {
       if (existingId) {
         dbRow.id = existingId;
+        // No pisar la categoría existente (p. ej. reclasificada a mano) con un vacío
+        // cuando Fastrax manda un código sin resolver.
+        if (!categoryDisp) delete dbRow.category;
         const { ok, dbError } = await restUpsertProduct(projectUrl, service, dbRow, "update");
         if (ok) stats.updated += 1;
         else {

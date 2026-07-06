@@ -7,6 +7,7 @@ import {
   extractProductRows,
   pickActive,
   pickCategory,
+  pickCategoryDisplay,
   pickDescription,
   pickFastraxCrc,
   pickImageUrl,
@@ -14,6 +15,7 @@ import {
   pickPrice,
   pickSku,
   pickStock,
+  type TaxonomyMaps,
 } from "./map_fastrax_row.ts";
 
 Deno.test("ope=1 lista en { d: [...] } con sku, sal, crc, sta", () => {
@@ -83,6 +85,31 @@ Deno.test("blo=1 inactivo", () => {
 Deno.test("ope=98 promo + precopromo", () => {
   const row = { sku: "x", pre: 1000, precopromo: 800, promo: 1, sal: 2, atv: 1 };
   assertEquals(pickPrice(row), 800);
+});
+
+Deno.test("categoría: nombre legible en caw se respeta", () => {
+  assertEquals(pickCategoryDisplay({ caw: "ACCESORIOS", cat: "97" }), "ACCESORIOS");
+});
+
+Deno.test("categoría: código conocido de Fastrax se traduce (sin taxonomía)", () => {
+  // caw="41,42" (tintas) y cat="97" son códigos, no nombres.
+  assertEquals(pickCategoryDisplay({ caw: "41,42", cat: "97" }), "INSUMOS");
+  assertEquals(pickCategoryDisplay({ caw: "64,60" }), "PDV");
+  assertEquals(pickCategoryDisplay({ caw: "24, 23" }), "ELECTRONICOS");
+});
+
+Deno.test("categoría: código desconocido nunca ensucia el menú (queda vacío)", () => {
+  assertEquals(pickCategoryDisplay({ caw: "99,88", cat: "77" }), "");
+});
+
+Deno.test("categoría: la taxonomía Fastrax sigue resolviendo códigos", () => {
+  const tax: TaxonomyMaps = {
+    catWeb: new Map([["41,42", "Tintas y Cartuchos"]]),
+    brands: new Map(),
+    catSys: new Map(),
+  };
+  // La taxonomía tiene prioridad sobre el mapa local hardcodeado.
+  assertEquals(pickCategoryDisplay({ caw: "41,42" }, tax), "Tintas y Cartuchos");
 });
 
 Deno.test("respuesta anidada productos[]", () => {

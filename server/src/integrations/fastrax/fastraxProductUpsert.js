@@ -2,7 +2,7 @@
  * Upsert de una fila Fastrax en `tradexpar.products` (solo fastrax, no toca otras filas).
  */
 
-import { FASTRAX_SOURCE, mapFastraxRowToProduct } from "./mapper.js";
+import { FASTRAX_SOURCE, mapFastraxRowToProduct, resolveFastraxCategory } from "./mapper.js";
 import { saveLocalFastraxProductImagesIfNeeded } from "./localFastraxImage.js";
 import { formatFastraxDescription } from "./fastraxDescriptionFormatter.js";
 
@@ -104,6 +104,18 @@ function numV(v) {
 }
 
 /**
+ * Payload de UPDATE que no pisa la categoría existente (p. ej. reclasificada a mano)
+ * con un valor vacío, que ocurre cuando Fastrax manda un código de categoría sin resolver.
+ * @param {Record<string, unknown>} row
+ * @returns {Record<string, unknown>}
+ */
+function updateRowPreservingCategory(row) {
+  if (row.category) return row;
+  const { category, ...rest } = row;
+  return rest;
+}
+
+/**
  * @param {Record<string, unknown>} raw
  */
 function descBrandCatFromFastraxDetail(raw) {
@@ -113,7 +125,7 @@ function descBrandCatFromFastraxDetail(raw) {
   return {
     description,
     brand: str(raw.mar ?? raw.Mar ?? raw.marca),
-    category: str(raw.cat ?? raw.caw ?? raw.rubro),
+    category: resolveFastraxCategory(raw),
   };
 }
 
@@ -177,7 +189,7 @@ export async function upsertFastraxFromImportItem(sb, item) {
   }
 
   if (existing?.id) {
-    const r = await runWithImagesFallback(row, (payload) =>
+    const r = await runWithImagesFallback(updateRowPreservingCategory(row), (payload) =>
       sb.from("products").update({ ...payload }).eq("id", existing.id)
     );
     if (r && r.error) {
@@ -276,7 +288,7 @@ export async function upsertFastraxMappedRow(sb, m) {
   }
 
   if (exId) {
-    const r = await runWithImagesFallback(row, (payload) =>
+    const r = await runWithImagesFallback(updateRowPreservingCategory(row), (payload) =>
       sb.from("products").update({ ...payload }).eq("id", exId)
     );
     if (r && r.error) {

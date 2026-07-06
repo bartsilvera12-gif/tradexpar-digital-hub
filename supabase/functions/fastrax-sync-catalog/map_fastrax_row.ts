@@ -100,21 +100,66 @@ function resolveCode(maps: Map<string, string>[], code: string): string {
   return c;
 }
 
+/**
+ * Códigos del árbol de categorías de Fastrax (`caw` / `cat`) → categoría real.
+ * Fastrax a veces envía el ID del nodo (p. ej. "41,42") en vez del nombre; sin esto,
+ * el código termina guardado como "categoría" y aparece en el menú de la tienda.
+ */
+const FASTRAX_CATEGORY_CODE_MAP: Record<string, string> = {
+  "41,42": "INSUMOS",
+  "41,44": "INSUMOS",
+  "66,78": "ACCESORIOS",
+  "66,31": "ACCESORIOS",
+  "66,27": "ACCESORIOS",
+  "66,77": "ACCESORIOS",
+  "66,71": "ACCESORIOS",
+  "66,88": "ACCESORIOS",
+  "33,35": "ACCESORIOS",
+  "33,91": "ELECTRONICOS",
+  "24,23": "ELECTRONICOS",
+  "64,60": "PDV",
+  "33,37": "COMPONENTE PC",
+  "43,79": "NETWORK",
+  "43,83": "NETWORK",
+};
+
+/** Un valor "solo números" (con `,` `.` o espacios) es un código de Fastrax, no un nombre. */
+const FASTRAX_NUMERIC_CODE_RE = /^\d+(?:[.,\s]+\d+)*$/;
+
+function isFastraxNumericCode(v: string): boolean {
+  return FASTRAX_NUMERIC_CODE_RE.test(v.replace(/\s+/g, ""));
+}
+
+/** Traduce un código conocido a su categoría; "" si no está mapeado. */
+function mappedFastraxCategory(v: string): string {
+  return FASTRAX_CATEGORY_CODE_MAP[v.replace(/\s+/g, "")] ?? "";
+}
+
 /** Categoría legible para UI / columna `category` (sin mezclar marca). */
 export function pickCategoryDisplay(row: Record<string, unknown>, tax?: TaxonomyMaps): string {
   const caw = str(row.caw ?? row.Caw);
-  if (caw) return caw.slice(0, 200);
   const cat = pickCategoryCode(row);
-  if (cat && tax) {
-    const resolved = resolveCode([tax.catWeb, tax.catSys], cat);
-    return resolved.slice(0, 200);
+  // 1) Primer valor que ya sea un nombre legible (no un código numérico).
+  for (const v of [caw, cat]) {
+    if (v && !isFastraxNumericCode(v)) return v.slice(0, 200);
   }
-  if (cat) return cat.slice(0, 200);
+  // 2) Códigos numéricos: resolver contra la taxonomía Fastrax y luego el mapa local.
+  for (const code of [caw, cat]) {
+    if (!code) continue;
+    if (tax) {
+      const resolved = resolveCode([tax.catWeb, tax.catSys], code);
+      if (resolved && resolved !== code) return resolved.slice(0, 200);
+    }
+    const mapped = mappedFastraxCategory(code);
+    if (mapped) return mapped.slice(0, 200);
+  }
+  // 3) rubro/familia como nombre legible.
   const keys = ["rubro", "Rubro", "familia", "Familia"];
   for (const k of keys) {
     const v = str(row[k]);
-    if (v) return v.slice(0, 200);
+    if (v && !isFastraxNumericCode(v)) return v.slice(0, 200);
   }
+  // 4) Solo quedan códigos sin resolver → vacío (nunca metemos un número en el menú).
   return "";
 }
 

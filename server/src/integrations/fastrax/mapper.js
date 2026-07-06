@@ -120,6 +120,53 @@ export function extractProductRows(root, depth = 0) {
 }
 
 /**
+ * Códigos del árbol de categorías de Fastrax (`caw` / `cat`) → categoría real.
+ * Fastrax a veces envía el ID del nodo (p. ej. "41,42") en vez del nombre; sin esto,
+ * el código termina guardado como "categoría" y aparece en el menú de la tienda.
+ */
+const FASTRAX_CATEGORY_CODE_MAP = {
+  "41,42": "INSUMOS",
+  "41,44": "INSUMOS",
+  "66,78": "ACCESORIOS",
+  "66,31": "ACCESORIOS",
+  "66,27": "ACCESORIOS",
+  "66,77": "ACCESORIOS",
+  "66,71": "ACCESORIOS",
+  "66,88": "ACCESORIOS",
+  "33,35": "ACCESORIOS",
+  "33,91": "ELECTRONICOS",
+  "24,23": "ELECTRONICOS",
+  "64,60": "PDV",
+  "33,37": "COMPONENTE PC",
+  "43,79": "NETWORK",
+  "43,83": "NETWORK",
+};
+
+/** Un valor "solo números" (con `,` `.` o espacios) es un código de Fastrax, no un nombre. */
+const FASTRAX_NUMERIC_CODE_RE = /^\d+(?:[.,\s]+\d+)*$/;
+
+/**
+ * Resuelve la categoría real a partir de los campos crudos de Fastrax (`caw`, `cat`, `rubro`).
+ * - Nombre legible → se respeta.
+ * - Código conocido → nombre mapeado.
+ * - Código numérico desconocido → "" (nunca metemos un número en el menú de categorías).
+ * @param {Record<string, unknown>} raw
+ * @returns {string}
+ */
+export function resolveFastraxCategory(raw) {
+  const caw = str(raw?.caw ?? raw?.Caw);
+  const cat = str(raw?.cat ?? raw?.Cat ?? raw?.rubro ?? raw?.Rubro);
+  for (const v of [caw, cat]) {
+    if (v && !FASTRAX_NUMERIC_CODE_RE.test(v.replace(/\s+/g, ""))) return v.slice(0, 200);
+  }
+  for (const code of [caw, cat]) {
+    const mapped = code ? FASTRAX_CATEGORY_CODE_MAP[code.replace(/\s+/g, "")] : undefined;
+    if (mapped) return mapped;
+  }
+  return "";
+}
+
+/**
  * @param {Record<string, unknown>} raw
  * @returns {{ source: string, external_sku: string, external_id: string, name: string, price: number, stock: number, description: string, image: string, category: string, brand: string, external_payload: Record<string, unknown> }}
  */
@@ -139,7 +186,7 @@ export function mapFastraxRowToProduct(raw) {
     image: str(
       raw.img ?? raw.Img ?? raw.foto ?? raw.image ?? rowUrl(raw)
     ),
-    category: str(raw.caw ?? raw.cat ?? raw.rubro ?? "") || "",
+    category: resolveFastraxCategory(raw),
     brand: str(raw.mar ?? raw.Mar ?? raw.marca ?? "") || "",
     external_payload: raw,
   };
