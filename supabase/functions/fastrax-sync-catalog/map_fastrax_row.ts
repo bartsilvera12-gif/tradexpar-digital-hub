@@ -121,6 +121,7 @@ const FASTRAX_CATEGORY_CODE_MAP: Record<string, string> = {
   "33,37": "COMPONENTE PC",
   "43,79": "NETWORK",
   "43,83": "NETWORK",
+  "102,106": "Herramientas",
 };
 
 /** Un valor "solo números" (con `,` `.` o espacios) es un código de Fastrax, no un nombre. */
