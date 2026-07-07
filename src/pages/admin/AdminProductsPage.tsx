@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -77,6 +78,7 @@ const emptyForm: Partial<Product> = {
   discount_value: 0,
   discount_starts_at: "",
   discount_ends_at: "",
+  is_featured: false,
 };
 
 function imageUrlsForForm(p: Partial<Product>): string[] {
@@ -225,6 +227,7 @@ export default function AdminProductsPage() {
       discount_ends_at: product.discount_ends_at || "",
       discount_value: product.discount_value || 0,
       discount_type: product.discount_type || null,
+      is_featured: product.is_featured === true,
     });
     setOpenForm(true);
   };
@@ -249,6 +252,7 @@ export default function AdminProductsPage() {
         discount_value: Math.max(0, Number(form.discount_value || 0)),
         stock_min: smin,
         stock_max: smax,
+        is_featured: form.is_featured === true,
       };
       if (editingId) {
         await tradexpar.adminUpdateProduct(editingId, payload);
@@ -695,6 +699,22 @@ export default function AdminProductsPage() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className={cn(ADMIN_FORM_MODAL, "max-w-2xl")}>
             <h2 className="text-xl font-semibold text-foreground">{editingId ? "Editar producto" : "Nuevo producto"}</h2>
+            <div className="flex items-start justify-between gap-3 rounded-lg border-2 border-primary/40 bg-primary/5 p-3">
+              <div className="min-w-0">
+                <Label htmlFor="prod-featured" className="text-sm font-semibold text-foreground cursor-pointer">
+                  ⭐ Producto destacado
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Si está activo, aparece en la sección «Productos destacados» del home.
+                </p>
+              </div>
+              <Switch
+                id="prod-featured"
+                checked={form.is_featured === true}
+                onCheckedChange={(v) => setForm({ ...form, is_featured: v === true })}
+                aria-label="Marcar como producto destacado"
+              />
+            </div>
             <div className="grid md:grid-cols-2 gap-3">
               <div className={ADMIN_FORM_FIELD}>
                 <Label htmlFor="prod-name" className={ADMIN_FORM_LABEL}>

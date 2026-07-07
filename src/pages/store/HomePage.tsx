@@ -43,6 +43,8 @@ export default function HomePage() {
   });
   const allCategories = [...categoryMap.entries()];
   const viralDropiAll = products.filter((p) => p.product_source_type === "dropi");
+  const featuredProducts = products.filter((p) => p.is_featured === true);
+  const productsDestacados = featuredProducts.length > 0 ? featuredProducts : products.slice(0, 8);
 
   return (
     <>
@@ -120,7 +122,7 @@ export default function HomePage() {
           <ProductSection
             title="Productos destacados"
             linkTo={withAffiliateRef("/products", refForLink)}
-            products={products.slice(0, 8)}
+            products={productsDestacados.slice(0, 8)}
           />
         )}
 

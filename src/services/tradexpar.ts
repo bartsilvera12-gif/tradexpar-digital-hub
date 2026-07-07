@@ -284,6 +284,7 @@ function mapProduct(row: Record<string, unknown>): Product {
     discount_value: row.discount_value != null ? Number(row.discount_value) : null,
     discount_starts_at: row.discount_starts_at != null ? String(row.discount_starts_at) : null,
     discount_ends_at: row.discount_ends_at != null ? String(row.discount_ends_at) : null,
+    is_featured: row.is_featured === true,
   };
 }
 
@@ -304,6 +305,7 @@ function productToRow(p: Partial<Product>): Record<string, unknown> {
   if (p.discount_starts_at !== undefined) row.discount_starts_at = p.discount_starts_at || null;
   if (p.discount_ends_at !== undefined) row.discount_ends_at = p.discount_ends_at || null;
   if (p.images !== undefined) row.images = p.images.length ? p.images : [];
+  if (p.is_featured !== undefined) row.is_featured = Boolean(p.is_featured);
   return row;
 }
 

@@ -30,6 +30,8 @@ export interface Product {
   discount_value?: number | null;
   discount_starts_at?: string | null;
   discount_ends_at?: string | null;
+  /** Si es true, aparece en la sección "Productos destacados" del home. */
+  is_featured?: boolean;
 }
 
 export interface CartItem {
