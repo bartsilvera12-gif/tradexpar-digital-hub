@@ -26,6 +26,7 @@ import AffiliatePortalPage from "@/pages/store/AffiliatePortalPage";
 import AboutTradexparPage from "@/pages/store/AboutTradexparPage";
 import PrivacyPage from "@/pages/store/PrivacyPage";
 import DataDeletionPage from "@/pages/store/DataDeletionPage";
+import TermsPage from "@/pages/store/TermsPage";
 
 const AdminLoginPage = lazy(() => import("@/pages/admin/AdminLoginPage"));
 const AdminDashboardPage = lazy(() => import("@/pages/admin/AdminDashboardPage"));
@@ -84,6 +85,8 @@ const App = () => (
                   <Route path="/data-deletion" element={<DataDeletionPage />} />
                   <Route path="/eliminacion-de-datos" element={<DataDeletionPage />} />
                   <Route path="/eliminar-datos" element={<DataDeletionPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/terminos" element={<TermsPage />} />
                   <Route path="/products/:id" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
