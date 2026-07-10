@@ -43,23 +43,38 @@ type CheckoutForm = {
 };
 
 /**
- * La venta con checkout directo se limita a Asunción y Central; el interior se
- * coordina por WhatsApp. `pagopar_city_code: "1"` es el hub PagoPar de Asunción
- * (ver `src/config/pagoparCiudadesPy.ts`), así que la orden guarda un código válido.
- * `paraguay_cities` sigue intacta en Supabase: esto solo acota lo que se ofrece.
+ * Ciudades habilitadas para checkout directo: Asunción y los 19 distritos del
+ * departamento Central. El interior se coordina por WhatsApp.
+ *
+ * Lista curada a propósito (no se lee de `paraguay_cities`): el seed de la base
+ * tiene el departamento "Central" contaminado con municipios de Concepción, así
+ * que fijarla acá garantiza que solo se ofrezca Gran Asunción. Los
+ * `pagopar_city_code` replican los hubs de `src/config/pagoparCiudadesPy.ts`
+ * (los distritos sin hub propio usan "1", Asunción, como respaldo válido).
+ * `paraguay_cities` queda intacta en Supabase.
  */
-const ASUNCION_CENTRAL_CITY_OPTION: ParaguayCity = {
-  id: "asuncion-central",
-  name: "ASUNCIÓN Y CENTRAL",
-  department: "Departamento Central",
-  pagopar_city_code: "1",
-  sort_order: 0,
-};
-
-const DELIVERY_CITY_OPTIONS: ParaguayCity[] = [ASUNCION_CENTRAL_CITY_OPTION];
-
-/** El nombre de la opción no es geocodificable; para el link de Maps usamos una referencia real. */
-const CITY_GEO_HINT = "Asunción";
+const DELIVERY_CITY_OPTIONS: ParaguayCity[] = [
+  { name: "Asunción", pagopar_city_code: "1", department: "Asunción" },
+  { name: "Areguá", pagopar_city_code: "1", department: "Central" },
+  { name: "Capiatá", pagopar_city_code: "5", department: "Central" },
+  { name: "Fernando de la Mora", pagopar_city_code: "7", department: "Central" },
+  { name: "Guarambaré", pagopar_city_code: "1", department: "Central" },
+  { name: "Itá", pagopar_city_code: "1", department: "Central" },
+  { name: "Itauguá", pagopar_city_code: "15", department: "Central" },
+  { name: "Julián Augusto Saldívar", pagopar_city_code: "1", department: "Central" },
+  { name: "Lambaré", pagopar_city_code: "6", department: "Central" },
+  { name: "Limpio", pagopar_city_code: "8", department: "Central" },
+  { name: "Luque", pagopar_city_code: "4", department: "Central" },
+  { name: "Mariano Roque Alonso", pagopar_city_code: "1", department: "Central" },
+  { name: "Nueva Italia", pagopar_city_code: "1", department: "Central" },
+  { name: "Ñemby", pagopar_city_code: "9", department: "Central" },
+  { name: "San Antonio", pagopar_city_code: "1", department: "Central" },
+  { name: "San Lorenzo", pagopar_city_code: "3", department: "Central" },
+  { name: "Villa Elisa", pagopar_city_code: "1", department: "Central" },
+  { name: "Villeta", pagopar_city_code: "1", department: "Central" },
+  { name: "Ypacaraí", pagopar_city_code: "1", department: "Central" },
+  { name: "Ypané", pagopar_city_code: "1", department: "Central" },
+].map((c, i) => ({ ...c, id: `delivery-${i}`, sort_order: i }));
 
 /**
  * Mensaje prellenado para el botón de envíos al interior. Sigue el formato del
@@ -111,7 +126,7 @@ export default function CheckoutPage() {
     phone: "",
     address: "",
     addressReference: "",
-    cityId: ASUNCION_CENTRAL_CITY_OPTION.id,
+    cityId: "",
     locationUrl: "",
   });
   const [locations, setLocations] = useState<CustomerLocation[]>([]);
@@ -255,7 +270,7 @@ export default function CheckoutPage() {
       const cityNameForOrder = cityLabel;
       const location_url =
         form.locationUrl.trim() ||
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address.trim()}, ${CITY_GEO_HINT}, Paraguay`)}`;
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address.trim()}, ${cityRow.name}, Paraguay`)}`;
 
       const customerLocationId = selectedLocationId || undefined;
 
@@ -418,6 +433,7 @@ export default function CheckoutPage() {
                     <SelectValue placeholder="Seleccioná tu ciudad de entrega" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[min(22rem,50vh)]">
+                    <SelectItem value="__none">Seleccioná tu ciudad de entrega</SelectItem>
                     {DELIVERY_CITY_OPTIONS.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
