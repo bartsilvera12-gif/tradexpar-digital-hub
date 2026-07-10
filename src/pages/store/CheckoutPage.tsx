@@ -86,7 +86,7 @@ function buildInteriorWhatsAppText(
       [`• ${l.name} x${l.quantity} — ₲${l.subtotal.toLocaleString("es-PY")}`, `  ${l.url}`].join("\n")
     ),
     "",
-    `*Subtotal:* ₲${subtotal.toLocaleString("es-PY")} _(sin envío)_`,
+    `*Subtotal:* ₲${subtotal.toLocaleString("es-PY")}`,
     "",
     "¿Me indican el costo y el plazo de envío a mi ciudad?",
     "¡Gracias!",
