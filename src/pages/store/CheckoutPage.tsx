@@ -19,6 +19,7 @@ import { getActiveAffiliateRef } from "@/lib/affiliate";
 import { affiliatesAvailable, finalizeAffiliateAttribution } from "@/services/affiliateTradexparService";
 import type { CustomerLocation, ParaguayCity } from "@/types";
 import { getWhatsAppDigits } from "@/config/whatsapp";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 /** Costos de envío (deben coincidir con la RPC `create_checkout_order` en Supabase). */
 const SHIPPING_48H_PYG = 25_000;
@@ -81,7 +82,7 @@ export default function CheckoutPage() {
     phone: "",
     address: "",
     addressReference: "",
-    cityId: "",
+    cityId: ASUNCION_CENTRAL_CITY_OPTION.id,
     locationUrl: "",
   });
   const [locations, setLocations] = useState<CustomerLocation[]>([]);
@@ -374,7 +375,6 @@ export default function CheckoutPage() {
                     <SelectValue placeholder="Seleccioná tu ciudad de entrega" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="__none">Seleccioná tu ciudad de entrega</SelectItem>
                     {DELIVERY_CITY_OPTIONS.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
@@ -385,14 +385,6 @@ export default function CheckoutPage() {
                 <p className="text-xs text-muted-foreground mt-1.5">
                   La compra online está disponible para Asunción y Central.
                 </p>
-                <a
-                  href={`https://wa.me/${getWhatsAppDigits()}?text=${encodeURIComponent(WHATSAPP_INTERIOR_MESSAGE)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 w-full min-h-11 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 text-xs font-semibold text-center leading-snug hover:bg-emerald-600/15 active:bg-emerald-600/20 transition-colors touch-manipulation"
-                >
-                  📲 PARA ENVÍOS AL INTERIOR, COMUNICARSE AL WHATSAPP.
-                </a>
               </div>
 
               <div>
@@ -557,6 +549,15 @@ export default function CheckoutPage() {
                 "Confirmar y pagar"
               )}
             </button>
+            <a
+              href={`https://wa.me/${getWhatsAppDigits()}?text=${encodeURIComponent(WHATSAPP_INTERIOR_MESSAGE)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 bg-[#25D366] hover:bg-[#1EBE5A] active:bg-[#128C7E] text-white font-semibold rounded-xl text-center text-sm sm:text-base leading-snug transition-colors touch-manipulation"
+            >
+              <WhatsAppIcon className="h-5 w-5" />
+              PARA ENVÍOS AL INTERIOR, COMUNICARSE AL WHATSAPP.
+            </a>
           </div>
         </div>
       </form>
