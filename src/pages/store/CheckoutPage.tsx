@@ -61,8 +61,37 @@ const DELIVERY_CITY_OPTIONS: ParaguayCity[] = [ASUNCION_CENTRAL_CITY_OPTION];
 /** El nombre de la opción no es geocodificable; para el link de Maps usamos una referencia real. */
 const CITY_GEO_HINT = "Asunción";
 
-const WHATSAPP_INTERIOR_MESSAGE =
-  "Hola, quiero consultar por un envío al interior del país desde Tradexpar.";
+/**
+ * Mensaje prellenado para el botón de envíos al interior. Sigue el formato del
+ * carrito (viñetas + `₲` con `toLocaleString("es-PY")`) y usa `*negrita*` de
+ * WhatsApp para que quien atiende ubique el pedido de un vistazo.
+ */
+function buildInteriorWhatsAppText(
+  lines: { name: string; quantity: number; subtotal: number; url: string }[],
+  subtotal: number
+): string {
+  const intro = [
+    "Hola Tradexpar 👋",
+    "",
+    "Quiero coordinar un *envío al interior del país*.",
+  ];
+  if (lines.length === 0) {
+    return [...intro, "", "¿Me indican el costo y el plazo de envío a mi ciudad?"].join("\n");
+  }
+  return [
+    ...intro,
+    "",
+    "*Productos que quiero llevar:*",
+    ...lines.map((l) =>
+      [`• ${l.name} x${l.quantity} — ₲${l.subtotal.toLocaleString("es-PY")}`, `  ${l.url}`].join("\n")
+    ),
+    "",
+    `*Subtotal:* ₲${subtotal.toLocaleString("es-PY")} _(sin envío)_`,
+    "",
+    "¿Me indican el costo y el plazo de envío a mi ciudad?",
+    "¡Gracias!",
+  ].join("\n");
+}
 
 export default function CheckoutPage() {
   const { items, clearCart } = useCart();
@@ -127,6 +156,20 @@ export default function CheckoutPage() {
   }, [user]);
 
   const checkoutType = useMemo(() => deriveCheckoutTypeFromItems(items), [items]);
+
+  const interiorWhatsAppHref = useMemo(() => {
+    const baseUrl =
+      import.meta.env.VITE_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+    const lines = items.map((i) => ({
+      name: i.product.name,
+      quantity: i.quantity,
+      subtotal: lineSubtotal(i.product, i.quantity),
+      url: `${baseUrl}/products/${i.product.id}`,
+    }));
+    const text = buildInteriorWhatsAppText(lines, totalPrice);
+    return `https://wa.me/${getWhatsAppDigits()}?${new URLSearchParams({ text }).toString()}`;
+  }, [items, lineSubtotal, totalPrice]);
 
   /**
    * Sin `forma_pago`, el POST usa el default del servidor (`PAGOPAR_FORMA_PAGO`, típicamente 9).
@@ -550,13 +593,13 @@ export default function CheckoutPage() {
               )}
             </button>
             <a
-              href={`https://wa.me/${getWhatsAppDigits()}?text=${encodeURIComponent(WHATSAPP_INTERIOR_MESSAGE)}`}
+              href={interiorWhatsAppHref}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full min-h-12 flex items-center justify-center gap-2 px-6 py-3.5 sm:py-4 bg-[#25D366] hover:bg-[#1EBE5A] active:bg-[#128C7E] text-white font-semibold rounded-xl text-center text-sm sm:text-base leading-snug transition-colors touch-manipulation"
             >
               <WhatsAppIcon className="h-5 w-5" />
-              PARA ENVÍOS AL INTERIOR, COMUNICARSE AL WHATSAPP.
+              Para envíos al interior, escribinos por WhatsApp
             </a>
           </div>
         </div>
