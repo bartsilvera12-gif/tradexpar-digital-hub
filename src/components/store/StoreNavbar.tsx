@@ -17,6 +17,8 @@ import { resolveProductPrimaryImageSrc } from "@/lib/productImageUrl";
 import { withAffiliateRef } from "@/lib/affiliate";
 
 const VIRAL_DROPI_LABEL = "Los más virales";
+/** Solo para mostrar: el valor original se conserva para navegar y filtrar. */
+const upperEs = (s: string) => s.toLocaleUpperCase("es-PY");
 /** Naranja fuego: solo texto, sin fondo */
 const viralItemText = "font-semibold text-[#FF4D00] hover:text-[#E65100]";
 const viralItemActive = "text-[#D84315]";
@@ -202,7 +204,7 @@ export function StoreNavbar() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{p.category}</p>
+                        <p className="text-xs text-muted-foreground">{p.category ? upperEs(p.category) : ""}</p>
                       </div>
                       <span className="text-sm font-bold text-foreground shrink-0">
                         ₲{(Number(p.price) || 0).toLocaleString("es-PY")}
@@ -289,7 +291,7 @@ export function StoreNavbar() {
                         viralNavActive && viralItemActive
                       )}
                     >
-                      {VIRAL_DROPI_LABEL}
+                      {upperEs(VIRAL_DROPI_LABEL)}
                     </button>
                     {categories.map((c) => (
                       <button
@@ -298,7 +300,7 @@ export function StoreNavbar() {
                         onClick={() => handleCategorySelect(c)}
                         className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
                       >
-                        {c}
+                        {upperEs(c)}
                       </button>
                     ))}
                   </motion.div>
@@ -484,7 +486,7 @@ export function StoreNavbar() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground line-clamp-2">{p.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{p.category}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.category ? upperEs(p.category) : ""}</p>
                       </div>
                       <span className="text-sm font-bold text-foreground shrink-0 tabular-nums">
                         ₲{(Number(p.price) || 0).toLocaleString("es-PY")}
@@ -579,7 +581,7 @@ export function StoreNavbar() {
                       viralNavActive && viralItemActive
                     )}
                   >
-                    {VIRAL_DROPI_LABEL}
+                    {upperEs(VIRAL_DROPI_LABEL)}
                   </button>
                   {categories.map((c) => (
                     <button
@@ -588,7 +590,7 @@ export function StoreNavbar() {
                       onClick={() => handleCategorySelect(c)}
                       className="w-full text-left text-sm font-medium min-h-11 flex items-center px-3 rounded-lg text-muted-foreground hover:bg-muted/50 active:bg-muted/60 transition-colors touch-manipulation"
                     >
-                      {c}
+                      {upperEs(c)}
                     </button>
                   ))}
                 </div>
