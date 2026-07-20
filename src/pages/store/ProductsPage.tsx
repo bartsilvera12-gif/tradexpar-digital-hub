@@ -4,6 +4,7 @@ import { Flame, Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import { getDiscountPercentage, normalizeProductSource } from "@/lib/productHelpers";
+import { productMatchesQuery, sortByRelevance } from "@/lib/productSearch";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 export default function ProductsPage() {
   const { data: products = [], isPending: loading, error: queryError, refetch } = useStoreCatalog();
@@ -26,14 +27,17 @@ export default function ProductsPage() {
   };
 
   const categories = ["all", ...new Set(products.map((p) => p.category).filter(Boolean))];
-  const filtered = products.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+  const matched = products.filter((p) => {
+    // Búsqueda inteligente (acentos, plurales y sinónimos ES/EN, p. ej. "auriculares" → "earphone"/"headset").
+    const matchSearch = productMatchesQuery(p, search);
     const matchCat = category === "all" || p.category === category;
     const sourceKnown = source === "tradexpar" || source === "dropi";
     const matchSource = source === "all" || !sourceKnown || normalizeProductSource(p) === source;
     const matchOffers = !offersOnly || getDiscountPercentage(p) > 0;
     return matchSearch && matchCat && matchSource && matchOffers;
   });
+  /** Con término de búsqueda, ordena por relevancia (coincidencia en el nombre primero). */
+  const filtered = search.trim() ? sortByRelevance(matched, search) : matched;
 
   const setCategory = (cat: string) => {
     if (cat === "all") searchParams.delete("category");

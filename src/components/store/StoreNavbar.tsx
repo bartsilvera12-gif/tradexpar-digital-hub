@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent } fro
 import { motion, AnimatePresence } from "framer-motion";
 import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
+import { searchProducts } from "@/lib/productSearch";
 import { useIsMdUp } from "@/hooks/use-mobile";
 import logoIcon from "@/assets/logo-icon.png";
 import { CartDropdown } from "@/components/store/CartDropdown";
@@ -60,14 +61,10 @@ export function StoreNavbar() {
    * default `[]` cambia de referencia en cada render mientras carga el catálogo.
    */
   const { results, totalMatches } = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return { results: [] as Product[], totalMatches: 0 };
-    const filtered = allProducts.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.category?.toLowerCase().includes(q) ||
-        p.sku?.toLowerCase().includes(q)
-    );
+    // Búsqueda inteligente compartida con el catálogo (acentos, plurales y sinónimos ES/EN).
+    const filtered = searchProducts(allProducts, q);
     return { results: filtered.slice(0, 8), totalMatches: filtered.length };
   }, [query, allProducts]);
 
