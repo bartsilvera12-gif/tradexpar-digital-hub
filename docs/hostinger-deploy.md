@@ -1,6 +1,30 @@
 # Despliegue en Hostinger (sitio estático + Vite)
 
-## 1. Variables de entorno (Supabase)
+## Método recomendado: automático (GitHub Actions → FTP)
+
+En vez de subir archivos a mano (propenso a que no se reemplace `index.html`/`assets`),
+el repo tiene un workflow que **compila y publica solo** en cada push a `main`:
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
+
+**Configuración por única vez** (GitHub → repo → *Settings* → *Secrets and variables* → *Actions* → *New repository secret*):
+
+| Secret | Valor | Dónde sacarlo |
+|---|---|---|
+| `FTP_SERVER` | host FTP (ej. `ftp.tradexpar.com.py` o la IP) | hPanel → **Archivos → Cuentas FTP** |
+| `FTP_USERNAME` | usuario FTP | ídem |
+| `FTP_PASSWORD` | contraseña FTP | ídem (podés crear/resetear la cuenta FTP ahí) |
+
+Luego, cada `git push` a `main` publica automáticamente. También se puede correr a mano
+desde la pestaña **Actions → Deploy a Hostinger → Run workflow**.
+
+> `server-dir` en el workflow es `/public_html/`. Si tu cuenta FTP entra directo dentro de
+> `public_html`, cambialo a `./`. El workflow sube el `.htaccess` (ruteo SPA + no-cache del index).
+
+---
+
+## Método manual (alternativa)
+
+### 1. Variables de entorno (Supabase)
 
 En tu PC, antes de `npm run build`, creá `.env.production` en la raíz del proyecto (no se sube a Git) con:
 

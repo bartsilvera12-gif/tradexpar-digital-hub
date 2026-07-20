@@ -1,0 +1,67 @@
+name: Deploy a Hostinger
+
+# Publica la tienda automáticamente:
+#  - En cada push a `main`.
+#  - O manualmente desde la pestaña "Actions" -> "Run workflow".
+#
+# Qué hace: instala dependencias, hace `npm run build` (genera dist/) y sube
+# el CONTENIDO de dist/ a Hostinger por FTP, sobrescribiendo lo que haya.
+# Así se elimina la subida manual (y el error de que no se reemplazaba index.html/assets).
+#
+# Requisito (configurar UNA sola vez en GitHub -> Settings -> Secrets and variables -> Actions):
+#   FTP_SERVER    -> host FTP de Hostinger (ej: "ftp.tradexpar.com.py" o la IP que da hPanel)
+#   FTP_USERNAME  -> usuario FTP (hPanel -> Archivos -> Cuentas FTP)
+#   FTP_PASSWORD  -> contraseña de esa cuenta FTP
+#
+# server-dir: para la cuenta FTP principal de Hostinger el sitio vive en /public_html/.
+#   Si tu cuenta FTP ya entra directamente dentro de public_html, cambialo a "./".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hostinger
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build
+        # Estos VITE_* terminan en el bundle del navegador (son públicos por diseño);
+        # replican el .env.production del proyecto. Supabase usa el fallback del código.
+        env:
+          VITE_API_BASE_URL: https://payments.neura.com.py
+          VITE_API_KEY: neura123
+        run: npm run build
+
+      - name: Publicar en Hostinger (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./dist/
+          server-dir: /public_html/
+          # Sube también el .htaccess (ruteo SPA + no-cache del index.html)
+          exclude: |
+            **/.git*
+            **/.git*/**
