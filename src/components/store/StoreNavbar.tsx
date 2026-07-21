@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 import { searchProducts } from "@/lib/productSearch";
+import { isDisplayableCategory } from "@/lib/productHelpers";
 import { useIsMdUp } from "@/hooks/use-mobile";
 import logoIcon from "@/assets/logo-icon.png";
 import { CartDropdown } from "@/components/store/CartDropdown";
@@ -49,7 +50,7 @@ export function StoreNavbar() {
   const mdUp = useIsMdUp();
   const cartAnchorRef = mdUp ? cartAnchorDesktopRef : cartAnchorMobileRef;
 
-  const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))];
+  const categories = [...new Set(allProducts.map((p) => p.category).filter(isDisplayableCategory))];
   const viralNavActive =
     location.pathname.startsWith("/products") &&
     searchParams.get("source") === "dropi" &&

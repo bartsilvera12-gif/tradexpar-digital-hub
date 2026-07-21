@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Flame, Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
-import { getDiscountPercentage, normalizeProductSource } from "@/lib/productHelpers";
+import { getDiscountPercentage, normalizeProductSource, isDisplayableCategory } from "@/lib/productHelpers";
 import { productMatchesQuery, sortByRelevance } from "@/lib/productSearch";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 export default function ProductsPage() {
@@ -26,7 +26,7 @@ export default function ProductsPage() {
     void refetch();
   };
 
-  const categories = ["all", ...new Set(products.map((p) => p.category).filter(Boolean))];
+  const categories = ["all", ...new Set(products.map((p) => p.category).filter(isDisplayableCategory))];
   const matched = products.filter((p) => {
     // Búsqueda inteligente (acentos, plurales y sinónimos ES/EN, p. ej. "auriculares" → "earphone"/"headset").
     const matchSearch = productMatchesQuery(p, search);

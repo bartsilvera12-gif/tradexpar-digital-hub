@@ -2,6 +2,41 @@ import { getWhatsAppDigits } from "@/config/whatsapp";
 import type { CartItem, Product } from "@/types";
 
 /**
+ * Fastrax a veces deja el código del árbol de categorías (p. ej. "41,42", "102,106")
+ * como `category` en vez del nombre. Eso no debe aparecer nunca en el menú de la tienda.
+ */
+const CATEGORY_CODE_RE = /^\d+(?:[.,\s]+\d+)*$/;
+
+/** True si la categoría es un nombre mostrable (no vacío y no un código numérico de Fastrax). */
+export function isDisplayableCategory(category: string | null | undefined): boolean {
+  const c = String(category ?? "").trim();
+  if (!c) return false;
+  return !CATEGORY_CODE_RE.test(c.replace(/\s+/g, ""));
+}
+
+/**
+ * Fastrax abrevia "auricular" como "AURI" al inicio del nombre ("AURI EARPHONE …",
+ * "AURI HEADSET …"). Eso se lee como código de proveedor, no como producto, así que
+ * en la tienda lo expandimos. Solo palabra completa: "AURICULAR GAMER" no se toca.
+ *
+ * Es una transformación de PRESENTACIÓN: se aplica en `useStoreCatalog`, no en
+ * `mapProduct`, porque el admin edita y vuelve a guardar `product.name` y escribiría
+ * el nombre expandido en la base (que además Fastrax pisa en la siguiente sync).
+ */
+const AURI_ABBREV_RE = /\bauri\b/gi;
+
+function expandAuriCase(match: string): string {
+  if (match === match.toLowerCase()) return "auricular";
+  if (match === match.toUpperCase()) return "AURICULAR";
+  return "Auricular";
+}
+
+/** Nombre del producto tal como se muestra al cliente en la tienda. */
+export function getDisplayProductName(name: string | null | undefined): string {
+  return String(name ?? "").replace(AURI_ABBREV_RE, expandAuriCase);
+}
+
+/**
  * Canal de checkout: Dropi aparte; Tradexpar y Fastrax comparten el mismo flujo local (sin pedido en Fastrax).
  */
 export function normalizeProductSource(product: Product): "tradexpar" | "dropi" {
