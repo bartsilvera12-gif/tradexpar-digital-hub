@@ -926,13 +926,22 @@ export default function AdminOrdersPage() {
           await tradexpar.adminUpdateOrderItemLine(it.id, { line_status: newS });
           patchLocalItem(order.id, it.id, { line_status: newS });
         }
+        // Releer desde la DB en lugar de quedarse con el patch local: así la card muestra lo
+        // que realmente quedó guardado (incluida cualquier propagación hecha por el servidor)
+        // y el borrador no sigue “pisando” visualmente al estado real.
+        setLineDrafts((d) => {
+          const x = { ...d };
+          delete x[order.id];
+          return x;
+        });
+        fetchOrders();
       } catch (e) {
         setError(e instanceof Error ? e.message : "No se pudieron guardar las líneas");
       } finally {
         setSavingLinesOrderId(null);
       }
     },
-    [lineDrafts]
+    [lineDrafts, fetchOrders]
   );
 
   const finalizeOrder = useCallback(

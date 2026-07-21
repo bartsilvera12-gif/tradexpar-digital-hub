@@ -306,8 +306,12 @@ export async function fetchDropiBridgeGetOrderByDropiId(dropiOrderId) {
   if (!sub) return null;
   const { base, key } = assertBridgeEnv();
   const id = encodeURIComponent(String(dropiOrderId).trim());
+  // Si el path trae placeholder (`{id}`), el id ya quedó ubicado y no se vuelve a anexar.
+  // No se puede decidir con `path.includes(id)`: un id corto ("1", "23") aparece como
+  // subcadena de paths normales (`v1-order`) y la petición saldría SIN el id.
+  const isTemplated = /\{[a-z_]+\}/i.test(sub);
   const path = sub.replace(/\{id\}/g, id).replace(/\{dropi_id\}/g, id);
-  const url = path.includes(id) || /\{[a-z_]+\}/i.test(sub) ? `${base}/${path}` : `${base}/${path}/${id}`;
+  const url = isTemplated ? `${base}/${path}` : `${base}/${path}/${id}`;
 
   const res = await fetch(url, {
     method: "GET",

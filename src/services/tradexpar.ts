@@ -1195,10 +1195,22 @@ export const tradexpar = {
     );
   },
 
+  // Ambos updates confirman con `.select("id")`: un UPDATE bloqueado por RLS no devuelve error,
+  // devuelve 0 filas. Sin esta comprobación el panel mostraba el estado nuevo, no se había
+  // guardado nada, y al recargar volvía el anterior («no actualiza el estado al guardar»).
   adminUpdateOrderStatus: async (orderId: string, status: string) => {
     const sb = await txAdmin();
-    const { error } = await sb.from("orders").update({ status }).eq("id", orderId);
+    const { data, error } = await sb
+      .from("orders")
+      .update({ status })
+      .eq("id", orderId)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) {
+      throw new Error(
+        "No se pudo guardar el estado del pedido: la base de datos no aplicó el cambio (permisos/RLS o pedido inexistente)."
+      );
+    }
   },
 
   adminUpdateOrderItemLine: async (
@@ -1206,8 +1218,17 @@ export const tradexpar = {
     patch: { line_status?: string; external_status?: string }
   ) => {
     const sb = await txAdmin();
-    const { error } = await sb.from("order_items").update(patch).eq("id", itemId);
+    const { data, error } = await sb
+      .from("order_items")
+      .update(patch)
+      .eq("id", itemId)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) {
+      throw new Error(
+        "No se pudo guardar el estado de la línea: la base de datos no aplicó el cambio (permisos/RLS o línea inexistente)."
+      );
+    }
   },
 
   adminGetUsers: async () => {

@@ -3,12 +3,11 @@
  * Requiere `tradexpar.products.external_sku` (ver `server/sql/fastrax_supabase_sql_arrays.mjs` / Supabase).
  */
 
-import { fastraxPost, fastraxConfigured, fastraxEnabled, listProductsPage } from "./client.js";
+import { fastraxPost, fastraxConfigured, fastraxEnabled, fastraxOpe4PageSize, listProductsPage } from "./client.js";
 import { upsertFastraxMappedRow } from "./fastraxProductUpsert.js";
-import { extractProductRows, mapFastraxRowToProduct } from "./mapper.js";
+import { extractProductRows, fastraxRowHasStock, mapFastraxRowToProduct } from "./mapper.js";
 
 const DEFAULT_MAX_PAGES = 100;
-const OPE4_STOP = 2;
 
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
@@ -29,6 +28,9 @@ export async function runFastraxProductSync(sb, options = {}) {
   const mergeOpe98 = options.mergeOpe98 !== false;
 
   const seen = new Map();
+  // Última página = la que devuelve menos filas que el tamaño pedido. Comparar contra una
+  // constante fija (antes 2) sólo cortaba con páginas de ≤1 fila → hasta `maxPages` llamadas.
+  const pageSize = fastraxOpe4PageSize();
   for (let page = 1; page <= maxPages; page += 1) {
     const r = await listProductsPage(page);
     if (!r.ok) {
@@ -42,7 +44,7 @@ export async function runFastraxProductSync(sb, options = {}) {
       if (!m) continue;
       seen.set(m.external_sku, m);
     }
-    if (rows.length < OPE4_STOP) break;
+    if (rows.length < pageSize) break;
   }
 
   if (mergeOpe98) {
@@ -57,7 +59,9 @@ export async function runFastraxProductSync(sb, options = {}) {
           seen.set(m.external_sku, {
             ...prev,
             price: m.price || prev.price,
-            stock: m.stock,
+            // Solo pisar el stock si la fila ope=98 lo informó: `m.stock` es 0 tanto para
+            // "sin stock" como para "no vino el dato", y lo segundo borraría el saldo de ope=4.
+            stock: fastraxRowHasStock(/** @type {Record<string, unknown>} */ (raw)) ? m.stock : prev.stock,
             name: m.name || prev.name,
             external_payload: m.external_payload,
           });

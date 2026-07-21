@@ -423,17 +423,42 @@ export function registerDropiRoutes(app) {
         return res.status(404).json({ ok: false, order_id: orderId, error: "Pedido no encontrado" });
       }
       const r = await syncDropiOrderStatus(orderId);
+      // Todo cuerpo de error debe llevar `error` legible: el cliente (`src/services/api.ts`)
+      // solo sabe extraer `error` / `error_message` / `message`; sin eso muestra
+      // «La petición falló (503)», que el operador lee como «error interno».
+      const withMsg = (body, fallback) =>
+        body && typeof body === "object" && typeof body.error === "string" && body.error.trim()
+          ? body
+          : { ...body, error: fallback };
+
       if (r.reason === "no_map" || r.reason === "load_error" || r.reason === "update_error" || r.reason === "bridge_error" || r.reason === "invalid_order_id") {
         if (r.reason === "no_map") {
-          return res.status(404).json(r);
+          return res
+            .status(404)
+            .json(withMsg(r, "Este pedido todavía no fue enviado a Dropi, así que no hay estado para sincronizar."));
         }
-        return res.status(502).json(r);
+        const fallbackByReason = {
+          load_error: "No se pudo leer el mapeo Dropi del pedido en la base de datos.",
+          update_error: "No se pudo guardar el estado sincronizado en la base de datos.",
+          bridge_error: "El bridge de Dropi no respondió correctamente.",
+          invalid_order_id: "Identificador de pedido inválido.",
+        };
+        return res.status(502).json(withMsg(r, fallbackByReason[r.reason] ?? "Fallo al sincronizar con Dropi."));
       }
       if (r.ok === false && r.reason === "missing_dropi_order_id") {
-        return res.status(422).json(r);
+        return res
+          .status(422)
+          .json(withMsg(r, "El pedido no tiene número de orden de Dropi asociado; volvé a enviarlo a Dropi."));
       }
       if (r.ok === false && r.reason === "dropi_status_endpoint_pending") {
-        return res.status(503).json(r);
+        return res
+          .status(503)
+          .json(
+            withMsg(
+              r,
+              "La consulta de estado a Dropi no está configurada en el servidor (falta DROPI_BRIDGE_GET_ORDER_PATH) y el último JSON guardado no trae estado."
+            )
+          );
       }
       if (r.ok === true) {
         return res.json({

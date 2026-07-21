@@ -471,9 +471,13 @@ export async function listFastraxProductsOpe4(page = 1, size = 50) {
   return fastraxPost(4, { [tamKey]: tam, [pagKey]: p });
 }
 
+/** Tamaño de página efectivo de ope=4 (`FASTRAX_OPE4_PAGE_SIZE`, por defecto 50). */
+export function fastraxOpe4PageSize() {
+  return Math.max(1, Math.min(500, Number(envTrim("FASTRAX_OPE4_PAGE_SIZE") || 50) || 50));
+}
+
 export async function listProductsPage(page = 1) {
-  const tam = Math.max(1, Math.min(500, Number(envTrim("FASTRAX_OPE4_PAGE_SIZE") || 50) || 50));
-  return listFastraxProductsOpe4(page, tam);
+  return listFastraxProductsOpe4(page, fastraxOpe4PageSize());
 }
 
 /**

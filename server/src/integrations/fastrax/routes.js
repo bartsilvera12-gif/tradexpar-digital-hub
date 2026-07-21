@@ -1,5 +1,5 @@
 import { createRequireAdminMiddleware } from "../../adminAuth.js";
-import { createApiKeyMiddleware } from "../../middleware/apiKey.js";
+import { createApiKeyMiddleware, resolveApiKey } from "../../middleware/apiKey.js";
 import { fastraxConfigured, fastraxEnabled, getFastraxImageOpe3, getVersion, listProductsPage } from "./client.js";
 import { createFastraxOrderForInternalOrder, runFastraxInvoiceForMap } from "./createOrderForInternal.js";
 import { supabaseService } from "./db.js";
@@ -18,19 +18,19 @@ import { sitToLabel } from "./mapper.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
 
-const requireAdmin = createRequireAdminMiddleware();
+const requireAdmin = createRequireAdminMiddleware("fastrax");
 const requireApiKey = createApiKeyMiddleware();
 
-const RESOLVED_API_KEY = String(
-  process.env.API_PUBLIC_KEY || process.env.API_KEY || ""
-).trim();
 /**
  * Acepta `x-api-key` o sesión admin (JWT) para herramientas híbridas.
+ * La clave se resuelve por request: a nivel de módulo se leería antes del `dotenv.config()`
+ * de `index.js` (los `import` de ESM se evalúan primero) y quedaría vacía → 401 permanente.
  */
 function requireApiKeyOrAdmin(req, res, next) {
+  const resolved = resolveApiKey();
   const k = String(req.headers["x-api-key"] ?? "")
     .trim();
-  if (RESOLVED_API_KEY && k && k === RESOLVED_API_KEY) {
+  if (resolved && k && k === resolved) {
     return next();
   }
   return requireAdmin(req, res, next);

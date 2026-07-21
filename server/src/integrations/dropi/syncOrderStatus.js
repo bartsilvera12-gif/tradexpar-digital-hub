@@ -1,7 +1,57 @@
 import { supabaseService } from "./db.js";
 import { fetchDropiBridgeGetOrderByDropiId } from "./client.js";
 import { pickErrorMessageString } from "./dropiErrors.js";
-import { extractDropiOrderStatusFromResponse, dropiStatusToCustomerLabel } from "./dropiStatusLabels.js";
+import {
+  extractDropiOrderStatusFromResponse,
+  dropiStatusToCustomerLabel,
+  dropiStatusToLineStatus,
+  dropiLineStatusRank,
+} from "./dropiStatusLabels.js";
+
+/**
+ * Baja el estado sincronizado a las líneas Dropi del pedido.
+ *
+ * Sin esto la sincronización solo tocaba `dropi_order_map`: el panel de pedidos lee
+ * `order_items.line_status`, así que el estado «no se actualizaba» aunque el sync dijera OK.
+ * Solo avanza (ver `dropiLineStatusRank`) para no pisar un cierre manual del operador.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} sb
+ * @param {string} orderId
+ * @param {string} rawStatus Estado crudo devuelto por Dropi
+ * @returns {Promise<{ updated: number, line_status: string | null, error: string | null }>}
+ */
+async function propagateStatusToOrderItems(sb, orderId, rawStatus) {
+  const target = dropiStatusToLineStatus(rawStatus);
+  if (!target) return { updated: 0, line_status: null, error: null };
+
+  const { data: rows, error: le } = await sb
+    .from("order_items")
+    .select("id, line_status")
+    .eq("order_id", orderId)
+    .eq("external_provider", "dropi");
+  if (le) {
+    return { updated: 0, line_status: target, error: pickErrorMessageString(le) };
+  }
+
+  const targetRank = dropiLineStatusRank(target);
+  const pending = (Array.isArray(rows) ? rows : []).filter(
+    (r) => r?.id && dropiLineStatusRank(r.line_status) < targetRank
+  );
+  if (pending.length === 0) return { updated: 0, line_status: target, error: null };
+
+  const { data: done, error: ue } = await sb
+    .from("order_items")
+    .update({ line_status: target, external_status: String(rawStatus).slice(0, 200) })
+    .in(
+      "id",
+      pending.map((r) => String(r.id))
+    )
+    .select("id");
+  if (ue) {
+    return { updated: 0, line_status: target, error: pickErrorMessageString(ue) };
+  }
+  return { updated: Array.isArray(done) ? done.length : 0, line_status: target, error: null };
+}
 
 function utcNowIso() {
   return new Date().toISOString();
@@ -15,19 +65,38 @@ function utcNowIso() {
 export async function syncDropiOrderStatus(orderId) {
   const oid = String(orderId || "").trim();
   if (!oid) {
-    return { ok: false, reason: "invalid_order_id" };
+    return { ok: false, reason: "invalid_order_id", error: "Id de pedido inválido." };
   }
 
   console.info("[dropi/status-sync] start", { order_id: oid });
-  const sb = supabaseService();
-  const { data: map, error: me } = await sb.from("dropi_order_map").select("*").eq("order_id", oid).maybeSingle();
-  if (me) {
-    const err = pickErrorMessageString(me);
+
+  // `supabaseService()` lanza si faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, y el select
+  // puede rechazar por red o por schema inexistente. Sin este guard, ambos escapaban al
+  // `catch` de la ruta y salían como 500 «Error interno» sin causa visible para el admin.
+  let sb;
+  let map;
+  try {
+    sb = supabaseService();
+    const { data, error: me } = await sb.from("dropi_order_map").select("*").eq("order_id", oid).maybeSingle();
+    if (me) {
+      const err = pickErrorMessageString(me);
+      console.error("[dropi/status-sync] error", { order_id: oid, err });
+      return { ok: false, reason: "load_error", order_id: oid, error: err };
+    }
+    map = data;
+  } catch (e) {
+    const err = pickErrorMessageString(e) || (e instanceof Error ? e.message : String(e));
     console.error("[dropi/status-sync] error", { order_id: oid, err });
     return { ok: false, reason: "load_error", order_id: oid, error: err };
   }
+
   if (!map || typeof map !== "object") {
-    return { ok: false, reason: "no_map", order_id: oid };
+    return {
+      ok: false,
+      reason: "no_map",
+      order_id: oid,
+      error: "El pedido no tiene registro en Dropi (`dropi_order_map`). Creálo en Dropi antes de sincronizar.",
+    };
   }
 
   const m = /** @type {Record<string, unknown>} */ (map);
@@ -38,7 +107,12 @@ export async function syncDropiOrderStatus(orderId) {
 
   const exId = m.dropi_order_id != null && String(m.dropi_order_id).trim() !== "" ? String(m.dropi_order_id).trim() : "";
   if (!exId) {
-    return { ok: false, reason: "missing_dropi_order_id", order_id: oid };
+    return {
+      ok: false,
+      reason: "missing_dropi_order_id",
+      order_id: oid,
+      error: "El registro Dropi existe pero no tiene `dropi_order_id`: la creación del pedido en Dropi no se completó. Reintentá la creación.",
+    };
   }
 
   let newResponse = m.response;
@@ -54,14 +128,8 @@ export async function syncDropiOrderStatus(orderId) {
       const ext = extractDropiOrderStatusFromResponse(/** @type {Record<string, unknown>} */ (remote));
       statusCode = ext.code;
       statusLabel = ext.name ? dropiStatusToCustomerLabel(ext.name) : null;
-      if (!statusCode) {
-        const r0 = /** @type {Record<string, unknown>} */ (remote);
-        const s = r0?.status_name ?? r0?.status;
-        if (s != null && s !== "" && (typeof s === "string" || typeof s === "number")) {
-          statusCode = String(s);
-          if (!statusLabel) statusLabel = dropiStatusToCustomerLabel(String(s));
-        }
-      }
+      // Sin fallback a `remote.status`: en el sobre del bridge eso es el estado HTTP (200),
+      // no el del pedido. `extractDropiOrderStatusFromResponse` ya cubre las claves válidas.
     }
   } catch (e) {
     const msg = pickErrorMessageString(e) || (e instanceof Error ? e.message : String(e));
@@ -112,7 +180,18 @@ export async function syncDropiOrderStatus(orderId) {
     stRaw = String(m.dropi_status).trim();
   }
   if (!stRaw && statusLabel && statusLabel !== "—") stRaw = statusLabel;
-  if (!stRaw) stRaw = "unknown";
+  if (!stRaw) {
+    // Antes se guardaba "unknown" y se devolvía ok:true: el panel mostraba un estado inventado
+    // como si la sincronización hubiera funcionado. Mejor fallar de forma explícita.
+    console.error("[dropi/status-sync] estado ilegible", { order_id: oid, dropi_order_id: exId });
+    return {
+      ok: false,
+      reason: "dropi_status_unreadable",
+      order_id: oid,
+      dropi_order_id: exId,
+      error: "Dropi respondió sin un estado reconocible para el pedido. Revisá el JSON en `dropi_order_map.response`.",
+    };
+  }
   const labelFinal =
     statusLabel && statusLabel !== "—" ? statusLabel : dropiStatusToCustomerLabel(stRaw);
   const ts2 = utcNowIso();

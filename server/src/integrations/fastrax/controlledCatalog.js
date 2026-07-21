@@ -16,7 +16,7 @@ import {
   getProductDetailsBatch,
   listFastraxProductsOpe4,
 } from "./client.js";
-import { extractProductRows, mapFastraxRowToProduct } from "./mapper.js";
+import { extractProductRows, mapFastraxRowToProduct, pickStock } from "./mapper.js";
 import { upsertFastraxFromImportItem, upsertFastraxFromRawRow } from "./fastraxProductUpsert.js";
 
 /**
@@ -397,7 +397,9 @@ function ope2RowToSearchItem(row, sku, ope2Failed, errMsg) {
   const nRaw = row.nom ?? row.Nom ?? row.nombre ?? row.Nombre;
   const name = nRaw != null && String(nRaw) !== "" ? decodeFastraxNom(nRaw) : "";
   const price = Math.max(0, numF(row.pre));
-  const stock = Math.max(0, Math.floor(numF(row.sal)));
+  // `pickStock` prueba sal/Sal/saldo/stock/cantidad/existencia. Leer sólo `row.sal` hacía que
+  // cualquier fila que informara el saldo con otra clave se importara —y se mostrara— con stock 0.
+  const stock = pickStock(/** @type {Record<string, unknown>} */ (row));
   const skuS = String(sku).trim();
   const imgN = numF(row.img);
   const base = {

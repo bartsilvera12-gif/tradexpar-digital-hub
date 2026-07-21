@@ -230,10 +230,15 @@ export function pickPromoPrice(row: Record<string, unknown>): number {
 }
 
 export function pickStock(row: Record<string, unknown>): number {
+  // `num()` devuelve 0 para claves ausentes, así que NO se puede usar `n >= 0` como corte:
+  // haría que la primera clave gane siempre y el resto quede muerto (stock 0 salvo que venga en `sal`).
   const keys = ["sal", "Sal", "saldo", "Saldo", "stock", "Stock", "cantidad", "existencia", "disponible"];
   for (const k of keys) {
-    const n = Math.floor(num(row[k]));
-    if (n >= 0) return n;
+    const v = row[k];
+    if (v == null || v === "") continue;
+    const n = num(v);
+    if (!Number.isFinite(n)) continue;
+    return Math.max(0, Math.floor(n));
   }
   return 0;
 }

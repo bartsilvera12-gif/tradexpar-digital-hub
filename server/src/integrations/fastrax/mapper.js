@@ -71,12 +71,33 @@ function pickPrice(row) {
 /**
  * @param {Record<string, unknown>} row
  */
-function pickStock(row) {
-  for (const k of ["sal", "Sal", "saldo", "stock", "disponible"]) {
-    const n = Math.floor(num(row[k]));
-    if (n >= 0) return n;
+const STOCK_KEYS = ["sal", "Sal", "saldo", "Saldo", "stock", "Stock", "disponible", "cantidad", "existencia"];
+
+/** @param {unknown} v */
+function stockNumOrNull(v) {
+  if (v == null || v === "") return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+}
+
+export function pickStock(row) {
+  // `num()` devuelve 0 para claves ausentes, así que NO se puede usar `n >= 0` como corte:
+  // haría que la primera clave gane siempre y el resto quede muerto (stock 0 salvo que venga en `sal`).
+  for (const k of STOCK_KEYS) {
+    const n = stockNumOrNull(row[k]);
+    if (n != null) return n;
   }
   return 0;
+}
+
+/**
+ * ¿La fila cruda trae realmente algún dato de stock? Permite distinguir "stock 0 real" de
+ * "la fila no informó stock", necesario para no pisar un saldo bueno al mezclar respuestas.
+ * @param {Record<string, unknown> | null | undefined} row
+ */
+export function fastraxRowHasStock(row) {
+  if (!row || typeof row !== "object") return false;
+  return STOCK_KEYS.some((k) => stockNumOrNull(/** @type {Record<string, unknown>} */ (row)[k]) != null);
 }
 
 /**

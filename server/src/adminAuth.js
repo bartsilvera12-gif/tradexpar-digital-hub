@@ -42,11 +42,19 @@ export async function isSuperAdmin(userId, projectUrl, serviceKey) {
 /**
  * @returns {(req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => Promise<void>}
  */
-export function createRequireAdminMiddleware() {
-  const requireSuper = process.env.DROPI_REQUIRE_SUPER !== "false";
+export function createRequireAdminMiddleware(integration = "dropi") {
+  const label = integration === "fastrax" ? "Fastrax" : "Dropi";
+  // Se lee por request, no al crear el middleware: los `import` de ESM se evalúan antes del
+  // `dotenv.config()` de `index.js`, así que capturar la env acá la leería siempre vacía.
+  const resolveRequireSuper = () => {
+    const specific = integration === "fastrax" ? process.env.FASTRAX_REQUIRE_SUPER : undefined;
+    const raw = specific ?? process.env.DROPI_REQUIRE_SUPER;
+    return String(raw ?? "").trim() !== "false";
+  };
 
   return async function requireAdmin(req, res, next) {
     try {
+      const requireSuper = resolveRequireSuper();
       const projectUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL);
       const anon = String(process.env.SUPABASE_ANON_KEY || "").trim();
       const service = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -70,7 +78,7 @@ export function createRequireAdminMiddleware() {
         if (!ok) {
           return res.status(403).json({
             error: "forbidden",
-            message: "Integración Dropi reservada a super administradores (o definí DROPI_REQUIRE_SUPER=false en el server).",
+            message: `Integración ${label} reservada a super administradores (o definí ${integration === "fastrax" ? "FASTRAX_REQUIRE_SUPER" : "DROPI_REQUIRE_SUPER"}=false en el server).`,
           });
         }
       }
