@@ -582,7 +582,11 @@ export function registerFastraxRoutes(app) {
       }
       const r = await createFastraxOrderForInternalOrder(sb, orderId, { context: "admin" });
       if (r.ok === false) {
-        return res.status(502).json(r);
+        // 422 (no 502): un rechazo de negocio de Fastrax (producto inválido, sin saldo,
+        // cliente inválido) o su timeout NO es un fallo de gateway. Con 502, un CDN/proxy
+        // (p. ej. Cloudflare) puede interceptar y reemplazar el cuerpo con su propia página
+        // de error, ocultando el mensaje real. El cuerpo `{ ok:false, error }` se conserva.
+        return res.status(422).json(r);
       }
       const { data: map2 } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
       return res.json({ ok: true, ...r, map: map2 ?? null });
@@ -608,7 +612,9 @@ export function registerFastraxRoutes(app) {
       }
       const r = await runFastraxInvoiceForMap(sb, orderId);
       if (!r.ok) {
-        return res.status(502).json({ ok: false, order_id: orderId, ...r });
+        // 422 (no 502): mismo criterio que en /create — un fallo de facturación de negocio
+        // no es un error de gateway; evita que un CDN/proxy oculte el mensaje real.
+        return res.status(422).json({ ok: false, order_id: orderId, ...r });
       }
       const { data: map2 } = await sb.from("fastrax_order_map").select("*").eq("order_id", orderId).maybeSingle();
       return res.json({ ok: true, order_id: orderId, map: map2 ?? null, parsed: r.parsed });

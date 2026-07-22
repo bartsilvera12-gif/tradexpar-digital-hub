@@ -133,7 +133,10 @@ async function apiFetch<T>(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.toLowerCase().includes("abort") || msg.toLowerCase().includes("timeout")) {
+    const low = msg.toLowerCase();
+    // `AbortSignal.timeout()` rechaza con "signal timed out" (name=TimeoutError): sin la
+    // variante "timed out" el mensaje crudo se filtraba al panel en vez de este texto claro.
+    if (low.includes("abort") || low.includes("timeout") || low.includes("timed out")) {
       throw new Error(
         `La API tardó más de ${Math.round(timeoutMs / 1000)} s en responder. Reintentá en un momento; si persiste, revisá el estado del backend.`
       );
@@ -333,22 +336,25 @@ export const api = {
     );
   },
 
+  // Estas 3 golpean la API Fastrax (ope=12/13/15), que puede tardar ~30 s bajo carga.
+  // El backend ya tiene su propio timeout de 30 s; el panel espera 60 s para recibir el
+  // resultado real (éxito o error de negocio) en lugar de cortar antes con "signal timed out".
   postAdminOrderFastraxSyncStatus: (orderId: string) =>
     apiFetch<AdminFastraxStatusResponse>(
       `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/sync-status`,
-      { method: "POST", body: "{}" }
+      { method: "POST", body: "{}", timeoutMs: 60_000 }
     ),
 
   postAdminOrderFastraxCreate: (orderId: string) =>
     apiFetch<Record<string, unknown>>(
       `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/create`,
-      { method: "POST", body: "{}" }
+      { method: "POST", body: "{}", timeoutMs: 60_000 }
     ),
 
   postAdminOrderFastraxInvoice: (orderId: string) =>
     apiFetch<Record<string, unknown>>(
       `/api/admin/orders/${encodeURIComponent(orderId)}/fastrax/invoice`,
-      { method: "POST", body: "{}" }
+      { method: "POST", body: "{}", timeoutMs: 60_000 }
     ),
 
   /**
