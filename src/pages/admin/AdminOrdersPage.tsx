@@ -11,6 +11,7 @@ import {
   applyLineStatusDraft,
   canFinalizeOrderFromItems,
   deriveOrderKind,
+  deriveOrderStatusFromItems,
   dropiLinkForLine,
   aggregateGroupQuantity,
   aggregateGroupSubtotal,
@@ -926,6 +927,14 @@ export default function AdminOrdersPage() {
           await tradexpar.adminUpdateOrderItemLine(it.id, { line_status: newS });
           patchLocalItem(order.id, it.id, { line_status: newS });
         }
+        // Recalcular el estado del pedido a partir de las líneas ya guardadas (Cerrado /
+        // Parcialmente Entregado / En proceso / Pendiente) y persistirlo si cambió.
+        const mergedItems = applyLineStatusDraft(order.items, draft);
+        const derived = deriveOrderStatusFromItems(mergedItems, order.status);
+        if (derived !== (order.status ?? "").toLowerCase().trim()) {
+          await tradexpar.adminUpdateOrderStatus(order.id, derived);
+          patchLocalOrder(order.id, { status: derived });
+        }
         // Releer desde la DB en lugar de quedarse con el patch local: así la card muestra lo
         // que realmente quedó guardado (incluida cualquier propagación hecha por el servidor)
         // y el borrador no sigue “pisando” visualmente al estado real.
@@ -1588,6 +1597,11 @@ export default function AdminOrdersPage() {
                   const { productGroups, units } = itemSummaryGrouped(o.items);
                   const kind = o.order_kind ?? deriveOrderKind(o.items);
                   const closed = isOrderClosed(o.status);
+                  // Estado derivado de las líneas (aplica también el borrador sin guardar) para
+                  // que la columna ESTADO reaccione al ajustar el estado de cada producto.
+                  const displayStatus = o.items.length
+                    ? deriveOrderStatusFromItems(applyLineStatusDraft(o.items, lineDrafts[o.id]), o.status)
+                    : o.status;
                   return (
                     <Fragment key={o.id}>
                       <tr className="hover:bg-muted/25 transition-colors align-middle bg-card">
@@ -1659,7 +1673,7 @@ export default function AdminOrdersPage() {
                         </td>
                         <td className="py-3 px-3 sm:px-4 align-middle min-w-0 text-center">
                           <div className="flex flex-col gap-1.5 items-center justify-center min-h-[2.5rem]">
-                            <StatusBadge status={o.status} />
+                            <StatusBadge status={displayStatus} />
                             {closed && (
                               <span className="text-[9px] text-muted-foreground leading-tight text-center max-w-[7rem]">
                                 Pedido cerrado

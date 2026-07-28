@@ -115,8 +115,9 @@ const STATUS_LABEL_ES: Record<string, string> = {
   waiting_supplier: "Esperando proveedor",
   shipped: "Enviado",
   delivered: "Entregado",
+  partially_delivered: "Parcialmente Entregado",
   cancelled: "Cancelado",
-  completed: "Completado",
+  completed: "Cerrado",
   failed: "Fallido",
   pending_supplier: "Pendiente proveedor",
   ordered_in_dropi: "Pedido en Dropi",
@@ -141,6 +142,7 @@ const STATUS_RING: Record<string, string> = {
   waiting_supplier: "bg-orange-500/15 text-orange-900 dark:text-orange-200 border-orange-500/40",
   shipped: "bg-violet-500/15 text-violet-800 dark:text-violet-200 border-violet-500/40",
   delivered: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/40",
+  partially_delivered: "bg-lime-500/15 text-lime-800 dark:text-lime-200 border-lime-500/40",
   completed: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/40",
   cancelled: "bg-destructive/15 text-destructive border-destructive/40",
   failed: "bg-destructive/15 text-destructive border-destructive/40",
@@ -245,6 +247,49 @@ export function isLineResolvedForFinalize(it: OrderLineItem): boolean {
 export function canFinalizeOrderFromItems(items: OrderLineItem[]): boolean {
   if (!items.length) return false;
   return items.every(isLineResolvedForFinalize);
+}
+
+/**
+ * Estado del pedido derivado del estado de sus líneas, para la columna ESTADO.
+ *
+ * Reglas (pedido del cliente):
+ *  - todas las líneas entregadas (o entregadas + canceladas, con ≥1 entregada) → "completed" (Cerrado)
+ *  - todas canceladas/fallidas → "cancelled"
+ *  - ≥1 entregada pero no todas resueltas → "partially_delivered" (Parcialmente Entregado)
+ *  - alguna línea fuera de "pendiente" → "processing" (En proceso)
+ *  - todas pendientes → "pending"
+ *
+ * No reabre un pedido cancelado a mano: si `current` es "cancelled" y ninguna
+ * línea está entregada, se mantiene "cancelled".
+ */
+export function deriveOrderStatusFromItems(items: OrderLineItem[], current?: string): string {
+  const cur = (current ?? "").toLowerCase().trim();
+  if (!items.length) return cur || "pending";
+
+  const norm = (it: OrderLineItem) => (it.line_status || "pending").toLowerCase().trim();
+  const isDelivered = (it: OrderLineItem) => norm(it) === "delivered";
+  const isCancelled = (it: OrderLineItem) => {
+    const s = norm(it);
+    return s === "cancelled" || s === "failed";
+  };
+  const isPending = (it: OrderLineItem) => {
+    const s = norm(it);
+    return s === "pending" || s === "pending_supplier";
+  };
+
+  const total = items.length;
+  const delivered = items.filter(isDelivered).length;
+  const cancelled = items.filter(isCancelled).length;
+  const resolved = delivered + cancelled;
+
+  if (cancelled === total) return "cancelled";
+  if (resolved === total && delivered >= 1) return "completed";
+  if (delivered >= 1) return "partially_delivered";
+  // Ninguna entregada: no reabrir un pedido cancelado manualmente.
+  if (cur === "cancelled") return "cancelled";
+  const anyInProgress = items.some((it) => !isPending(it) && !isCancelled(it));
+  if (anyInProgress || cancelled >= 1) return "processing";
+  return "pending";
 }
 
 /** Aplica borrador de estados por id de línea sobre los ítems del pedido. */
