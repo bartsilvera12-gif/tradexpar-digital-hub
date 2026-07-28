@@ -84,7 +84,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-full border px-3 py-1 min-h-[1.625rem] text-[10px] sm:text-xs font-semibold text-center leading-none whitespace-nowrap",
+        "inline-flex items-center justify-center rounded-full border px-3 py-1 min-h-[1.625rem] max-w-[7.5rem] text-[10px] sm:text-xs font-semibold text-center leading-tight whitespace-normal text-balance",
         statusBadgeClass(status)
       )}
     >
