@@ -84,8 +84,9 @@ const SYNONYM_GROUPS: string[][] = [
   ["ventilador", "ventiladores", "fan", "fans", "cooler", "coolers"],
   // Aspiradoras
   ["aspiradora", "aspiradoras", "vacuum"],
-  // Conservadoras / hieleras
-  ["conservadora", "conservadoras", "hielera", "hieleras", "cooler", "coolers", "nevera", "neveras"],
+  // Conservadoras / hieleras (el catálogo abrevia "CONSERV"). Sin "cooler":
+  // es ambiguo con los cooler/ventiladores de PC y traía falsos positivos.
+  ["conservadora", "conservadoras", "conserv", "hielera", "hieleras", "nevera", "neveras"],
   // Adaptadores (nombres del catálogo usan la abreviatura "ADAP")
   ["adaptador", "adaptadores", "adapter", "adapters", "adap"],
   // Notebooks / laptops
@@ -120,26 +121,29 @@ function buildIndex(product: Product): SearchIndex {
       .filter(Boolean)
       .join(" ")
   );
-  // Palabras completas del texto: el disparo de sinónimos usa palabra exacta
-  // (evita que "fan" dispare en "fantasía" o "elefante").
-  const words = new Set(base.split(/[^a-z0-9]+/).filter(Boolean));
+  // Palabras del texto PROPIO del producto (nunca las etiquetas heredadas): la
+  // pertenencia a un grupo de sinónimos debe decidirse solo con lo que el producto
+  // realmente dice. Si se mezclaran las etiquetas, un producto podría "saltar" de
+  // un grupo a otro por un término compartido (ej. "cooler" ventilador → conservadora).
+  const baseWords = new Set(base.split(/[^a-z0-9]+/).filter(Boolean));
+
+  const belongsTo = (term: string) =>
+    term.includes(" ") ? base.includes(term) : baseWords.has(term);
 
   const extra: string[] = [];
   for (const group of SYNONYM_GROUPS) {
-    const belongs = group.some((term) =>
-      term.includes(" ") ? base.includes(term) : words.has(term)
-    );
-    if (!belongs) continue;
+    if (!group.some(belongsTo)) continue;
     for (const term of group) {
-      const present = term.includes(" ") ? base.includes(term) : words.has(term);
-      if (!present) {
-        extra.push(term);
-        for (const w of term.split(" ")) words.add(w);
-      }
+      if (!belongsTo(term)) extra.push(term);
     }
   }
 
   const hay = extra.length ? `${base} ${extra.join(" ")}` : base;
+  // Conjunto de palabras para matchear/fuzzy: las propias + las de sinónimos
+  // heredados (aquí sí, porque esto ya no decide pertenencia, solo coincidencia).
+  const words = new Set(baseWords);
+  for (const term of extra) for (const w of term.split(" ")) words.add(w);
+
   return {
     hay,
     words: Array.from(words),
@@ -267,6 +271,9 @@ function nameMatchKind(idx: SearchIndex, tok: string): MatchKind {
   if (len >= MIN_PARTIAL_LEN && name.startsWith(tok)) return "prefix";
   if (len >= MIN_PARTIAL_LEN) {
     for (const w of idx.nameWords) if (w.startsWith(tok)) return "prefix";
+    // Abreviatura: una palabra del nombre es prefijo del término buscado
+    // (ej. nombre "CONSERV" ⊂ búsqueda "conservadora").
+    for (const w of idx.nameWords) if (w.length >= 4 && tok.startsWith(w)) return "prefix";
   }
 
   // Parcial: substring en cualquier parte del nombre.

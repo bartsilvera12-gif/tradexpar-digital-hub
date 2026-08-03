@@ -201,6 +201,39 @@ describe("orden por relevancia", () => {
   });
 });
 
+describe("catálogo real: abreviatura CONSERV y anti-contaminación de sinónimos", () => {
+  // Nombres tal como vienen del catálogo Fastrax (abrevian "CONSERV") + productos
+  // con "cooler"/"fan" que NO deben aparecer al buscar conservadora.
+  const realCatalog: Product[] = [
+    makeProduct({ id: "v1", name: "VENTILADOR DE PIE 16 PULGADAS", category: "ELECTRODOMESTICO" }),
+    makeProduct({ id: "g1", name: "GAB GAMER FTX-702BK VIDRIO TEMP 3 FAN MATX NEGRO", category: "COMPONENTE PC" }),
+    makeProduct({ id: "g2", name: "GAB GAMER FTX PCC-G9BK 3 FAN ATX NEGRO", category: "COMPONENTE PC", description: "incluye cooler rgb" }),
+    makeProduct({ id: "cpu", name: "CPU INTEL CORE I3-10100F C/COOL BX8070110100F", category: "COMPONENTE PC" }),
+    makeProduct({ id: "c1", name: "CONSERV IGLOO 118L PARTY BAR C/RUEDAS EXT GRIS 34413", category: "TERMICOS" }),
+    makeProduct({ id: "c2", name: "CONSERV BOLSA IGLOO 6LAT ESS GRIS 6P 66194", category: "TERMICOS" }),
+    makeProduct({ id: "c3", name: "CONSERV BOLSA IGLOO 9LAT RETRO SQUARE LUNCH 63085", category: "TERMICOS" }),
+  ];
+
+  it('"conservadora" encuentra las CONSERV y NO trae ventiladores/gabinetes', () => {
+    const res = searchProducts(realCatalog, "conservadora");
+    expect(ids(res)).toEqual(expect.arrayContaining(["c1", "c2", "c3"]));
+    expect(ids(res)).not.toContain("v1");
+    expect(ids(res)).not.toContain("g1");
+    expect(ids(res)).not.toContain("g2"); // tiene "cooler" en la descripción, pero no es conservadora
+    expect(ids(res)).not.toContain("cpu");
+  });
+
+  it('"conserv" (abreviatura) trae solo las CONSERV', () => {
+    const res = searchProducts(realCatalog, "conserv");
+    expect(ids(res)).toEqual(["c1", "c2", "c3"]);
+  });
+
+  it("un ventilador con 'cooler' heredado no queda etiquetado como conservadora", () => {
+    // Regresión: la pertenencia a un grupo se decide solo con el texto propio.
+    expect(productMatchesQuery(realCatalog[0], "conservadora")).toBe(false);
+  });
+});
+
 describe("consultas vacías", () => {
   it("searchProducts vacío devuelve []", () => {
     expect(searchProducts(catalog, "")).toEqual([]);
