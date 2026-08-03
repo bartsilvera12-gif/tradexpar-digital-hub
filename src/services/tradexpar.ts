@@ -33,6 +33,24 @@ import {
 } from "@/lib/networkResilience";
 import { productDescriptionForClient } from "@/lib/productDescriptionText";
 
+/**
+ * Traduce los errores de validación de stock que lanza `create_checkout_order`
+ * (prefijos INSUFFICIENT_STOCK / PRODUCT_UNAVAILABLE) a un mensaje claro para el
+ * cliente. Otros errores se devuelven tal cual.
+ */
+export function friendlyCheckoutError(raw: string | null | undefined): string {
+  const msg = String(raw ?? "").trim();
+  const insufficient = msg.match(/INSUFFICIENT_STOCK:\s*(.*)$/i);
+  if (insufficient) {
+    return `No hay stock suficiente: ${insufficient[1].trim()}. Ajustá la cantidad y volvé a intentar.`;
+  }
+  const unavailable = msg.match(/PRODUCT_UNAVAILABLE:\s*(.*)$/i);
+  if (unavailable) {
+    return `Un producto ya no está disponible: ${unavailable[1].trim()}. Quitalo del carrito para continuar.`;
+  }
+  return msg || "No se pudo crear el pedido.";
+}
+
 function oauthProviderFromUser(user: User): "google" | "facebook" | null {
   for (const id of user.identities ?? []) {
     if (id.provider === "google") return "google";
@@ -839,7 +857,7 @@ export const tradexpar = {
       p_customer_dropi_city_code: payload.customer.dropi_city_code?.trim() || null,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(friendlyCheckoutError(error.message));
     const o = data as Record<string, unknown>;
     const cust = (o.customer || {}) as Record<string, unknown>;
     return {

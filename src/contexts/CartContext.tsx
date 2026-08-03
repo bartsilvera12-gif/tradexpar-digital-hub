@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useRef } from "react";
 import type { Product, CartItem } from "@/types";
 import { getEffectivePrice } from "@/lib/productHelpers";
+
+/** Tope de unidades agregables de un producto. `stock` indefinido = sin límite. */
+function stockCap(product: Product): number {
+  if (product.stock === undefined || product.stock === null) return Infinity;
+  const n = Math.floor(Number(product.stock));
+  return Number.isFinite(n) ? Math.max(0, n) : Infinity;
+}
 
 interface CartContextType {
   items: CartItem[];
@@ -71,56 +78,57 @@ function parseStoredCart(raw: string | null): CartItem[] {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => parseStoredCart(cartStorageGet()));
+  // Espejo síncrono del carrito: permite decidir el tope de stock y devolver el
+  // booleano de `addItem` sin depender del update asíncrono de estado.
+  const itemsRef = useRef<CartItem[]>(items);
 
-  const persist = (next: CartItem[]) => {
+  const persist = useCallback((next: CartItem[]) => {
+    itemsRef.current = next;
     setItems(next);
     cartStorageSet(JSON.stringify(next));
-  };
+  }, []);
 
-  const addItem = useCallback((product: Product, quantity = 1): boolean => {
-    setItems((prev) => {
+  const addItem = useCallback(
+    (product: Product, quantity = 1): boolean => {
+      const cap = stockCap(product);
+      const prev = itemsRef.current;
       const existing = prev.find((i) => i.product.id === product.id);
-      if (existing) {
-        const next = prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i
-        );
-        cartStorageSet(JSON.stringify(next));
-        return next;
+      const current = existing ? existing.quantity : 0;
+      // Agotado o ya en el tope de stock → no se agrega.
+      if (cap <= 0 || current >= cap) return false;
+      const nextQty = Math.min(current + quantity, cap);
+      const next = existing
+        ? prev.map((i) => (i.product.id === product.id ? { ...i, product, quantity: nextQty } : i))
+        : [...prev, { product, quantity: nextQty }];
+      persist(next);
+      return true;
+    },
+    [persist]
+  );
+
+  const removeItem = useCallback(
+    (productId: string) => {
+      persist(itemsRef.current.filter((i) => i.product.id !== productId));
+    },
+    [persist]
+  );
+
+  const updateQuantity = useCallback(
+    (productId: string, quantity: number) => {
+      if (quantity <= 0) {
+        persist(itemsRef.current.filter((i) => i.product.id !== productId));
+        return;
       }
-      const next = [...prev, { product, quantity }];
-      cartStorageSet(JSON.stringify(next));
-      return next;
-    });
-    return true;
-  }, []);
+      const next = itemsRef.current.map((i) =>
+        // Nunca por encima del stock disponible.
+        i.product.id === productId ? { ...i, quantity: Math.min(quantity, stockCap(i.product)) } : i
+      );
+      persist(next);
+    },
+    [persist]
+  );
 
-  const removeItem = useCallback((productId: string) => {
-    setItems((prev) => {
-      const next = prev.filter((i) => i.product.id !== productId);
-      cartStorageSet(JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setItems((prev) => {
-        const next = prev.filter((i) => i.product.id !== productId);
-        cartStorageSet(JSON.stringify(next));
-        return next;
-      });
-      return;
-    }
-    setItems((prev) =>
-      {
-        const next = prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i));
-        cartStorageSet(JSON.stringify(next));
-        return next;
-      }
-    );
-  }, []);
-
-  const clearCart = useCallback(() => persist([]), []);
+  const clearCart = useCallback(() => persist([]), [persist]);
 
   const totalItems = items.reduce((sum, i) => sum + (i?.product && i.quantity > 0 ? i.quantity : 0), 0);
   const totalPrice = items.reduce(

@@ -1,0 +1,199 @@
+-- -----------------------------------------------------------------------------
+-- Revalidación de stock al confirmar la compra.
+--
+-- Antes de crear el pedido, create_checkout_order verifica que cada ítem del
+-- catálogo siga disponible y con saldo suficiente (el stock lo mantiene fresco la
+-- sincronización automática Fastrax cada 10-15 min). Si un producto está
+-- bloqueado/no disponible o el saldo es menor a la cantidad pedida, se aborta la
+-- creación del pedido con un error accionable (errcode P0001). No decrementa
+-- stock: el pedido nace 'pending' y el descuento real se maneja al confirmar el pago.
+--
+-- Basada en 20260601130000_tradexpar_shipping_fees_update.sql (firma 17 params).
+-- Solo agrega el bloque de validación; el resto es idéntico.
+-- -----------------------------------------------------------------------------
+
+create or replace function tradexpar.create_checkout_order(
+  p_checkout_type text,
+  p_location_url text,
+  p_customer_name text,
+  p_customer_email text,
+  p_customer_phone text,
+  p_customer_location_id uuid,
+  p_affiliate_ref text,
+  p_items jsonb,
+  p_affiliate_campaign_slug text default null,
+  p_checkout_client_ip text default null,
+  p_customer_document text default null,
+  p_customer_address text default null,
+  p_customer_city_code text default null,
+  p_customer_address_reference text default null,
+  p_shipping_option text default '48h',
+  p_customer_city_name text default null,
+  p_customer_dropi_city_code text default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = tradexpar, public
+as $$
+declare
+  v_order_id uuid;
+  v_total numeric(14,2) := 0;
+  v_ship numeric(14,2) := 0;
+  v_ship_label text;
+  it jsonb;
+  idx int := 0;
+  v_qty int;
+  v_price numeric(14,2);
+  v_line numeric(14,2);
+  v_ct text;
+  v_ip inet;
+  v_so text;
+  -- Validación de stock.
+  v_pid uuid;
+  v_stock int;
+  v_active boolean;
+  v_pname text;
+begin
+  v_ct := coalesce(nullif(trim(p_checkout_type), ''), 'tradexpar');
+  if v_ct not in ('tradexpar', 'dropi', 'mixed') then
+    v_ct := 'tradexpar';
+  end if;
+
+  v_so := lower(trim(coalesce(p_shipping_option, '48h')));
+  if v_so = '24h' then
+    v_ship := 30000;
+    v_ship_label := 'Entrega en 24 horas – Gs. 30.000';
+  else
+    v_ship := 25000;
+    v_ship_label := 'Entrega en 48 horas – Gs. 25.000';
+  end if;
+
+  if p_checkout_client_ip is not null and trim(p_checkout_client_ip) <> '' then
+    begin
+      v_ip := trim(p_checkout_client_ip)::inet;
+    exception when others then
+      v_ip := null;
+    end;
+  end if;
+
+  -- Revalidar disponibilidad y stock de cada ítem del catálogo ANTES de crear el
+  -- pedido. Si product_id es nulo o no existe como fila de catálogo, no se valida
+  -- (ítem libre); si existe, debe estar activo y con saldo >= cantidad pedida.
+  for it in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    v_qty := greatest(1, coalesce((it->>'quantity')::int, 1));
+    begin
+      v_pid := nullif(trim(coalesce(it->>'product_id', '')), '')::uuid;
+    exception when others then
+      v_pid := null;
+    end;
+    if v_pid is not null then
+      select p.stock, coalesce(p.external_active, true), p.name
+        into v_stock, v_active, v_pname
+        from tradexpar.products p
+        where p.id = v_pid;
+      if found then
+        if v_active = false then
+          raise exception 'PRODUCT_UNAVAILABLE: "%" ya no está disponible', coalesce(v_pname, 'Producto')
+            using errcode = 'P0001';
+        end if;
+        if coalesce(v_stock, 0) < v_qty then
+          raise exception 'INSUFFICIENT_STOCK: "%" sin stock suficiente (disponible %, pedido %)',
+            coalesce(v_pname, 'Producto'), coalesce(v_stock, 0), v_qty
+            using errcode = 'P0001';
+        end if;
+      end if;
+    end if;
+  end loop;
+
+  for it in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    v_qty := greatest(1, coalesce((it->>'quantity')::int, 1));
+    v_price := coalesce((it->>'price')::numeric, (it->>'unit_price')::numeric, 0);
+    v_line := coalesce((it->>'line_subtotal')::numeric, v_price * v_qty);
+    v_total := v_total + v_line;
+    idx := idx + 1;
+  end loop;
+
+  v_total := v_total + v_ship;
+
+  insert into tradexpar.orders (
+    total, status, checkout_type, location_url, customer_location_id,
+    affiliate_ref, customer_name, customer_email, customer_phone,
+    checkout_client_ip, affiliate_campaign_slug,
+    customer_document, customer_address, customer_city_code,
+    customer_city_name, customer_dropi_city_code,
+    customer_address_reference,
+    shipping_fee, shipping_option
+  ) values (
+    round(v_total, 2),
+    'pending',
+    v_ct,
+    nullif(trim(p_location_url), ''),
+    p_customer_location_id,
+    nullif(trim(p_affiliate_ref), ''),
+    nullif(trim(p_customer_name), ''),
+    nullif(trim(p_customer_email), ''),
+    nullif(trim(p_customer_phone), ''),
+    v_ip,
+    nullif(trim(p_affiliate_campaign_slug), ''),
+    nullif(trim(p_customer_document), ''),
+    nullif(trim(p_customer_address), ''),
+    nullif(trim(p_customer_city_code), ''),
+    nullif(trim(p_customer_city_name), ''),
+    nullif(trim(p_customer_dropi_city_code), ''),
+    nullif(trim(p_customer_address_reference), ''),
+    round(v_ship, 2),
+    v_ship_label
+  ) returning id into v_order_id;
+
+  idx := 0;
+  for it in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    v_qty := greatest(1, coalesce((it->>'quantity')::int, 1));
+    v_price := coalesce((it->>'price')::numeric, (it->>'unit_price')::numeric, 0);
+    v_line := coalesce((it->>'line_subtotal')::numeric, v_price * v_qty);
+    insert into tradexpar.order_items (
+      order_id, product_id, product_name, quantity, unit_price, line_subtotal, line_index
+    ) values (
+      v_order_id,
+      (it->>'product_id')::uuid,
+      nullif(trim(coalesce(it->>'product_name', '')), ''),
+      v_qty,
+      v_price,
+      round(v_line, 2),
+      idx
+    );
+    idx := idx + 1;
+  end loop;
+
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on p.pronamespace = n.oid
+    where n.nspname = 'tradexpar' and p.proname = 'apply_affiliate_to_order'
+  ) then
+    perform tradexpar.apply_affiliate_to_order(v_order_id);
+  end if;
+
+  return jsonb_build_object(
+    'id', v_order_id,
+    'total', round(v_total, 2),
+    'status', 'pending',
+    'checkout_type', v_ct,
+    'created_at', (select o.created_at from tradexpar.orders o where o.id = v_order_id),
+    'customer', jsonb_build_object(
+      'name', coalesce(nullif(trim(p_customer_name), ''), ''),
+      'email', coalesce(nullif(trim(p_customer_email), ''), ''),
+      'phone', coalesce(nullif(trim(p_customer_phone), ''), ''),
+      'document', coalesce(nullif(trim(p_customer_document), ''), ''),
+      'address', coalesce(nullif(trim(p_customer_address), ''), ''),
+      'city_code', coalesce(nullif(trim(p_customer_city_code), ''), ''),
+      'city_name', coalesce(nullif(trim(p_customer_city_name), ''), ''),
+      'dropi_city_code', coalesce(nullif(trim(p_customer_dropi_city_code), ''), ''),
+      'address_reference', coalesce(nullif(trim(p_customer_address_reference), ''), '')
+    ),
+    'items', coalesce(p_items, '[]'::jsonb)
+  );
+end;
+$$;
+
+grant execute on function tradexpar.create_checkout_order(text, text, text, text, text, uuid, text, jsonb, text, text, text, text, text, text, text, text, text) to anon, authenticated;
