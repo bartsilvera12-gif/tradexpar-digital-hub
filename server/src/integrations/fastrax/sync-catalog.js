@@ -3,8 +3,10 @@
  *
  * Reutiliza el cliente (ope=4 listado, ope=98 saldos, ope=99 cambios-desde), el
  * mapper y el upsert existentes. Dos modos:
- *  - `full`: recorre todo el catálogo (ope=4) + saldos (ope=98) y desactiva los
- *    SKU Fastrax que ya no aparecen. Se usa en el arranque inicial.
+ *  - `full`: recorre todo el catálogo (ope=4) + saldos (ope=98) y refresca el
+ *    stock de los productos ya importados. Se usa en el arranque inicial. NO
+ *    desactiva por ausencia en el escaneo (evita apagar productos por un ope=4
+ *    incompleto); la baja se maneja solo por señal explícita de Fastrax.
  *  - `incremental`: solo los productos modificados desde la última corrida
  *    exitosa (ope=99) + saldos (ope=98) de esos SKU. Se usa cada N minutos.
  *
@@ -24,7 +26,7 @@ import {
   listProductsPage,
 } from "./client.js";
 import { upsertFastraxStockOnly } from "./fastraxProductUpsert.js";
-import { extractProductRows, fastraxRowHasStock, FASTRAX_SOURCE, mapFastraxRowToProduct } from "./mapper.js";
+import { extractProductRows, fastraxRowHasStock, mapFastraxRowToProduct } from "./mapper.js";
 
 const DEFAULT_MAX_PAGES = 200;
 const RUNS_TABLE = "fastrax_sync_runs";
@@ -170,48 +172,6 @@ async function applyUpserts(sb, seen) {
 }
 
 /**
- * Marca como no disponibles (external_active=false, stock=0) los productos
- * Fastrax que ya NO aparecen en `seen`. Solo se llama en modo full y solo tras un
- * recorrido ope=4 EXITOSO (nunca por una falla temporal de la API, para no
- * "apagar" el catálogo entero). No borra físicamente.
- * @param {import('@supabase/supabase-js').SupabaseClient} sb
- * @param {Set<string>} seenIds
- */
-async function deactivateMissing(sb, seenIds) {
-  const existing = [];
-  const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await sb
-      .from("products")
-      .select("external_product_id")
-      .eq("external_provider", FASTRAX_SOURCE)
-      .eq("external_active", true)
-      .range(from, from + pageSize - 1);
-    if (error) return { ok: false, deactivated: 0, error: error.message };
-    if (!data || data.length === 0) break;
-    for (const row of data) {
-      const id = row?.external_product_id ? String(row.external_product_id) : "";
-      if (id && !seenIds.has(id)) existing.push(id);
-    }
-    if (data.length < pageSize) break;
-  }
-
-  let deactivated = 0;
-  const now = new Date().toISOString();
-  for (let i = 0; i < existing.length; i += 100) {
-    const batch = existing.slice(i, i + 100);
-    const { error } = await sb
-      .from("products")
-      .update({ external_active: false, stock: 0, external_last_sync_at: now, updated_at: now })
-      .eq("external_provider", FASTRAX_SOURCE)
-      .in("external_product_id", batch);
-    if (error) return { ok: false, deactivated, error: error.message };
-    deactivated += batch.length;
-  }
-  return { ok: true, deactivated };
-}
-
-/**
  * Marca de la última sincronización exitosa (o parcial) para el modo incremental.
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @returns {Promise<Date | null>}
@@ -332,17 +292,15 @@ export async function runFastraxCatalogSync(sb, options = {}) {
     const { stats, errors } = await applyUpserts(sb, collected.seen);
     if (errors.length) meta.upsert_errors = errors;
 
-    // 3) Desactivar faltantes (solo en full y solo si el recorrido fue exitoso).
-    if (mode === "full") {
-      const seenIds = new Set(collected.seen.keys());
-      const d = await deactivateMissing(sb, seenIds);
-      if (d.ok) stats.deactivated = d.deactivated;
-      else meta.deactivate_error = d.error;
-    }
+    // NOTA: NO se desactivan productos por "no aparecer en el escaneo". Un ope=4
+    // incompleto (cap de páginas, respuesta parcial) apagaría productos buenos y
+    // les pondría stock 0 —justo la "falla temporal" que hay que evitar—. La baja
+    // de disponibilidad se maneja SOLO por señal explícita de Fastrax (bloqueo /
+    // precio 0), dentro de upsertFastraxStockOnly (external_active).
 
-    const hadFailures = stats.failed > 0 || !!meta.deactivate_error;
+    const hadFailures = stats.failed > 0;
     const status = hadFailures ? "partial" : "success";
-    const errMsg = hadFailures ? (errors[0] || meta.deactivate_error || "fallos parciales") : null;
+    const errMsg = hadFailures ? (errors[0] || "fallos parciales") : null;
     return finish(status, stats, errMsg);
   } catch (e) {
     console.error("[fastrax/sync] excepción:", e);
