@@ -47,6 +47,7 @@ import { registerDropiRoutes } from "./integrations/dropi/routes.js";
 import { createDropiOrderForInternalOrder } from "./integrations/dropi/createOrderForInternal.js";
 import { mapPagoparToDropi, isStrictPagoparToDropiMapping } from "./integrations/dropi/mapPagoparToDropi.js";
 import { registerFastraxRoutes } from "./integrations/fastrax/routes.js";
+import { startFastraxAutoSync, stopFastraxAutoSync } from "./integrations/fastrax/scheduler.js";
 import { createFastraxOrderForInternalOrder } from "./integrations/fastrax/createOrderForInternal.js";
 import { createApiKeyMiddleware } from "./middleware/apiKey.js";
 
@@ -1422,6 +1423,8 @@ const httpServer = app.listen(PORT, () => {
   console.log(
     `[payments-api] PagoPar: ORDER_WRAPPER default off (flat body). Depuración token en VPS: PAGOPAR_LOG_INICIAR_TRANSACCION=1 y PAGOPAR_LOG_TOKEN_DEBUG=1`
   );
+  // Sincronización automática de catálogo Fastrax (stock/disponibilidad).
+  startFastraxAutoSync();
 });
 
 /**
@@ -1441,6 +1444,7 @@ httpServer.requestTimeout = 120_000;
  */
 function gracefulShutdown(signal) {
   console.info(`[payments-api] ${signal} recibido; cerrando servidor HTTP…`);
+  stopFastraxAutoSync();
   httpServer.close((err) => {
     if (err) {
       console.error("[payments-api] error al cerrar HTTP server", err);

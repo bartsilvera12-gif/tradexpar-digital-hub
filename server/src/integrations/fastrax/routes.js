@@ -14,6 +14,12 @@ import {
   searchFastraxReadonlyOpe4Ope2,
 } from "./controlledCatalog.js";
 import { runFastraxProductSync } from "./sync-products.js";
+import {
+  getLastSuccessfulSyncAt,
+  getLastSyncRun,
+  isFastraxSyncRunning,
+  runFastraxCatalogSync,
+} from "./sync-catalog.js";
 import { sitToLabel } from "./mapper.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
@@ -419,6 +425,59 @@ export function registerFastraxRoutes(app) {
         ok: false,
         error: e instanceof Error ? e.message : String(e),
       });
+    }
+  });
+
+  /**
+   * GET /api/admin/fastrax/sync/status
+   * Estado de la sincronización automática para el panel: última corrida
+   * (fecha/hora, estado, contadores), si hay una en curso y la marca "desde".
+   */
+  app.get("/api/admin/fastrax/sync/status", requireApiKeyOrAdmin, async (_req, res) => {
+    try {
+      const sb = supabaseService();
+      const [{ run }, since] = await Promise.all([
+        getLastSyncRun(sb).then((r) => (r.ok ? r : { run: null })),
+        getLastSuccessfulSyncAt(sb),
+      ]);
+      return res.json({
+        ok: true,
+        enabled: fastraxEnabled(),
+        configured: fastraxConfigured(),
+        auto_sync_enabled: process.env.FASTRAX_AUTO_SYNC_ENABLED !== "0",
+        interval_ms: Number(process.env.FASTRAX_SYNC_INTERVAL_MS || 600_000) || 600_000,
+        running: isFastraxSyncRunning(),
+        last_successful_at: since ? since.toISOString() : null,
+        last_run: run,
+      });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /**
+   * POST /api/admin/fastrax/sync/run  { mode?: 'full' | 'incremental' }
+   * Dispara una sincronización manual (mismo flujo que el scheduler). Rechaza con
+   * 409 si ya hay una en curso.
+   */
+  app.post("/api/admin/fastrax/sync/run", requireAdmin, async (req, res) => {
+    if (!fastraxEnabled()) return res.status(503).json({ ok: false, error: "FASTRAX_ENABLED=0" });
+    if (!fastraxConfigured()) {
+      return res.status(503).json({ ok: false, error: "Falta FASTRAX_API_URL / CÓD / PASS" });
+    }
+    if (isFastraxSyncRunning()) {
+      return res.status(409).json({ ok: false, error: "Ya hay una sincronización en curso." });
+    }
+    try {
+      const sb = supabaseService();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const mode = body.mode === "full" ? "full" : "incremental";
+      const result = await runFastraxCatalogSync(sb, { mode, trigger: "manual" });
+      const code = result.ok ? 200 : result.busy ? 409 : 502;
+      return res.status(code).json(result);
+    } catch (e) {
+      console.error("[fastrax/sync/run]", e);
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
   });
 

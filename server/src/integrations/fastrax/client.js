@@ -513,6 +513,51 @@ export async function getStockPrice(extra = {}) {
 }
 
 /**
+ * Formatea la marca "cambios desde" para la operación 99 según lo que espere la
+ * API (configurable con `FASTRAX_CHANGED_SINCE_FORMAT`): `datetime` (por defecto,
+ * "YYYY-MM-DD HH:mm:ss"), `date` ("YYYY-MM-DD") o `iso` (ISO 8601 en UTC).
+ * @param {Date | string | number} since
+ * @returns {string}
+ */
+export function formatFastraxSince(since) {
+  const d = since instanceof Date ? since : new Date(since);
+  if (Number.isNaN(d.getTime())) return "";
+  const fmt = (envTrim("FASTRAX_CHANGED_SINCE_FORMAT") || "datetime").toLowerCase();
+  if (fmt === "iso") return d.toISOString();
+  const p = (n) => String(n).padStart(2, "0");
+  const ymd = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  if (fmt === "date") return ymd;
+  return `${ymd} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
+ * ope=99: productos modificados desde una fecha. Envía `dat` (+ parámetro
+ * alternativo `FASTRAX_CHANGED_SINCE_PARAM` si está seteado) y opcional `mod`
+ * (`FASTRAX_CHANGED_MOD`, según el manual Fastrax). Mismo contrato que la Edge
+ * Function, para consolidar un único flujo de sincronización.
+ * @param {Date | string | number} since
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function listChangedProductsOpe99(since) {
+  const dat = formatFastraxSince(since);
+  /** @type {Record<string, unknown>} */
+  const extra = {};
+  if (dat) {
+    extra.dat = dat;
+    const alt = envTrim("FASTRAX_CHANGED_SINCE_PARAM");
+    if (alt) extra[alt] = dat;
+  }
+  const mod = envTrim("FASTRAX_CHANGED_MOD");
+  if (mod) extra.mod = mod;
+  return fastraxPost(99, extra);
+}
+
+/** ope=98: saldos/precios/estado de todo el catálogo (para merge sobre ope=4/99). */
+export async function listBalancesOpe98() {
+  return fastraxPost(98, {});
+}
+
+/**
  * ope=2 en lote: agrupa SKUs en batches (FASTRAX_DETAIL_BATCH_SIZE, max 50) y
  * los consulta con un único request `sku=A,B,C`. Concurrencia limitada
  * (FASTRAX_DETAIL_CONCURRENCY, max 4). Si un batch falla con HTTP/ok=false, se

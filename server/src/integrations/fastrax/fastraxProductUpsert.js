@@ -2,6 +2,7 @@
  * Upsert de una fila Fastrax en `tradexpar.products` (solo fastrax, no toca otras filas).
  */
 
+import crypto from "node:crypto";
 import { FASTRAX_SOURCE, mapFastraxRowToProduct, resolveFastraxCategory } from "./mapper.js";
 import { saveLocalFastraxProductImagesIfNeeded } from "./localFastraxImage.js";
 import { formatFastraxDescription } from "./fastraxDescriptionFormatter.js";
@@ -206,6 +207,101 @@ export async function upsertFastraxFromImportItem(sb, item) {
   }
   const insData = /** @type {{ id?: unknown } | null} */ (r && "data" in r ? r.data : null);
   return { ok: true, action: "inserted", id: insData?.id ? String(insData.id) : undefined };
+}
+
+/**
+ * Deriva el estado "vendible" (external_active) de una fila Fastrax: inactivo solo
+ * si la API marca bloqueo explícito (`blo`), o si el precio es 0. NO depende del
+ * stock: saldo 0 = agotado (external_active sigue true), no "dado de baja".
+ * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
+ * @returns {boolean}
+ */
+export function deriveFastraxActive(m) {
+  const p = m.external_payload;
+  if (p && typeof p === "object" && !Array.isArray(p)) {
+    const rec = /** @type {Record<string, unknown>} */ (p);
+    const blo = str(rec.blo ?? rec.Blo ?? rec.bloqueado ?? rec.bloqueo);
+    if (blo && !/^(0|n|no|false)$/i.test(blo)) return false;
+  }
+  return m.price > 0;
+}
+
+/**
+ * CRC liviano de los campos técnicos que controla la sync automática (stock,
+ * precio, estado). Si no cambió, se evita el UPDATE (idempotencia + menos escritura).
+ * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
+ * @param {boolean} active
+ * @returns {string}
+ */
+export function computeFastraxStockCrc(m, active) {
+  const basis = `${m.stock}|${m.price}|${active ? 1 : 0}`;
+  return crypto.createHash("sha1").update(basis).digest("hex").slice(0, 16);
+}
+
+/**
+ * Upsert "solo técnico" para la sincronización automática de stock. En UPDATE
+ * toca EXCLUSIVAMENTE stock, external_active, external_sync_crc,
+ * external_last_sync_at y external_payload — NUNCA nombre/categoría/imagen/
+ * descripción/marca (eso queda para la importación manual). Un SKU nuevo se
+ * inserta completo (delegando en upsertFastraxMappedRow). Idempotente por
+ * (external_provider, external_product_id).
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} sb
+ * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
+ * @param {{ skipUnchanged?: boolean }} [opts]
+ * @returns {Promise<{ ok: boolean, action?: 'inserted' | 'updated' | 'unchanged', id?: string, error?: string }>}
+ */
+export async function upsertFastraxStockOnly(sb, m, opts = {}) {
+  const skipUnchanged = opts.skipUnchanged !== false;
+  const active = deriveFastraxActive(m);
+  const crc = computeFastraxStockCrc(m, active);
+
+  const sel = "id, external_sync_crc";
+  let existing = null;
+  const { data: byExtSku, error: e1 } = await sb
+    .from("products")
+    .select(sel)
+    .eq("external_provider", FASTRAX_SOURCE)
+    .eq("external_sku", m.external_sku)
+    .maybeSingle();
+  if (e1) return { ok: false, error: e1.message };
+  if (byExtSku?.id) {
+    existing = byExtSku;
+  } else {
+    const { data: byEp, error: e2 } = await sb
+      .from("products")
+      .select(sel)
+      .eq("external_provider", FASTRAX_SOURCE)
+      .eq("external_product_id", m.external_sku)
+      .maybeSingle();
+    if (e2) return { ok: false, error: e2.message };
+    if (byEp?.id) existing = byEp;
+  }
+
+  // SKU nuevo → alta completa (nombre/categoría/imagen incluidos).
+  if (!existing) {
+    return upsertFastraxMappedRow(sb, m);
+  }
+
+  // Sin cambios técnicos → no reescribir (idempotente).
+  if (skipUnchanged && existing.external_sync_crc && existing.external_sync_crc === crc) {
+    return { ok: true, action: "unchanged", id: String(existing.id) };
+  }
+
+  const now = new Date().toISOString();
+  const patch = {
+    stock: m.stock,
+    external_active: active,
+    external_sync_crc: crc,
+    external_last_sync_at: now,
+    external_payload: m.external_payload,
+    updated_at: now,
+  };
+  const { error } = await sb.from("products").update(patch).eq("id", existing.id);
+  if (error) {
+    return { ok: false, error: describeKnownUpsertError(error) || "update stock fallo" };
+  }
+  return { ok: true, action: "updated", id: String(existing.id) };
 }
 
 /**
