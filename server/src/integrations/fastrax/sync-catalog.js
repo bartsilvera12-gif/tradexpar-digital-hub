@@ -152,7 +152,9 @@ async function collectChanged(since) {
  * @param {Map<string, any>} seen
  */
 async function applyUpserts(sb, seen) {
-  const stats = { reviewed: 0, updated: 0, inserted: 0, unchanged: 0, failed: 0 };
+  // skipped = SKU de Fastrax que no está importado en el catálogo local (no se
+  // inserta desde el sync automático; el alta es manual por el panel).
+  const stats = { reviewed: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0 };
   const errors = [];
   for (const m of seen.values()) {
     stats.reviewed += 1;
@@ -160,8 +162,8 @@ async function applyUpserts(sb, seen) {
     if (!u.ok) {
       stats.failed += 1;
       if (errors.length < 20) errors.push(`${m.external_sku}: ${String(u.error || "upsert")}`);
-    } else if (u.action === "inserted") stats.inserted += 1;
-    else if (u.action === "updated") stats.updated += 1;
+    } else if (u.action === "updated") stats.updated += 1;
+    else if (u.action === "skipped") stats.skipped += 1;
     else stats.unchanged += 1;
   }
   return { stats, errors };

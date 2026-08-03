@@ -242,14 +242,14 @@ export function computeFastraxStockCrc(m, active) {
  * Upsert "solo técnico" para la sincronización automática de stock. En UPDATE
  * toca EXCLUSIVAMENTE stock, external_active, external_sync_crc,
  * external_last_sync_at y external_payload — NUNCA nombre/categoría/imagen/
- * descripción/marca (eso queda para la importación manual). Un SKU nuevo se
- * inserta completo (delegando en upsertFastraxMappedRow). Idempotente por
- * (external_provider, external_product_id).
+ * descripción/marca (eso queda para la importación manual). Un SKU que no existe
+ * en el catálogo local se OMITE (no se inserta: el alta de productos es manual).
+ * Idempotente por (external_provider, external_product_id).
  *
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
  * @param {{ skipUnchanged?: boolean }} [opts]
- * @returns {Promise<{ ok: boolean, action?: 'inserted' | 'updated' | 'unchanged', id?: string, error?: string }>}
+ * @returns {Promise<{ ok: boolean, action?: 'updated' | 'unchanged' | 'skipped', id?: string, error?: string }>}
  */
 export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   const skipUnchanged = opts.skipUnchanged !== false;
@@ -278,9 +278,12 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
     if (byEp?.id) existing = byEp;
   }
 
-  // SKU nuevo → alta completa (nombre/categoría/imagen incluidos).
+  // SKU nuevo → NO se inserta desde la sincronización automática. El alta de
+  // productos es una decisión manual (panel de importación): el sync solo refresca
+  // el stock de lo que ya está en el catálogo. Así no se llena la tienda sola con
+  // todo el catálogo Fastrax.
   if (!existing) {
-    return upsertFastraxMappedRow(sb, m);
+    return { ok: true, action: "skipped" };
   }
 
   // Sin cambios técnicos → no reescribir (idempotente).
