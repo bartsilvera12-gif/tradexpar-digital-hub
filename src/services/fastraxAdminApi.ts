@@ -212,6 +212,62 @@ export async function syncFastraxAllProductsOnServer(args?: { max_pages?: number
   });
 }
 
+/** Contadores de una corrida de sincronización automática. */
+export type FastraxSyncRunStats = {
+  reviewed?: number;
+  updated?: number;
+  inserted?: number;
+  unchanged?: number;
+  deactivated?: number;
+  failed?: number;
+};
+
+/** Fila de tradexpar.fastrax_sync_runs devuelta por el endpoint de estado. */
+export type FastraxSyncRun = {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "success" | "partial" | "failed";
+  mode: "full" | "incremental";
+  trigger: "auto" | "manual";
+  since: string | null;
+  stats: FastraxSyncRunStats | null;
+  error_message: string | null;
+};
+
+export type FastraxSyncStatus = {
+  ok: boolean;
+  enabled: boolean;
+  configured: boolean;
+  auto_sync_enabled: boolean;
+  interval_ms: number;
+  running: boolean;
+  last_successful_at: string | null;
+  last_run: FastraxSyncRun | null;
+};
+
+/** Estado de la sincronización automática (para la tarjeta del panel). */
+export async function getFastraxSyncStatus(): Promise<FastraxSyncStatus> {
+  return fastraxAdminJson<FastraxSyncStatus>("/api/admin/fastrax/sync/status", { method: "GET" });
+}
+
+export type FastraxSyncRunResult = {
+  ok: boolean;
+  busy?: boolean;
+  status?: "success" | "partial" | "failed";
+  mode?: "full" | "incremental";
+  stats?: FastraxSyncRunStats;
+  error?: string;
+};
+
+/** Dispara una sincronización manual (mismo flujo que el scheduler). */
+export async function runFastraxSyncNow(mode: "full" | "incremental" = "incremental"): Promise<FastraxSyncRunResult> {
+  return fastraxAdminJson<FastraxSyncRunResult>("/api/admin/fastrax/sync/run", {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+}
+
 /** Listado rápido: solo ope=4, sin per-SKU ope=2. */
 export type FastraxFastListResult =
   | {

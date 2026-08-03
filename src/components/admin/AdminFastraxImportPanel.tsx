@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
+import { FastraxSyncStatusCard } from "@/components/admin/FastraxSyncStatusCard";
 import {
   ADMIN_FORM_CONTROL,
   ADMIN_FORM_FIELD,
@@ -332,6 +333,8 @@ export function AdminFastraxImportPanel({ onLocalCatalogRefresh }: Props) {
 
   return (
     <div className="space-y-4 w-full max-w-6xl">
+      <FastraxSyncStatusCard />
+
       <p className="text-sm text-muted-foreground max-w-2xl">
         Consultá el catálogo Fastrax en la nube, elegí SKUs e importalos a tu base local. Nada se guarda hasta
         presionar <strong>Importar</strong>. El servidor consulta los detalles ope=2 en lote (batches de
