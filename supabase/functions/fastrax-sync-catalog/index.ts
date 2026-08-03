@@ -375,6 +375,24 @@ Deno.serve(async (req) => {
     });
   }
 
+  // RETIRADA COMO ESCRITOR: el flujo oficial de sincronización de catálogo Fastrax
+  // es el server Node (POST /api/admin/fastrax/sync/*), que ya hace incremental
+  // (ope=99), CRC y desactivación de faltantes. Mantener dos escritores del mismo
+  // catálogo hacía que se pisaran. Esta función queda deshabilitada por defecto
+  // para no divergir; se puede reactivar temporalmente con
+  // FASTRAX_EDGE_WRITER_ENABLED=1 (no recomendado mientras el scheduler Node corra).
+  if (Deno.env.get("FASTRAX_EDGE_WRITER_ENABLED") !== "1") {
+    return new Response(
+      JSON.stringify({
+        error: "retired",
+        message:
+          "La Edge Function fastrax-sync-catalog fue retirada como escritor de catálogo. " +
+          "Usá el server Node: POST /api/admin/fastrax/sync/run (o el scheduler automático).",
+      }),
+      { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   const projectUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
