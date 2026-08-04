@@ -20,6 +20,8 @@ import {
   isFastraxSyncRunning,
   runFastraxCatalogSync,
 } from "./sync-catalog.js";
+import { fastraxPost, listBalancesOpe98, listProductsOpe1 } from "./client.js";
+import { extractProductRows } from "./mapper.js";
 import { sitToLabel } from "./mapper.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
@@ -425,6 +427,60 @@ export function registerFastraxRoutes(app) {
         ok: false,
         error: e instanceof Error ? e.message : String(e),
       });
+    }
+  });
+
+  /**
+   * GET /api/admin/fastrax/sync/probe?sku=127141
+   * Diagnóstico: llama ope=1, ope=98 y opcionalmente ope=2 para un SKU dado y
+   * devuelve tamaños de respuesta, si el SKU aparece en cada una, y la fila
+   * cruda si aparece. Útil para depurar credenciales/depósitos con soporte.
+   */
+  app.get("/api/admin/fastrax/sync/probe", requireApiKeyOrAdmin, async (req, res) => {
+    const sku = String(req.query?.sku ?? "").trim();
+    try {
+      const [one, b, two] = await Promise.all([
+        listProductsOpe1(),
+        listBalancesOpe98(),
+        sku ? fastraxPost(2, { sku }) : Promise.resolve(null),
+      ]);
+      const rowsOne = one.ok ? extractProductRows(one.parsed) : [];
+      const rowsB = b.ok ? extractProductRows(b.parsed) : [];
+      const findBySku = (rows) =>
+        !sku
+          ? null
+          : rows.find((r) => {
+              const k = String(r?.sku ?? r?.SKU ?? r?.codigo ?? r?.cod_art ?? "").trim();
+              return k === sku;
+            }) || null;
+      return res.json({
+        ok: true,
+        sku,
+        ope1: {
+          ok: !!one.ok,
+          error: one.ok ? undefined : one.message,
+          rows: rowsOne.length,
+          sku_found: !!findBySku(rowsOne),
+          sku_row: findBySku(rowsOne),
+          first_row_sample: rowsOne[0] ?? null,
+        },
+        ope98: {
+          ok: !!b.ok,
+          error: b.ok ? undefined : b.message,
+          rows: rowsB.length,
+          sku_found: !!findBySku(rowsB),
+          sku_row: findBySku(rowsB),
+        },
+        ope2: two
+          ? {
+              ok: !!two.ok,
+              error: two.ok ? undefined : two.message,
+              parsed: two.parsed,
+            }
+          : null,
+      });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
   });
 
