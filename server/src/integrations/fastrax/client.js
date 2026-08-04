@@ -558,6 +558,16 @@ export async function listBalancesOpe98() {
 }
 
 /**
+ * ope=1: listado con saldos consolidados por SKU. Devuelve `sal` (stock total)
+ * y `slj` (desglose por depósito). Complementa ope=98 para SKUs que ope=98 no
+ * incluye (por ejemplo, cuando la cuenta API solo ve un depósito y el stock
+ * total está distribuido en varios).
+ */
+export async function listProductsOpe1() {
+  return fastraxPost(1, {});
+}
+
+/**
  * ope=2 en lote: agrupa SKUs en batches (FASTRAX_DETAIL_BATCH_SIZE, max 50) y
  * los consulta con un único request `sku=A,B,C`. Concurrencia limitada
  * (FASTRAX_DETAIL_CONCURRENCY, max 4). Si un batch falla con HTTP/ok=false, se

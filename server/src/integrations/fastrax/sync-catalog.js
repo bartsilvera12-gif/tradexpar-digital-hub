@@ -23,6 +23,7 @@ import {
   fastraxOpe4PageSize,
   listBalancesOpe98,
   listChangedProductsOpe99,
+  listProductsOpe1,
   listProductsPage,
 } from "./client.js";
 import { upsertFastraxStockOnly } from "./fastraxProductUpsert.js";
@@ -120,7 +121,17 @@ async function collectFull(opts = {}) {
   const b = await withRetries(() => listBalancesOpe98());
   if (b.ok && b.parsed) mergeBalances(seen, b.parsed, false);
 
-  return { ok: true, seen, meta: { pages_scanned: pagesScanned, ope98_ok: !!b.ok } };
+  // ope=1: saldos consolidados por SKU (sal + slj por depósito). Cubre productos
+  // que ope=98 no devuelve cuando la cuenta API solo ve un depósito y el stock
+  // está repartido en varios (confirmado por soporte Fastrax).
+  const one = await withRetries(() => listProductsOpe1());
+  if (one.ok && one.parsed) mergeBalances(seen, one.parsed, false);
+
+  return {
+    ok: true,
+    seen,
+    meta: { pages_scanned: pagesScanned, ope98_ok: !!b.ok, ope1_ok: !!one.ok },
+  };
 }
 
 /**
@@ -144,6 +155,10 @@ async function collectChanged(since) {
   if (seen.size > 0) {
     const b = await withRetries(() => listBalancesOpe98());
     if (b.ok && b.parsed) mergeBalances(seen, b.parsed, true);
+    // ope=1: fallback para SKUs con stock repartido en varios depósitos
+    // (ver comentario en collectFull).
+    const one = await withRetries(() => listProductsOpe1());
+    if (one.ok && one.parsed) mergeBalances(seen, one.parsed, true);
   }
   return { ok: true, seen, meta: { ope99_changed: seen.size } };
 }
