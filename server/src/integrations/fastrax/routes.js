@@ -21,7 +21,8 @@ import {
   runFastraxCatalogSync,
 } from "./sync-catalog.js";
 import { fastraxPost, listBalancesOpe98, listProductsOpe1 } from "./client.js";
-import { extractProductRows } from "./mapper.js";
+import { extractProductRows, mapFastraxRowToProduct } from "./mapper.js";
+import { computeFastraxStockCrc, deriveFastraxActive } from "./fastraxProductUpsert.js";
 import { sitToLabel } from "./mapper.js";
 import { syncFastraxOrderStatusForOrderId } from "./syncOrderStatus.js";
 import { orderCanFulfillFastraxTest } from "./orderFastraxGates.js";
@@ -453,9 +454,50 @@ export function registerFastraxRoutes(app) {
               const k = String(r?.sku ?? r?.SKU ?? r?.codigo ?? r?.cod_art ?? "").trim();
               return k === sku;
             }) || null;
+
+      // Simular la decisión del upsert (sin escribir): mapear la fila de Fastrax
+      // y comparar el CRC computado contra el CRC almacenado en DB.
+      let upsertPreview = null;
+      if (sku) {
+        const rowB = findBySku(rowsB);
+        const rowOne = findBySku(rowsOne);
+        // Mismo criterio que collectChanged: ope=98 primero, ope=1 después.
+        const raw = rowB || rowOne;
+        if (raw) {
+          const m = mapFastraxRowToProduct(raw);
+          if (m) {
+            const active = deriveFastraxActive(m);
+            const crcComputed = computeFastraxStockCrc(m, active);
+            const sb = supabaseService();
+            const { data: existing } = await sb
+              .from("products")
+              .select("id, stock, external_sync_crc, external_last_sync_at")
+              .eq("external_provider", "fastrax")
+              .eq("external_sku", sku)
+              .maybeSingle();
+            upsertPreview = {
+              picked_from: rowB ? "ope98" : "ope1",
+              mapped: { external_sku: m.external_sku, stock: m.stock, price: m.price, active },
+              crc_computed: crcComputed,
+              db_existing: existing ?? null,
+              would_action: !existing
+                ? "no_match_in_db"
+                : existing.external_sync_crc === crcComputed
+                  ? "unchanged"
+                  : "update",
+            };
+          } else {
+            upsertPreview = { picked_from: rowB ? "ope98" : "ope1", mapped: null, would_action: "mapper_returned_null" };
+          }
+        } else {
+          upsertPreview = { picked_from: null, would_action: "sku_not_in_ope1_ope98" };
+        }
+      }
+
       return res.json({
         ok: true,
         sku,
+        upsert_preview: upsertPreview,
         ope1: {
           ok: !!one.ok,
           error: one.ok ? undefined : one.message,
