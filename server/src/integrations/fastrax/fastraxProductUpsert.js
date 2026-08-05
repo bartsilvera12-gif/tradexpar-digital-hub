@@ -4,6 +4,27 @@
 
 import crypto from "node:crypto";
 import { FASTRAX_SOURCE, mapFastraxRowToProduct, resolveFastraxCategory } from "./mapper.js";
+
+/**
+ * Margen a aplicar sobre el costo Fastrax para calcular el precio de venta.
+ * Configurable con `FASTRAX_MARGIN_PERCENT` (ej. "0.35" = +35%). Default 0.35.
+ * price_venta = round(costo * (1 + margen)).
+ */
+function fastraxMargin() {
+  const raw = process.env.FASTRAX_MARGIN_PERCENT;
+  const n = raw == null || raw === "" ? 0.35 : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0.35;
+}
+
+/**
+ * Aplica el margen configurado al costo Fastrax. Redondeo al peso (sin decimales)
+ * porque el guaraní no maneja centavos.
+ * @param {number} cost
+ */
+function priceFromCost(cost) {
+  const c = Math.max(0, Number(cost) || 0);
+  return Math.round(c * (1 + fastraxMargin()));
+}
 import { saveLocalFastraxProductImagesIfNeeded } from "./localFastraxImage.js";
 import { formatFastraxDescription } from "./fastraxDescriptionFormatter.js";
 
@@ -161,15 +182,19 @@ export async function upsertFastraxFromImportItem(sb, item) {
   const { mainImage, gallery } = await saveLocalFastraxProductImagesIfNeeded(extSku, rawPayload);
   // Debe escribir stock + CRC juntos: si actualizamos stock sin refrescar el CRC,
   // el sync incremental leerá el CRC viejo, hará "unchanged" y no ajustará el stock.
+  // price_venta = costo_fastrax * (1 + margen). cost = costo_fastrax (raw).
   const mForCrc = { external_sku: extSku, stock, price, external_payload: rawPayload };
   const activeRow = deriveFastraxActive(mForCrc);
+  const cost = price; // lo que Fastrax cobra = nuestro costo
+  const salePrice = priceFromCost(cost);
   const row = {
     name,
     sku: extSku,
     description: dbc.description || name,
     category: dbc.category,
     brand: dbc.brand,
-    price,
+    price: salePrice,
+    cost,
     stock,
     image: mainImage || "",
     images: gallery.length > 0 ? gallery : null,
@@ -297,8 +322,12 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   }
 
   const now = new Date().toISOString();
+  // Recalcula cost/price cada sync: si Fastrax cambia el costo, el precio de
+  // venta se actualiza solo aplicando el margen configurado.
   const patch = {
     stock: m.stock,
+    cost: m.price,
+    price: priceFromCost(m.price),
     external_active: active,
     external_sync_crc: crc,
     external_last_sync_at: now,
@@ -346,14 +375,17 @@ export async function upsertFastraxMappedRow(sb, m) {
   );
   // Debe escribir stock + CRC juntos para que el sync incremental no vea un
   // estado inconsistente (stock viejo con CRC "actual" que hace match y salta).
+  // price_venta = costo_fastrax * (1 + margen). cost = costo_fastrax (raw).
   const activeRow = deriveFastraxActive(m);
+  const salePrice = priceFromCost(m.price);
   const row = {
     name: m.name,
     sku: m.external_sku,
     description: formattedDesc || m.name,
     category: m.category,
     brand: m.brand,
-    price: m.price,
+    price: salePrice,
+    cost: m.price,
     stock: m.stock,
     image: mainImage || m.image || null,
     images: gallery.length > 0 ? gallery : null,
