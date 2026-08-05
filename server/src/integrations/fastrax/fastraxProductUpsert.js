@@ -159,6 +159,10 @@ export async function upsertFastraxFromImportItem(sb, item) {
 
   const now = new Date().toISOString();
   const { mainImage, gallery } = await saveLocalFastraxProductImagesIfNeeded(extSku, rawPayload);
+  // Debe escribir stock + CRC juntos: si actualizamos stock sin refrescar el CRC,
+  // el sync incremental leerá el CRC viejo, hará "unchanged" y no ajustará el stock.
+  const mForCrc = { external_sku: extSku, stock, price, external_payload: rawPayload };
+  const activeRow = deriveFastraxActive(mForCrc);
   const row = {
     name,
     sku: extSku,
@@ -174,9 +178,10 @@ export async function upsertFastraxFromImportItem(sb, item) {
     external_sku: extSku,
     external_product_id: extSku,
     external_payload: rawPayload,
+    external_sync_crc: computeFastraxStockCrc(mForCrc, activeRow),
     external_last_sync_at: now,
     updated_at: now,
-    external_active: price > 0,
+    external_active: activeRow,
   };
 
   const { data: existing, error: eFind } = await sb
@@ -339,6 +344,9 @@ export async function upsertFastraxMappedRow(sb, m) {
     payloadRecord?.des ?? payloadRecord?.descripcion ?? m.description ?? "",
     payloadRecord?.bre ?? ""
   );
+  // Debe escribir stock + CRC juntos para que el sync incremental no vea un
+  // estado inconsistente (stock viejo con CRC "actual" que hace match y salta).
+  const activeRow = deriveFastraxActive(m);
   const row = {
     name: m.name,
     sku: m.external_sku,
@@ -354,9 +362,10 @@ export async function upsertFastraxMappedRow(sb, m) {
     external_sku: m.external_sku,
     external_product_id: m.external_sku,
     external_payload: m.external_payload,
+    external_sync_crc: computeFastraxStockCrc(m, activeRow),
     external_last_sync_at: now,
     updated_at: now,
-    external_active: m.price > 0,
+    external_active: activeRow,
   };
 
   let exId = null;
