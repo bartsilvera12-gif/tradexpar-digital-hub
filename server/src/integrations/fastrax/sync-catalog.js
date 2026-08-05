@@ -135,32 +135,48 @@ async function collectFull(opts = {}) {
 }
 
 /**
- * Solo los productos modificados desde `since` (ope=99) + saldos (ope=98) de esos
- * SKU. Si ope=99 falla, devuelve ok:false para que el orquestador caiga a full.
+ * Sincronización incremental. Trae los cambios reportados por ope=99 y SIEMPRE
+ * consulta ope=98 + ope=1 para no depender del reporte de cambios de Fastrax
+ * (que a veces no informa un cambio de stock que sí ocurrió). Los SKU que no
+ * están en el catálogo local se descartan más adelante en upsertFastraxStockOnly
+ * (no cuestan escritura); los que ya coinciden por CRC tampoco se reescriben.
+ *
  * @param {Date | string | number} since
  * @returns {Promise<{ ok: boolean, seen: Map<string, any>, error?: string, meta: Record<string, unknown> }>}
  */
 async function collectChanged(since) {
   const seen = new Map();
+  // ope=99: si Fastrax responde con cambios explícitos, arrancan como base
+  // (permite ver en el stats.reviewed cuánto "priorizó" Fastrax).
   const r = await withRetries(() => listChangedProductsOpe99(since));
-  if (!r.ok) {
-    return { ok: false, seen, error: r.message || "ope=99 falló", meta: {} };
+  const ope99Ok = !!r.ok;
+  if (ope99Ok) {
+    for (const raw of extractProductRows(r.parsed)) {
+      if (!raw || typeof raw !== "object") continue;
+      const m = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (raw));
+      if (m) seen.set(m.external_sku, m);
+    }
   }
-  for (const raw of extractProductRows(r.parsed)) {
-    if (!raw || typeof raw !== "object") continue;
-    const m = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (raw));
-    if (m) seen.set(m.external_sku, m);
-  }
-  // Saldos frescos solo para los SKU que cambiaron.
-  if (seen.size > 0) {
-    const b = await withRetries(() => listBalancesOpe98());
-    if (b.ok && b.parsed) mergeBalances(seen, b.parsed, true);
-    // ope=1: fallback para SKUs con stock repartido en varios depósitos
-    // (ver comentario en collectFull).
-    const one = await withRetries(() => listProductsOpe1());
-    if (one.ok && one.parsed) mergeBalances(seen, one.parsed, true);
-  }
-  return { ok: true, seen, meta: { ope99_changed: seen.size } };
+  const ope99Changed = seen.size;
+
+  // Saldos frescos SIEMPRE: agrega todos los SKU que Fastrax lista con stock,
+  // aunque ope=99 no los haya reportado. Así el sync de 10 min agarra cambios
+  // que Fastrax omite en su feed de cambios.
+  const b = await withRetries(() => listBalancesOpe98());
+  if (b.ok && b.parsed) mergeBalances(seen, b.parsed, false);
+  const one = await withRetries(() => listProductsOpe1());
+  if (one.ok && one.parsed) mergeBalances(seen, one.parsed, false);
+
+  return {
+    ok: true,
+    seen,
+    meta: {
+      ope99_ok: ope99Ok,
+      ope99_changed: ope99Changed,
+      ope98_ok: !!b.ok,
+      ope1_ok: !!one.ok,
+    },
+  };
 }
 
 /**
@@ -284,15 +300,11 @@ export async function runFastraxCatalogSync(sb, options = {}) {
   };
 
   try {
-    // 1) Recolectar (incremental con fallback a full si ope=99 falla).
+    // 1) Recolectar. El incremental ahora consulta ope=98/ope=1 directo (no
+    // depende solo de ope=99), así que no necesita fallback a full por fallo de 99.
     let collected;
     if (mode === "incremental" && since) {
       collected = await collectChanged(since);
-      if (!collected.ok) {
-        meta.incremental_fallback = collected.error || "ope=99 falló";
-        mode = "full";
-        collected = await collectFull({ maxPages: options.maxPages });
-      }
     } else {
       collected = await collectFull({ maxPages: options.maxPages });
     }
