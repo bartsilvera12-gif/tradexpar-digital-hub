@@ -13,6 +13,22 @@ function str(v) {
   return String(v).trim();
 }
 
+/**
+ * Fastrax devuelve textos URL-encoded (`+` = espacio, `%2F` = `/`, `%C2%A0` = NBSP, etc).
+ * Los decodificamos antes de guardar para que el nombre se vea limpio en la tienda.
+ * @param {unknown} v
+ */
+function decodeStr(v) {
+  const s = String(v ?? "").replace(/\+/g, " ").trim();
+  if (!s) return "";
+  try {
+    // Uso decodeURIComponent para %XX; si viene basura, cae al catch y devuelve el string sin decodificar.
+    return decodeURIComponent(s).replace(/ /g, " ").replace(/\s+/g, " ").trim();
+  } catch {
+    return s.replace(/ /g, " ").replace(/\s+/g, " ").trim();
+  }
+}
+
 function num(v) {
   if (v == null || v === "") return 0;
   const n = Number(String(v).replace(",", "."));
@@ -40,9 +56,9 @@ function pickSku(row) {
  * @param {Record<string, unknown>} row
  */
 function pickName(row) {
-  const keys = ["nom", "nom", "nombre", "name", "titulo"];
+  const keys = ["nom", "nombre", "name", "titulo"];
   for (const k of keys) {
-    const v = str(row[k]);
+    const v = decodeStr(row[k]);
     if (v) return v.slice(0, 500);
   }
   return "";
@@ -142,10 +158,13 @@ export function extractProductRows(root, depth = 0) {
 
 /**
  * Códigos del árbol de categorías de Fastrax (`caw` / `cat`) → categoría real.
- * Fastrax a veces envía el ID del nodo (p. ej. "41,42") en vez del nombre; sin esto,
- * el código termina guardado como "categoría" y aparece en el menú de la tienda.
+ * Combinación de: (1) codigos "árbol" (caw) que llegan como "41,42" y (2) códigos
+ * de categoría directa (cat) extraídos del CSV oficial que compartió el cliente.
+ * Fastrax a veces envía el ID del nodo en vez del nombre; sin esto, el código
+ * termina guardado como "categoría" y aparece en el menú de la tienda.
  */
 const FASTRAX_CATEGORY_CODE_MAP = {
+  // Códigos árbol (caw)
   "41,42": "INSUMOS",
   "41,44": "INSUMOS",
   "66,78": "ACCESORIOS",
@@ -162,7 +181,78 @@ const FASTRAX_CATEGORY_CODE_MAP = {
   "43,79": "NETWORK",
   "43,83": "NETWORK",
   "102,106": "Herramientas",
+  // Códigos directos (cat) — extraídos del CSV oficial de Fastrax
+  "14": "ALMACENAMIENTO EXT",
+  "52": "NETWORK",
+  "58": "SOFTWARE",
+  "59": "GAMER",
+  "79": "ACCESORIOS",
+  "86": "ENTRETENIMIENTO",
+  "91": "ELECTRONICOS",
+  "96": "COMPUTADORAS ESCRITORIO",
+  "97": "INSUMOS",
+  "105": "PDV",
+  "110": "COMPONENTE PC",
+  "112": "TERMICOS",
+  "120": "ELECTRODOMESTICO",
+  "122": "MINERIA",
 };
+
+/**
+ * Códigos de marca de Fastrax (campo `mar`) → nombre de marca real.
+ * Extraídos del CSV oficial de Fastrax (COD MARCA → MARCA).
+ */
+const FASTRAX_BRAND_CODE_MAP = {
+  "2": "HP",
+  "3": "DIVERSAS",
+  "5": "EPSON",
+  "7": "KINGSTON",
+  "8": "GENERICO",
+  "9": "KLIP",
+  "12": "AMP",
+  "13": "BRADY",
+  "15": "FUJIKURA",
+  "17": "BENQ",
+  "21": "LG",
+  "22": "AMD",
+  "27": "ASUS",
+  "29": "TRANSITION",
+  "30": "MICROSOFT",
+  "31": "GIGABYTE",
+  "32": "JVC",
+  "34": "LANPRO",
+  "36": "INTEL",
+  "43": "FTX",
+  "47": "ATRIAN",
+  "48": "XTECH",
+  "51": "3NSTAR",
+  "56": "CRUCIAL",
+  "58": "MSI",
+  "60": "FAYSER",
+  "67": "ADECOM",
+  "73": "OPTOMA",
+  "75": "SENTAL PARAGUAY",
+  "89": "ASUSTOR",
+  "91": "XIAOMI",
+  "112": "MULTILASER",
+  "120": "IGLOO",
+  "127": "HIKVISION",
+  "131": "KITCHENAID",
+  "136": "SAFARIMAX",
+};
+
+/**
+ * Resuelve la marca real. Si el valor viene como código (solo dígitos), lo mapea
+ * a nombre; si viene como texto legible, lo respeta.
+ * @param {Record<string, unknown>} raw
+ */
+export function resolveFastraxBrand(raw) {
+  const v = decodeStr(raw?.mar ?? raw?.Mar ?? raw?.marca);
+  if (!v) return "";
+  // Si es un código numérico, mapear
+  if (/^\d+$/.test(v)) return FASTRAX_BRAND_CODE_MAP[v] || "";
+  return v.slice(0, 100);
+}
 
 /** Un valor "solo números" (con `,` `.` o espacios) es un código de Fastrax, no un nombre. */
 const FASTRAX_NUMERIC_CODE_RE = /^\d+(?:[.,\s]+\d+)*$/;
@@ -204,12 +294,12 @@ export function mapFastraxRowToProduct(raw) {
     name: pickName(raw) || `Producto ${sku}`,
     price: pickPrice(raw),
     stock: pickStock(raw),
-    description: str(raw.des ?? raw.bre ?? raw.descripcion ?? "") || "",
+    description: decodeStr(raw.des ?? raw.bre ?? raw.descripcion ?? ""),
     image: str(
       raw.img ?? raw.Img ?? raw.foto ?? raw.image ?? rowUrl(raw)
     ),
     category: resolveFastraxCategory(raw),
-    brand: str(raw.mar ?? raw.Mar ?? raw.marca ?? "") || "",
+    brand: resolveFastraxBrand(raw),
     external_payload: raw,
   };
 }
