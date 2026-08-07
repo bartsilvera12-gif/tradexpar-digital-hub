@@ -432,6 +432,74 @@ export function registerFastraxRoutes(app) {
   });
 
   /**
+   * POST /api/admin/fastrax/reprocess-metadata
+   * Reprocesa name/brand/category de los productos Fastrax ya guardados usando
+   * el mapper actualizado, sobre `external_payload` almacenado (no llama a la
+   * API de Fastrax). Sirve para arreglar en bulk despues de cambiar el mapper.
+   * Body opcional: { fields: ["name","brand","category"] } (default: los 3).
+   */
+  app.post("/api/admin/fastrax/reprocess-metadata", requireApiKeyOrAdmin, async (req, res) => {
+    try {
+      const sb = supabaseService();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const allowed = new Set(["name", "brand", "category"]);
+      const fields = Array.isArray(body.fields)
+        ? body.fields.filter((f) => allowed.has(f))
+        : ["name", "brand", "category"];
+      if (!fields.length) {
+        return res.status(400).json({ ok: false, error: "fields debe incluir al menos uno de name/brand/category" });
+      }
+
+      const stats = { reviewed: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0 };
+      const errors = [];
+      const pageSize = 500;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await sb
+          .from("products")
+          .select("id, name, brand, category, external_payload")
+          .eq("external_provider", "fastrax")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        for (const row of data) {
+          stats.reviewed += 1;
+          const p = row.external_payload;
+          if (!p || typeof p !== "object" || Array.isArray(p)) {
+            stats.skipped += 1;
+            continue;
+          }
+          const m = mapFastraxRowToProduct(/** @type {Record<string, unknown>} */ (p));
+          if (!m) {
+            stats.skipped += 1;
+            continue;
+          }
+          const patch = {};
+          if (fields.includes("name") && m.name && m.name !== row.name) patch.name = m.name;
+          if (fields.includes("brand") && m.brand && m.brand !== row.brand) patch.brand = m.brand;
+          if (fields.includes("category") && m.category && m.category !== row.category) patch.category = m.category;
+          if (Object.keys(patch).length === 0) {
+            stats.unchanged += 1;
+            continue;
+          }
+          patch.updated_at = new Date().toISOString();
+          const { error: e2 } = await sb.from("products").update(patch).eq("id", row.id);
+          if (e2) {
+            stats.failed += 1;
+            if (errors.length < 20) errors.push(`${row.id}: ${e2.message}`);
+          } else {
+            stats.updated += 1;
+          }
+        }
+        if (data.length < pageSize) break;
+      }
+      return res.json({ ok: true, fields, stats, errors: errors.length ? errors : undefined });
+    } catch (e) {
+      console.error("[fastrax/reprocess-metadata]", e);
+      return res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /**
    * GET /api/admin/fastrax/sync/probe?sku=127141
    * Diagnóstico: llama ope=1, ope=98 y opcionalmente ope=2 para un SKU dado y
    * devuelve tamaños de respuesta, si el SKU aparece en cada una, y la fila
