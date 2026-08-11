@@ -852,7 +852,8 @@ export const tradexpar = {
       p_customer_address: payload.customer.address?.trim() || null,
       p_customer_city_code: payload.customer.city_code?.trim() || null,
       p_customer_address_reference: payload.customer.address_reference?.trim() || null,
-      p_shipping_option: payload.shipping_option ?? "48h",
+      p_shipping_fee: payload.shipping_fee ?? 0,
+      p_shipping_label: payload.shipping_label ?? "",
       p_customer_city_name: payload.customer.city_name?.trim() || null,
       p_customer_dropi_city_code: payload.customer.dropi_city_code?.trim() || null,
     });

@@ -21,9 +21,41 @@ import type { CustomerLocation, ParaguayCity } from "@/types";
 import { getWhatsAppDigits } from "@/config/whatsapp";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
-/** Costos de envío (deben coincidir con la RPC `create_checkout_order` en Supabase). */
-const SHIPPING_48H_PYG = 25_000;
-const SHIPPING_24H_PYG = 30_000;
+/**
+ * Tarifa de envío por ciudad (según acuerdo con el prestador logístico).
+ * Cada entrada define plazo y precio. Los precios llegan al backend por
+ * `p_shipping_fee` / `p_shipping_label`; la RPC ya no infiere fees.
+ *
+ * Ciudades que NO están en el acuerdo (Guarambaré, Julián Augusto Saldívar,
+ * Nueva Italia, Ypacaraí) usan la tarifa DEFAULT_SHIPPING.
+ */
+type ShippingTariff = { hoursLabel: string; fee: number };
+const CITY_SHIPPING_TARIFFS: Record<string, ShippingTariff> = {
+  "Asunción":              { hoursLabel: "24 hs",     fee: 20_000 },
+  "Capiatá":               { hoursLabel: "24 a 48 hs", fee: 25_000 },
+  "Fernando de la Mora":   { hoursLabel: "24 hs",     fee: 25_000 },
+  "Lambaré":               { hoursLabel: "24 hs",     fee: 25_000 },
+  "Limpio":                { hoursLabel: "24 a 48 hs", fee: 25_000 },
+  "Luque":                 { hoursLabel: "24 hs",     fee: 25_000 },
+  "Mariano Roque Alonso":  { hoursLabel: "24 a 48 hs", fee: 25_000 },
+  "Ñemby":                 { hoursLabel: "24 a 48 hs", fee: 25_000 },
+  "San Lorenzo":           { hoursLabel: "24 hs",     fee: 25_000 },
+  "Villa Elisa":           { hoursLabel: "24 hs",     fee: 25_000 },
+  "Areguá":                { hoursLabel: "24 a 48 hs", fee: 30_000 },
+  "San Antonio":           { hoursLabel: "24 a 48 hs", fee: 30_000 },
+  "Itauguá":               { hoursLabel: "24 a 48 hs", fee: 35_000 },
+  "Itá":                   { hoursLabel: "48 a 72 hs", fee: 35_000 },
+  "Ypané":                 { hoursLabel: "48 a 72 hs", fee: 35_000 },
+  "Villeta":               { hoursLabel: "48 a 72 hs", fee: 35_000 },
+};
+const DEFAULT_SHIPPING: ShippingTariff = { hoursLabel: "48 a 72 hs", fee: 35_000 };
+function shippingForCity(cityName: string | undefined): ShippingTariff {
+  if (!cityName) return DEFAULT_SHIPPING;
+  return CITY_SHIPPING_TARIFFS[cityName] || DEFAULT_SHIPPING;
+}
+function shippingLabel(cityName: string, t: ShippingTariff): string {
+  return `Entrega en ${t.hoursLabel} — Gs. ${t.fee.toLocaleString("es-PY")}`;
+}
 
 const fieldCls =
   "w-full min-h-11 px-4 py-2.5 rounded-xl border bg-background text-foreground text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -112,9 +144,6 @@ export default function CheckoutPage() {
   const { items, clearCart } = useCart();
   const { lineUnitPrice, lineSubtotal, cartTotal } = useAffiliateBuyerDiscount();
   const totalPrice = cartTotal(items);
-  const [shippingOption, setShippingOption] = useState<"24h" | "48h">("48h");
-  const shippingFee = shippingOption === "24h" ? SHIPPING_24H_PYG : SHIPPING_48H_PYG;
-  const orderGrandTotal = totalPrice + shippingFee;
   const { user } = useCustomerAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -131,6 +160,15 @@ export default function CheckoutPage() {
   });
   const [locations, setLocations] = useState<CustomerLocation[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
+  // Envío calculado a partir de la ciudad elegida (tabla CITY_SHIPPING_TARIFFS).
+  const selectedCity = useMemo(
+    () => (form.cityId ? DELIVERY_CITY_OPTIONS.find((c) => c.id === form.cityId) : undefined),
+    [form.cityId]
+  );
+  const shippingTariff = useMemo(() => shippingForCity(selectedCity?.name), [selectedCity]);
+  const shippingFee = shippingTariff.fee;
+  const shippingLabelText = selectedCity ? shippingLabel(selectedCity.name, shippingTariff) : "";
+  const orderGrandTotal = totalPrice + shippingFee;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Pedido creado, pendiente de redirigir al pago. */
@@ -300,7 +338,8 @@ export default function CheckoutPage() {
             if (fromUrl) return fromUrl;
             return getActiveAffiliateRef() || undefined;
           })(),
-        shipping_option: shippingOption,
+        shipping_fee: shippingFee,
+        shipping_label: shippingLabelText,
       });
 
       if (affiliatesAvailable()) {
@@ -475,18 +514,19 @@ export default function CheckoutPage() {
               </div>
 
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Envío <span className="text-destructive">*</span>
-                </label>
-                <Select value={shippingOption} onValueChange={(v) => setShippingOption(v as "24h" | "48h")}>
-                  <SelectTrigger className="w-full rounded-xl border-border/80 py-2.5 h-auto min-h-11 text-foreground text-sm">
-                    <SelectValue placeholder="Seleccioná el envío" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[min(22rem,50vh)]">
-                    <SelectItem value="48h">Entrega en 48 horas — Gs. 25.000</SelectItem>
-                    <SelectItem value="24h">Entrega en 24 horas — Gs. 30.000</SelectItem>
-                  </SelectContent>
-                </Select>
+                <label className="block text-sm font-medium text-foreground mb-1">Envío</label>
+                {selectedCity ? (
+                  <div className="w-full rounded-xl border border-border/80 bg-muted/40 px-4 py-2.5 min-h-11 flex items-center text-sm text-foreground">
+                    <span>
+                      Envío a <span className="font-medium">{selectedCity.name}</span>: {shippingTariff.hoursLabel} —{" "}
+                      <span className="font-semibold">₲{shippingFee.toLocaleString("es-PY")}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="w-full rounded-xl border border-dashed border-border/80 bg-muted/20 px-4 py-2.5 min-h-11 flex items-center text-sm text-muted-foreground">
+                    Elegí primero la ciudad para calcular el envío.
+                  </div>
+                )}
               </div>
 
               {user && locations.length > 0 && (

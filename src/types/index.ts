@@ -89,8 +89,13 @@ export interface CreateOrderPayload {
   affiliate_ref?: string;
   /** IP del cliente si el ERP/front la envía (antifraude) */
   checkout_client_ip?: string | null;
-  /** Opción de envío: `24h` (Gs. 25.000) o `48h` (gratis); la RPC valida el importe. */
-  shipping_option?: "24h" | "48h";
+  /**
+   * Costo de envío en Gs calculado en el frontend según la ciudad elegida
+   * (tabla CITY_SHIPPING_TARIFFS en CheckoutPage). La RPC lo persiste tal cual.
+   */
+  shipping_fee?: number;
+  /** Etiqueta legible del envío ("Entrega en 24 hs — Gs. 20.000"). */
+  shipping_label?: string;
 }
 
 export interface Order {
