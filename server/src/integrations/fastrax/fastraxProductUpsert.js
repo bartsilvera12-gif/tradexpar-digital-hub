@@ -257,14 +257,16 @@ export function deriveFastraxActive(m) {
 }
 
 /**
- * CRC liviano de los campos técnicos que controla la sync automática (stock,
- * precio, estado). Si no cambió, se evita el UPDATE (idempotencia + menos escritura).
+ * CRC liviano de los campos que la sync automática efectivamente actualiza:
+ * stock y estado activo. NO incluye precio: la sync ya no toca cost/price
+ * (decisión de negocio: los precios en tradexpar no se pisan por cambios en el
+ * costo Fastrax; solo se setean en la importación manual desde el panel).
  * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
  * @param {boolean} active
  * @returns {string}
  */
 export function computeFastraxStockCrc(m, active) {
-  const basis = `${m.stock}|${m.price}|${active ? 1 : 0}`;
+  const basis = `${m.stock}|${active ? 1 : 0}`;
   return crypto.createHash("sha1").update(basis).digest("hex").slice(0, 16);
 }
 
@@ -322,12 +324,13 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   }
 
   const now = new Date().toISOString();
-  // Recalcula cost/price cada sync: si Fastrax cambia el costo, el precio de
-  // venta se actualiza solo aplicando el margen configurado.
+  // La sync automática NO toca cost/price (decisión de negocio del cliente:
+  // los precios en tradexpar no se pisan por cambios en el costo Fastrax).
+  // Solo se actualiza stock/disponibilidad. Los precios se setean en la
+  // importación manual desde el panel (upsertFastraxMappedRow /
+  // upsertFastraxFromImportItem), o se editan a mano desde el admin.
   const patch = {
     stock: m.stock,
-    cost: m.price,
-    price: priceFromCost(m.price),
     external_active: active,
     external_sync_crc: crc,
     external_last_sync_at: now,
