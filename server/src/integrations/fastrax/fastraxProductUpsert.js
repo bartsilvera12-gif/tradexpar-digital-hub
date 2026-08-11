@@ -288,7 +288,11 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   const active = deriveFastraxActive(m);
   const crc = computeFastraxStockCrc(m, active);
 
-  const sel = "id, external_sync_crc";
+  // Se selecciona también product_source_type: si el admin cambió el origen a
+  // 'tradexpar' o 'dropi' (stock propio del negocio, no dropshipping de Fastrax),
+  // la sync automática NO debe tocar el stock. Cuando el admin vuelve a poner
+  // origen 'fastrax', la sync vuelve a actualizar.
+  const sel = "id, external_sync_crc, product_source_type";
   let existing = null;
   const { data: byExtSku, error: e1 } = await sb
     .from("products")
@@ -316,6 +320,14 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   // todo el catálogo Fastrax.
   if (!existing) {
     return { ok: true, action: "skipped" };
+  }
+
+  // Si el admin cambió el origen a 'tradexpar' o 'dropi' (stock propio del
+  // negocio, no dropshipping de Fastrax), la sync NO debe tocar el stock.
+  // Volver a poner el origen en 'fastrax' desde el panel reactiva la sync.
+  const sourceType = String(existing.product_source_type ?? "").toLowerCase();
+  if (sourceType && sourceType !== FASTRAX_SOURCE) {
+    return { ok: true, action: "skipped", id: String(existing.id) };
   }
 
   // Sin cambios técnicos → no reescribir (idempotente).
