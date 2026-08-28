@@ -42,7 +42,7 @@ export default function HomePage() {
     categoryMap.get(p.category)!.push(p);
   });
   const allCategories = [...categoryMap.entries()];
-  const viralDropiAll = products.filter((p) => p.product_source_type === "dropi");
+  const viralDropiAll = products.filter((p) => p.is_viral === true);
   const featuredProducts = products.filter((p) => p.is_featured === true);
   const productsDestacados = featuredProducts.length > 0 ? featuredProducts : products.slice(0, 8);
 
@@ -112,7 +112,7 @@ export default function HomePage() {
           <ViralProductRotatingSection
             title="Los más virales"
             subtitle="Tendencias del momento"
-            linkTo={withAffiliateRef("/products?source=dropi", refForLink)}
+            linkTo={withAffiliateRef("/products?viral=1", refForLink)}
             products={viralDropiAll}
           />
         )}

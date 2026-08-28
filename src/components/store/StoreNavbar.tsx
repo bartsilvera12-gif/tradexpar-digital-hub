@@ -53,7 +53,7 @@ export function StoreNavbar() {
   const categories = [...new Set(allProducts.map((p) => p.category).filter(isDisplayableCategory))];
   const viralNavActive =
     location.pathname.startsWith("/products") &&
-    searchParams.get("source") === "dropi" &&
+    searchParams.get("viral") === "1" &&
     !searchParams.get("category");
 
   /**
@@ -111,7 +111,7 @@ export function StoreNavbar() {
   const handleViralDropiSelect = () => {
     setCatOpen(false);
     setMobileOpen(false);
-    navigate(withAffiliateRef("/products?source=dropi", refForNav));
+    navigate(withAffiliateRef("/products?viral=1", refForNav));
   };
 
   /** Navega al catálogo con la búsqueda actual para ver TODOS los resultados (no solo la vista previa). */

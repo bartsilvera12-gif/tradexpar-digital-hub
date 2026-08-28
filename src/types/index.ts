@@ -32,6 +32,8 @@ export interface Product {
   discount_ends_at?: string | null;
   /** Si es true, aparece en la sección "Productos destacados" del home. */
   is_featured?: boolean;
+  /** Si es true, aparece en la sección "Los más virales" del home. Manual, independiente del origen. */
+  is_viral?: boolean;
 }
 
 export interface CartItem {

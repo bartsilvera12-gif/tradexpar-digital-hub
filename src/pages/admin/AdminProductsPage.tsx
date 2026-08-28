@@ -79,6 +79,7 @@ const emptyForm: Partial<Product> = {
   discount_starts_at: "",
   discount_ends_at: "",
   is_featured: false,
+  is_viral: false,
 };
 
 function imageUrlsForForm(p: Partial<Product>): string[] {
@@ -228,6 +229,7 @@ export default function AdminProductsPage() {
       discount_value: product.discount_value || 0,
       discount_type: product.discount_type || null,
       is_featured: product.is_featured === true,
+      is_viral: product.is_viral === true,
     });
     setOpenForm(true);
   };
@@ -253,6 +255,7 @@ export default function AdminProductsPage() {
         stock_min: smin,
         stock_max: smax,
         is_featured: form.is_featured === true,
+        is_viral: form.is_viral === true,
       };
       if (editingId) {
         await tradexpar.adminUpdateProduct(editingId, payload);
@@ -713,6 +716,22 @@ export default function AdminProductsPage() {
                 checked={form.is_featured === true}
                 onCheckedChange={(v) => setForm({ ...form, is_featured: v === true })}
                 aria-label="Marcar como producto destacado"
+              />
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-lg border-2 border-[#FF4D00]/40 bg-[#FF4D00]/5 p-3">
+              <div className="min-w-0">
+                <Label htmlFor="prod-viral" className="text-sm font-semibold text-foreground cursor-pointer">
+                  🔥 Producto viral
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Si está activo, aparece en la sección «Los más virales» del home. Vale para cualquier producto, sea o no de dropshipping.
+                </p>
+              </div>
+              <Switch
+                id="prod-viral"
+                checked={form.is_viral === true}
+                onCheckedChange={(v) => setForm({ ...form, is_viral: v === true })}
+                aria-label="Marcar como producto viral"
               />
             </div>
             <div className="grid md:grid-cols-2 gap-3">

@@ -21,6 +21,7 @@ export default function ProductsPage() {
   const category = searchParams.get("category") || "all";
   const source = searchParams.get("source") || "all";
   const offersOnly = searchParams.get("offers") === "1";
+  const viralOnly = searchParams.get("viral") === "1";
 
   const fetchProducts = () => {
     void refetch();
@@ -34,7 +35,8 @@ export default function ProductsPage() {
     const sourceKnown = source === "tradexpar" || source === "dropi";
     const matchSource = source === "all" || !sourceKnown || normalizeProductSource(p) === source;
     const matchOffers = !offersOnly || getDiscountPercentage(p) > 0;
-    return matchSearch && matchCat && matchSource && matchOffers;
+    const matchViral = !viralOnly || p.is_viral === true;
+    return matchSearch && matchCat && matchSource && matchOffers && matchViral;
   });
   /** Con término de búsqueda, ordena por relevancia (coincidencia en el nombre primero). */
   const filtered = search.trim() ? sortByRelevance(matched, search) : matched;
@@ -52,18 +54,16 @@ export default function ProductsPage() {
   };
 
   /**
-   * "Los más virales" reutiliza el mismo criterio que la navbar superior:
-   * productos cuyo origen es Dropi (`source=dropi`). Así, si el usuario llega
-   * desde el menú "Los más virales", el chip aparece activo automáticamente.
+   * "Los más virales" usa el flag manual `is_viral` (`viral=1` en la URL),
+   * marcado producto por producto desde el panel. Ya no depende del origen Dropi.
    */
-  const viralOnly = source === "dropi";
   const setViralFilter = (on: boolean) => {
-    if (on) searchParams.set("source", "dropi");
-    else searchParams.delete("source");
+    if (on) searchParams.set("viral", "1");
+    else searchParams.delete("viral");
     setSearchParams(searchParams);
   };
 
-  const hasActiveFilters = category !== "all" || source !== "all" || offersOnly;
+  const hasActiveFilters = category !== "all" || source !== "all" || offersOnly || viralOnly;
 
   return (
     <div className="container mx-auto py-5 sm:py-8 min-w-0 max-w-full pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
@@ -144,7 +144,7 @@ export default function ProductsPage() {
               </button>
               {/*
                 "Los más virales": misma paleta naranja fuego que la navbar
-                (#FF4D00). Cuando está activo aplica `source=dropi` al filtrado.
+                (#FF4D00). Cuando está activo aplica `viral=1` (flag is_viral) al filtrado.
               */}
               <button
                 type="button"
@@ -167,6 +167,7 @@ export default function ProductsPage() {
                 searchParams.delete("category");
                 searchParams.delete("source");
                 searchParams.delete("offers");
+                searchParams.delete("viral");
                 setSearchParams(searchParams);
               }}
               className="text-sm text-primary hover:underline flex items-center gap-1"
