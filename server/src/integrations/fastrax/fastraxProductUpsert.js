@@ -270,6 +270,53 @@ export function computeFastraxStockCrc(m, active) {
   return crypto.createHash("sha1").update(basis).digest("hex").slice(0, 16);
 }
 
+/** Marca de clave repetida en el índice: replica el error de `.maybeSingle()` con 2+ filas. */
+const FASTRAX_INDEX_DUP = Symbol("fastrax-index-dup");
+
+/**
+ * Carga UNA vez los productos Fastrax del catálogo local para resolver SKU en memoria.
+ *
+ * Antes cada corrida consultaba la base 1-2 veces por SKU de Fastrax (~6.000 SKU,
+ * casi todos no importados) → ~12.900 requests a PostgREST cada 10 min, que
+ * saturaban el pool compartido de Supabase. Con el índice: 1 request por cada
+ * 1.000 productos importados.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} sb
+ * @returns {Promise<{ bySku: Map<string, any>, byEp: Map<string, any> }>}
+ */
+export async function loadFastraxStockIndex(sb) {
+  const PAGE = 1000; // tope de filas por respuesta de PostgREST (db-max-rows)
+  const bySku = new Map();
+  const byEp = new Map();
+  const put = (map, key, row) => {
+    if (key == null || key === "") return;
+    const k = String(key);
+    const prev = map.get(k);
+    // La misma fila vista dos veces (página corrida por un insert concurrente) no es duplicado.
+    if (prev && prev !== FASTRAX_INDEX_DUP && prev.id === row.id) return;
+    map.set(k, prev ? FASTRAX_INDEX_DUP : row);
+  };
+  // Avanza por lo que realmente llegó y termina solo con una página vacía: si el
+  // servidor corta en menos de PAGE filas (db-max-rows menor), no queda índice parcial.
+  for (let from = 0; ; ) {
+    const { data, error } = await sb
+      .from("products")
+      .select("id, external_sku, external_product_id, external_sync_crc, product_source_type")
+      .eq("external_provider", FASTRAX_SOURCE)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    if (rows.length === 0) break;
+    for (const row of rows) {
+      put(bySku, row.external_sku, row);
+      put(byEp, row.external_product_id, row);
+    }
+    from += rows.length;
+  }
+  return { bySku, byEp };
+}
+
 /**
  * Upsert "solo técnico" para la sincronización automática de stock. En UPDATE
  * toca EXCLUSIVAMENTE stock, external_active, external_sync_crc,
@@ -280,7 +327,8 @@ export function computeFastraxStockCrc(m, active) {
  *
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
- * @param {{ skipUnchanged?: boolean }} [opts]
+ * @param {{ skipUnchanged?: boolean, index?: { bySku: Map<string, any>, byEp: Map<string, any> } }} [opts]
+ *   `index` (de `loadFastraxStockIndex`): resuelve el SKU en memoria en vez de consultar.
  * @returns {Promise<{ ok: boolean, action?: 'updated' | 'unchanged' | 'skipped', id?: string, error?: string }>}
  */
 export async function upsertFastraxStockOnly(sb, m, opts = {}) {
@@ -294,24 +342,38 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   // origen 'fastrax', la sync vuelve a actualizar.
   const sel = "id, external_sync_crc, product_source_type";
   let existing = null;
-  const { data: byExtSku, error: e1 } = await sb
-    .from("products")
-    .select(sel)
-    .eq("external_provider", FASTRAX_SOURCE)
-    .eq("external_sku", m.external_sku)
-    .maybeSingle();
-  if (e1) return { ok: false, error: e1.message };
-  if (byExtSku?.id) {
-    existing = byExtSku;
+  if (opts.index) {
+    // Mismo orden que las consultas de abajo: primero external_sku, después
+    // external_product_id; una clave repetida falla igual que `.maybeSingle()`.
+    const key = String(m.external_sku);
+    const hitSku = opts.index.bySku.get(key);
+    if (hitSku === FASTRAX_INDEX_DUP) return { ok: false, error: "external_sku repetido en el catálogo local" };
+    if (hitSku) existing = hitSku;
+    else {
+      const hitEp = opts.index.byEp.get(key);
+      if (hitEp === FASTRAX_INDEX_DUP) return { ok: false, error: "external_product_id repetido en el catálogo local" };
+      if (hitEp) existing = hitEp;
+    }
   } else {
-    const { data: byEp, error: e2 } = await sb
+    const { data: byExtSku, error: e1 } = await sb
       .from("products")
       .select(sel)
       .eq("external_provider", FASTRAX_SOURCE)
-      .eq("external_product_id", m.external_sku)
+      .eq("external_sku", m.external_sku)
       .maybeSingle();
-    if (e2) return { ok: false, error: e2.message };
-    if (byEp?.id) existing = byEp;
+    if (e1) return { ok: false, error: e1.message };
+    if (byExtSku?.id) {
+      existing = byExtSku;
+    } else {
+      const { data: byEp, error: e2 } = await sb
+        .from("products")
+        .select(sel)
+        .eq("external_provider", FASTRAX_SOURCE)
+        .eq("external_product_id", m.external_sku)
+        .maybeSingle();
+      if (e2) return { ok: false, error: e2.message };
+      if (byEp?.id) existing = byEp;
+    }
   }
 
   // SKU nuevo → NO se inserta desde la sincronización automática. El alta de
@@ -349,9 +411,20 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
     external_payload: m.external_payload,
     updated_at: now,
   };
-  const { error } = await sb.from("products").update(patch).eq("id", existing.id);
+  // Guarda en el propio UPDATE: si el admin cambió el origen a 'tradexpar'/'dropi'
+  // después de leerlo (con índice, la lectura es del inicio de la corrida), no se
+  // escribe. Mismo criterio que arriba: vacío/null o 'fastrax' (sin mayúsculas).
+  const { data: updRows, error } = await sb
+    .from("products")
+    .update(patch)
+    .eq("id", existing.id)
+    .or(`product_source_type.is.null,product_source_type.eq."",product_source_type.ilike.${FASTRAX_SOURCE}`)
+    .select("id");
   if (error) {
     return { ok: false, error: describeKnownUpsertError(error) || "update stock fallo" };
+  }
+  if (!updRows || updRows.length === 0) {
+    return { ok: true, action: "skipped", id: String(existing.id) };
   }
   return { ok: true, action: "updated", id: String(existing.id) };
 }

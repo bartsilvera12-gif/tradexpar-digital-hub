@@ -26,7 +26,7 @@ import {
   listProductsOpe1,
   listProductsPage,
 } from "./client.js";
-import { upsertFastraxStockOnly } from "./fastraxProductUpsert.js";
+import { loadFastraxStockIndex, upsertFastraxStockOnly } from "./fastraxProductUpsert.js";
 import { extractProductRows, fastraxRowHasStock, mapFastraxRowToProduct } from "./mapper.js";
 
 const DEFAULT_MAX_PAGES = 200;
@@ -189,9 +189,17 @@ async function applyUpserts(sb, seen) {
   // inserta desde el sync automático; el alta es manual por el panel).
   const stats = { reviewed: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0 };
   const errors = [];
+  // Índice del catálogo local en una sola lectura (ver loadFastraxStockIndex). Si
+  // falla, se sigue como antes (consulta por SKU): la sync nunca se frena por esto.
+  let index;
+  try {
+    index = await loadFastraxStockIndex(sb);
+  } catch (e) {
+    console.warn("[fastrax/sync] indice local no disponible, consulta por SKU:", e instanceof Error ? e.message : e);
+  }
   for (const m of seen.values()) {
     stats.reviewed += 1;
-    const u = await upsertFastraxStockOnly(sb, m, { skipUnchanged: true });
+    const u = await upsertFastraxStockOnly(sb, m, { skipUnchanged: true, index });
     if (!u.ok) {
       stats.failed += 1;
       if (errors.length < 20) errors.push(`${m.external_sku}: ${String(u.error || "upsert")}`);
