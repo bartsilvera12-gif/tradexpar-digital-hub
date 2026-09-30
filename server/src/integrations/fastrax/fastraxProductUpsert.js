@@ -326,9 +326,9 @@ export async function loadFastraxStockIndex(sb) {
  * cost/price (cuando Fastrax informa precio >0) — el cliente pidió que la lista
  * nueva de Fastrax se refleje en los precios. NO toca nombre/categoría/imagen/
  * descripción/marca en el UPDATE (eso sigue siendo de la importación manual).
- * Un SKU que no existe en el catálogo local y trae precio >0 se DA DE ALTA
- * (vía upsertFastraxMappedRow); sin precio se omite (no es vendible todavía).
- * Idempotente por (external_provider, external_product_id).
+ * Un SKU que no existe en el catálogo local se OMITE: el alta es curada
+ * (importación por lista/panel), no automática. Idempotente por
+ * (external_provider, external_product_id).
  *
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
  * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
@@ -381,19 +381,13 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
     }
   }
 
-  // SKU nuevo → se DA DE ALTA automáticamente (pedido del cliente: la lista nueva
-  // de Fastrax debe aparecer en la tienda sin importación manual). Se inserta con
-  // datos completos (nombre/categoría/marca/precio/imagen) vía upsertFastraxMappedRow.
-  // Guarda: solo si Fastrax informó precio (>0). Un ítem sin precio no es vendible
-  // (external_active quedaría false) y suele ser una fila de saldo incompleta; se
-  // insertará cuando llegue con precio, o por importación manual desde el panel.
+  // SKU nuevo → NO se da de alta desde la sincronización automática. El alta es
+  // una decisión CURADA: importación por lista/panel (upsertFastraxMappedRow), que
+  // trae los productos elegidos con datos completos (ope=2). El sync solo refresca
+  // stock y precio de lo que ya está en el catálogo. Insertar acá cualquier SKU de
+  // Fastrax con precio llenaría la tienda con >5.000 productos no curados.
   if (!existing) {
-    if (!(Number(m.price) > 0)) {
-      return { ok: true, action: "skipped" };
-    }
-    const ins = await upsertFastraxMappedRow(sb, m);
-    if (!ins.ok) return { ok: false, error: ins.error };
-    return { ok: true, action: ins.action === "updated" ? "updated" : "inserted", id: ins.id };
+    return { ok: true, action: "skipped" };
   }
 
   // Si el admin cambió el origen a 'tradexpar' o 'dropi' (stock propio del

@@ -16,9 +16,9 @@ que dos procesos actualicen el mismo catálogo de formas distintas.
   `external_sync_crc`, `external_payload`.
   **No** toca nombre, categoría, imagen, descripción ni marca en el UPDATE de
   productos existentes (eso sigue siendo solo importación manual desde el panel).
-- **Da de alta** los SKU nuevos de Fastrax que traen precio (> 0), con datos
-  completos (nombre/categoría/marca/precio/imagen). Los SKU sin precio se omiten
-  hasta que Fastrax los informe con precio.
+- **No da de alta** productos nuevos: un SKU de Fastrax que no está importado se
+  omite. El alta es **curada** (importación por lista/panel), para no llenar la
+  tienda con los ~5.000+ SKU no curados del catálogo Fastrax.
 - El precio de venta se recalcula como `costo_fastrax × (1 + FASTRAX_MARGIN_PERCENT)`
   (default +35 %). Esto **sobrescribe** ediciones manuales de precio en productos
   de origen `fastrax`; para blindar un precio, cambiá el origen del producto a
