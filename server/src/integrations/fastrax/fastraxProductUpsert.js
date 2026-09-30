@@ -257,16 +257,19 @@ export function deriveFastraxActive(m) {
 }
 
 /**
- * CRC liviano de los campos que la sync automática efectivamente actualiza:
- * stock y estado activo. NO incluye precio: la sync ya no toca cost/price
- * (decisión de negocio: los precios en tradexpar no se pisan por cambios en el
- * costo Fastrax; solo se setean en la importación manual desde el panel).
+ * CRC liviano de los campos que la sync automática actualiza: stock, estado
+ * activo y COSTO Fastrax. Incluir el costo permite que un cambio de solo precio
+ * (sin cambio de stock) se detecte y se propague — el cliente pidió que la lista
+ * nueva de Fastrax se refleje también en los precios. Cuando Fastrax no informa
+ * precio (>0), el componente de costo queda vacío: así una fila de saldo sin
+ * precio no fuerza reescrituras ni pisa el precio bueno con 0.
  * @param {NonNullable<ReturnType<typeof mapFastraxRowToProduct>>} m
  * @param {boolean} active
  * @returns {string}
  */
 export function computeFastraxStockCrc(m, active) {
-  const basis = `${m.stock}|${active ? 1 : 0}`;
+  const cost = Number(m.price) > 0 ? Math.max(0, Number(m.price)) : "";
+  const basis = `${m.stock}|${active ? 1 : 0}|${cost}`;
   return crypto.createHash("sha1").update(basis).digest("hex").slice(0, 16);
 }
 
@@ -318,11 +321,13 @@ export async function loadFastraxStockIndex(sb) {
 }
 
 /**
- * Upsert "solo técnico" para la sincronización automática de stock. En UPDATE
- * toca EXCLUSIVAMENTE stock, external_active, external_sync_crc,
- * external_last_sync_at y external_payload — NUNCA nombre/categoría/imagen/
- * descripción/marca (eso queda para la importación manual). Un SKU que no existe
- * en el catálogo local se OMITE (no se inserta: el alta de productos es manual).
+ * Upsert de la sincronización automática. En UPDATE toca stock, external_active,
+ * external_sync_crc, external_last_sync_at, external_payload y AHORA TAMBIÉN
+ * cost/price (cuando Fastrax informa precio >0) — el cliente pidió que la lista
+ * nueva de Fastrax se refleje en los precios. NO toca nombre/categoría/imagen/
+ * descripción/marca en el UPDATE (eso sigue siendo de la importación manual).
+ * Un SKU que no existe en el catálogo local y trae precio >0 se DA DE ALTA
+ * (vía upsertFastraxMappedRow); sin precio se omite (no es vendible todavía).
  * Idempotente por (external_provider, external_product_id).
  *
  * @param {import('@supabase/supabase-js').SupabaseClient} sb
@@ -376,12 +381,19 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
     }
   }
 
-  // SKU nuevo → NO se inserta desde la sincronización automática. El alta de
-  // productos es una decisión manual (panel de importación): el sync solo refresca
-  // el stock de lo que ya está en el catálogo. Así no se llena la tienda sola con
-  // todo el catálogo Fastrax.
+  // SKU nuevo → se DA DE ALTA automáticamente (pedido del cliente: la lista nueva
+  // de Fastrax debe aparecer en la tienda sin importación manual). Se inserta con
+  // datos completos (nombre/categoría/marca/precio/imagen) vía upsertFastraxMappedRow.
+  // Guarda: solo si Fastrax informó precio (>0). Un ítem sin precio no es vendible
+  // (external_active quedaría false) y suele ser una fila de saldo incompleta; se
+  // insertará cuando llegue con precio, o por importación manual desde el panel.
   if (!existing) {
-    return { ok: true, action: "skipped" };
+    if (!(Number(m.price) > 0)) {
+      return { ok: true, action: "skipped" };
+    }
+    const ins = await upsertFastraxMappedRow(sb, m);
+    if (!ins.ok) return { ok: false, error: ins.error };
+    return { ok: true, action: ins.action === "updated" ? "updated" : "inserted", id: ins.id };
   }
 
   // Si el admin cambió el origen a 'tradexpar' o 'dropi' (stock propio del
@@ -398,11 +410,13 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   }
 
   const now = new Date().toISOString();
-  // La sync automática NO toca cost/price (decisión de negocio del cliente:
-  // los precios en tradexpar no se pisan por cambios en el costo Fastrax).
-  // Solo se actualiza stock/disponibilidad. Los precios se setean en la
-  // importación manual desde el panel (upsertFastraxMappedRow /
-  // upsertFastraxFromImportItem), o se editan a mano desde el admin.
+  // La sync automática AHORA refresca cost/price desde Fastrax (pedido del
+  // cliente: la lista nueva debe reflejarse en los precios). cost = costo Fastrax;
+  // price = precio de venta con margen (priceFromCost). Solo si Fastrax informó
+  // precio (>0), para no pisar un precio bueno con el 0 de una fila de saldo sin
+  // precio. Nota: esto sobrescribe ediciones manuales de precio en productos de
+  // origen 'fastrax'; para blindar un precio, cambiá el origen a 'tradexpar' (el
+  // filtro .or de abajo evita que la sync toque esos productos).
   const patch = {
     stock: m.stock,
     external_active: active,
@@ -411,6 +425,10 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
     external_payload: m.external_payload,
     updated_at: now,
   };
+  if (Number(m.price) > 0) {
+    patch.cost = m.price;
+    patch.price = priceFromCost(m.price);
+  }
   // Guarda en el propio UPDATE: si el admin cambió el origen a 'tradexpar'/'dropi'
   // después de leerlo (con índice, la lectura es del inicio de la corrida), no se
   // escribe. Mismo criterio que arriba: vacío/null o 'fastrax' (sin mayúsculas).

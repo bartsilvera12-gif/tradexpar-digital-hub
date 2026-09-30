@@ -11,10 +11,18 @@ que dos procesos actualicen el mismo catálogo de formas distintas.
   consultando los productos modificados desde la última corrida exitosa
   (ope=99) y actualizando saldos con ope=98.
 - **Full periódico** (≈1/día) para detectar bajas y desactivar SKU faltantes.
-- Actualiza **solo** campos técnicos: `stock`, `external_active`,
-  `external_last_sync_at`, `external_sync_crc`, `external_payload`.
-  **No** toca nombre, categoría, imagen, descripción ni marca (eso es solo
-  importación manual desde el panel).
+- Actualiza: `stock`, `external_active`, `cost`/`price` (precio de venta con
+  margen, cuando Fastrax informa precio > 0), `external_last_sync_at`,
+  `external_sync_crc`, `external_payload`.
+  **No** toca nombre, categoría, imagen, descripción ni marca en el UPDATE de
+  productos existentes (eso sigue siendo solo importación manual desde el panel).
+- **Da de alta** los SKU nuevos de Fastrax que traen precio (> 0), con datos
+  completos (nombre/categoría/marca/precio/imagen). Los SKU sin precio se omiten
+  hasta que Fastrax los informe con precio.
+- El precio de venta se recalcula como `costo_fastrax × (1 + FASTRAX_MARGIN_PERCENT)`
+  (default +35 %). Esto **sobrescribe** ediciones manuales de precio en productos
+  de origen `fastrax`; para blindar un precio, cambiá el origen del producto a
+  `tradexpar` (la sync no toca productos de origen distinto a `fastrax`).
 - Relaciona por SKU / `external_product_id` de Fastrax. Idempotente
   (índice único `external_provider + external_product_id`).
 - Saldo 0 → agotado (no baja). Bloqueado en Fastrax → `external_active=false`.

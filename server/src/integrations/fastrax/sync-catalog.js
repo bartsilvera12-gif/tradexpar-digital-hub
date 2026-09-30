@@ -3,16 +3,19 @@
  *
  * Reutiliza el cliente (ope=4 listado, ope=98 saldos, ope=99 cambios-desde), el
  * mapper y el upsert existentes. Dos modos:
- *  - `full`: recorre todo el catálogo (ope=4) + saldos (ope=98) y refresca el
- *    stock de los productos ya importados. Se usa en el arranque inicial. NO
- *    desactiva por ausencia en el escaneo (evita apagar productos por un ope=4
- *    incompleto); la baja se maneja solo por señal explícita de Fastrax.
+ *  - `full`: recorre todo el catálogo (ope=4) + saldos (ope=98) y refresca
+ *    stock/precio de los productos ya importados, y DA DE ALTA los SKU nuevos
+ *    con precio. Se usa en el arranque inicial. NO desactiva por ausencia en el
+ *    escaneo (evita apagar productos por un ope=4 incompleto); la baja se maneja
+ *    solo por señal explícita de Fastrax.
  *  - `incremental`: solo los productos modificados desde la última corrida
  *    exitosa (ope=99) + saldos (ope=98) de esos SKU. Se usa cada N minutos.
  *
- * La actualización automática toca SOLO campos técnicos (stock, disponibilidad,
- * external_last_sync_at, CRC) — nunca nombre/categoría/imagen/descripción (ver
- * `upsertFastraxStockOnly`). Cada corrida queda auditada en
+ * La actualización automática toca stock, disponibilidad, cost/price (cuando
+ * Fastrax informa precio), external_last_sync_at y CRC, e inserta SKU nuevos con
+ * precio. En el UPDATE de existentes NO pisa nombre/categoría/imagen/descripción
+ * (eso queda para la importación manual; ver `upsertFastraxStockOnly`). Cada
+ * corrida queda auditada en
  * `tradexpar.fastrax_sync_runs`. Una falla de la API no deja el catálogo a medias
  * sin poder auditarlo: el run queda en estado `failed`/`partial` con el detalle.
  */
@@ -185,9 +188,9 @@ async function collectChanged(since) {
  * @param {Map<string, any>} seen
  */
 async function applyUpserts(sb, seen) {
-  // skipped = SKU de Fastrax que no está importado en el catálogo local (no se
-  // inserta desde el sync automático; el alta es manual por el panel).
-  const stats = { reviewed: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0 };
+  // inserted = SKU nuevo de Fastrax (con precio) dado de alta por la sync.
+  // skipped  = SKU sin precio, o de un producto cuyo origen ya no es 'fastrax'.
+  const stats = { reviewed: 0, inserted: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0 };
   const errors = [];
   // Índice del catálogo local en una sola lectura (ver loadFastraxStockIndex). Si
   // falla, se sigue como antes (consulta por SKU): la sync nunca se frena por esto.
@@ -203,7 +206,8 @@ async function applyUpserts(sb, seen) {
     if (!u.ok) {
       stats.failed += 1;
       if (errors.length < 20) errors.push(`${m.external_sku}: ${String(u.error || "upsert")}`);
-    } else if (u.action === "updated") stats.updated += 1;
+    } else if (u.action === "inserted") stats.inserted += 1;
+    else if (u.action === "updated") stats.updated += 1;
     else if (u.action === "skipped") stats.skipped += 1;
     else stats.unchanged += 1;
   }
