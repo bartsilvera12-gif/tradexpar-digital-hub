@@ -29,6 +29,16 @@ const SERVER_ROOT = path.resolve(__dirname, "..", "..", "..");
 export const FASTRAX_LOCAL_IMAGE_DIR = path.join(SERVER_ROOT, "public", "fastrax-products");
 
 /**
+ * Host público donde se sirven las imágenes (`/fastrax-products/…`). Se guarda la
+ * URL ABSOLUTA en la BD para que la tienda las cargue aunque el frontend no tenga
+ * el resolver de rutas relativas (evita imágenes rotas en productos importados).
+ * Configurable con `FASTRAX_PUBLIC_IMAGE_BASE`; default = host de pagos.
+ */
+const PUBLIC_IMAGE_BASE = String(
+  process.env.FASTRAX_PUBLIC_IMAGE_BASE || "https://payments.neura.com.py"
+).replace(/\/+$/, "");
+
+/**
  * Tope de seguridad: si `raw_detail.img` viene exagerado (p. ej. mal codificado),
  * limitamos a este máximo para no martillar el bridge.
  */
@@ -145,7 +155,9 @@ async function migrateLegacyFirstImage(fileBase) {
 async function ensureSingleImage(sSku, fileBase, idx) {
   const fileName = `${fileBase}-${idx}.jpg`;
   const absPath = path.join(FASTRAX_LOCAL_IMAGE_DIR, fileName);
-  const publicPath = `/fastrax-products/${fileName}`;
+  // URL absoluta (host público) para que la tienda la cargue sin depender del
+  // resolver de rutas relativas del frontend.
+  const publicPath = `${PUBLIC_IMAGE_BASE}/fastrax-products/${fileName}`;
 
   if (await fileExists(absPath)) {
     return publicPath;
