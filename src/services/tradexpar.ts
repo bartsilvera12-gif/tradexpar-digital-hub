@@ -193,13 +193,27 @@ async function syncStoreJwtToDataClient(): Promise<void> {
 
 async function fetchProductsOnce(): Promise<Product[]> {
   const signal = requestAbortSignal(STORE_CATALOG_TIMEOUT_MS);
-  const { data, error } = await tx()
-    .from("products")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .abortSignal(signal);
-  if (error) throw new Error(formatSupabaseErrorForUser(error.message));
-  return (data ?? []).map((r) => mapProduct(r as Record<string, unknown>));
+  // Paginamos en tandas: PostgREST corta la respuesta en `db-max-rows` (1000),
+  // así que una sola consulta dejaba invisibles los productos que excedían ese
+  // tope. Recorremos por `range` hasta agotar y acumulamos. Orden estable
+  // (created_at + id como desempate) para que las tandas no se pisen ni cambie
+  // "cuáles se ven" entre cargas.
+  const PAGE = 1000;
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await tx()
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + PAGE - 1)
+      .abortSignal(signal);
+    if (error) throw new Error(formatSupabaseErrorForUser(error.message));
+    const page = (data ?? []) as Record<string, unknown>[];
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return rows.map((r) => mapProduct(r));
 }
 
 const ADMIN_AUTH_SYNC_MS = 6000;

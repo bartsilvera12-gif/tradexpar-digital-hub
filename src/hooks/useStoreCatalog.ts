@@ -1,21 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 import { tradexpar } from "@/services/tradexpar";
-import { getDisplayProductName } from "@/lib/productHelpers";
+import { getDisplayProductName, isPlaceholderProductName } from "@/lib/productHelpers";
 import type { Product } from "@/types";
 
 export const STORE_CATALOG_QUERY_KEY = ["store-catalog", "products"] as const;
 
 /**
- * Nombres en versión legible para el cliente (ver `getDisplayProductName`).
+ * Prepara el catálogo para la tienda pública:
+ *  - Oculta los productos con nombre "placeholder" (p. ej. "Producto 13666"),
+ *    importados con solo el SKU y sin nombre real (en el admin siguen visibles).
+ *  - Pasa los nombres a su versión legible (ver `getDisplayProductName`).
  * Definido a nivel de módulo a propósito: react-query memoiza `select` por
  * referencia, y una flecha inline recrearía los productos en cada render
  * (invalidando el cache de búsqueda y los `useMemo` que dependen de ellos).
  */
 function withDisplayNames(products: Product[]): Product[] {
-  return products.map((p) => {
+  const out: Product[] = [];
+  for (const p of products) {
+    if (isPlaceholderProductName(p.name)) continue;
     const name = getDisplayProductName(p.name);
-    return name === p.name ? p : { ...p, name };
-  });
+    out.push(name === p.name ? p : { ...p, name });
+  }
+  return out;
 }
 
 /**

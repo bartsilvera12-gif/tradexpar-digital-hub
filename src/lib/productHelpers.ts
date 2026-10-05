@@ -37,6 +37,15 @@ export function getDisplayProductName(name: string | null | undefined): string {
 }
 
 /**
+ * True si el nombre es un "placeholder" (p. ej. "Producto 13666"): productos que
+ * se importaron con solo el SKU y nunca recibieron un nombre real. Se usan para
+ * ocultarlos de la tienda pública (en el admin siguen visibles para corregirlos).
+ */
+export function isPlaceholderProductName(name: string | null | undefined): boolean {
+  return /^\s*producto\s+\d+\s*$/i.test(String(name ?? ""));
+}
+
+/**
  * Canal de checkout: Dropi aparte; Tradexpar y Fastrax comparten el mismo flujo local (sin pedido en Fastrax).
  */
 export function normalizeProductSource(product: Product): "tradexpar" | "dropi" {
