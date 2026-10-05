@@ -295,9 +295,10 @@ export function mapFastraxRowToProduct(raw) {
     price: pickPrice(raw),
     stock: pickStock(raw),
     description: decodeStr(raw.des ?? raw.bre ?? raw.descripcion ?? ""),
-    image: str(
-      raw.img ?? raw.Img ?? raw.foto ?? raw.image ?? rowUrl(raw)
-    ),
+    // OJO: `img`/`Img` en Fastrax es el CONTADOR de imágenes (ej. "0", "3"), NO
+    // una URL. No se usa como imagen (antes se guardaba "0" como foto y rompía la
+    // imagen en la tienda). Las fotos reales se bajan por ope=3 en la importación.
+    image: str(raw.foto ?? raw.image ?? rowUrl(raw)),
     category: resolveFastraxCategory(raw),
     brand: resolveFastraxBrand(raw),
     external_payload: raw,

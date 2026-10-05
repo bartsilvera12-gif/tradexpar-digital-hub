@@ -487,7 +487,10 @@ export async function upsertFastraxMappedRow(sb, m) {
     price: salePrice,
     cost: m.price,
     stock: m.stock,
-    image: mainImage || m.image || null,
+    // Solo la imagen real bajada por ope=3 (mainImage). m.image ya no se usa como
+    // fallback: podía traer el contador "0" de Fastrax y romper la imagen. Sin
+    // foto → "" (la tienda muestra el placeholder "Sin imagen", no una rota).
+    image: mainImage || "",
     images: gallery.length > 0 ? gallery : null,
     product_source_type: FASTRAX_SOURCE,
     external_provider: FASTRAX_SOURCE,
