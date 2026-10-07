@@ -138,6 +138,23 @@ function updateRowPreservingCategory(row) {
 }
 
 /**
+ * Fastrax a veces devuelve en des/bre la ficha de OTRO producto (típico: el
+ * smartwatch FTXR20, con "Aplicación del reloj", "Frecuencia cardiaca", etc.)
+ * para productos que no son relojes (mouse, batidora, secarropas…). En ese caso
+ * la descripción es basura: mejor dejarla vacía que mostrar specs equivocadas.
+ * @param {string} description
+ * @param {string} name
+ * @returns {boolean}
+ */
+function descriptionLooksMismatchedWatch(description, name) {
+  const d = String(description || "");
+  if (!d) return false;
+  const watchMarkers = /aplicaci[oó]n del reloj|FTXR20|frecuencia cardiaca|presi[oó]n arterial|pulsera:/i;
+  const isWatchProduct = /smartwatch|reloj|watch|pulsera|smart ?band|smartband/i.test(String(name || ""));
+  return watchMarkers.test(d) && !isWatchProduct;
+}
+
+/**
  * @param {Record<string, unknown>} raw
  */
 function descBrandCatFromFastraxDetail(raw) {
@@ -187,10 +204,11 @@ export async function upsertFastraxFromImportItem(sb, item) {
   const activeRow = deriveFastraxActive(mForCrc);
   const cost = price; // lo que Fastrax cobra = nuestro costo
   const salePrice = priceFromCost(cost);
+  const safeDesc = descriptionLooksMismatchedWatch(dbc.description, name) ? "" : dbc.description;
   const row = {
     name,
     sku: extSku,
-    description: dbc.description || name,
+    description: safeDesc || name,
     category: dbc.category,
     brand: dbc.brand,
     price: salePrice,
@@ -478,10 +496,11 @@ export async function upsertFastraxMappedRow(sb, m) {
   // price_venta = costo_fastrax * (1 + margen). cost = costo_fastrax (raw).
   const activeRow = deriveFastraxActive(m);
   const salePrice = priceFromCost(m.price);
+  const safeDesc = descriptionLooksMismatchedWatch(formattedDesc, m.name) ? "" : formattedDesc;
   const row = {
     name: m.name,
     sku: m.external_sku,
-    description: formattedDesc || m.name,
+    description: safeDesc || m.name,
     category: m.category,
     brand: m.brand,
     price: salePrice,
