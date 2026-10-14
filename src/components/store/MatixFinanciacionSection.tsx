@@ -45,14 +45,13 @@ export function MatixFinanciacionSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.6 }}
-            className="relative mx-auto w-[180px] shrink-0 sm:w-[230px] lg:mx-0 lg:w-full lg:max-w-[320px]"
+            className="relative mx-auto w-[210px] shrink-0 sm:w-[250px] lg:mx-0 lg:w-full lg:max-w-[340px]"
           >
             <div className="pointer-events-none absolute inset-x-6 bottom-2 h-6 rounded-[50%] bg-black/30 blur-xl" />
             <img
               src={MATIX_SALUDANDO}
               alt="Matix, el personaje de Tradexpar, saludando"
-              loading="lazy"
-              className="relative mx-auto h-auto w-full drop-shadow-[0_18px_30px_rgba(0,0,0,0.35)]"
+              className="relative mx-auto h-auto w-full drop-shadow-[0_18px_30px_rgba(0,0,0,0.35)] motion-safe:animate-[matixFloat_3s_ease-in-out_infinite]"
             />
           </motion.div>
 

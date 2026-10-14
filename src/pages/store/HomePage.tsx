@@ -88,6 +88,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Financiación con Matix EN PORTADA (Ueno Bank / Financiera Paraguayo Japonesa) */}
+      <MatixFinanciacionSection />
+
       {/* Banner promocional */}
       <section className="w-full max-w-[100vw] overflow-hidden">
         <img
@@ -140,9 +143,6 @@ export default function HomePage() {
           />
         ))}
       </section>
-
-      {/* Financiación con Matix (Ueno Bank / Financiera Paraguayo Japonesa) */}
-      <MatixFinanciacionSection />
 
       {/* Benefits */}
       <section className="relative overflow-hidden">
