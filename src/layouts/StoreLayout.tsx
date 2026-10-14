@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { StoreNavbar } from "@/components/store/StoreNavbar";
 import { StoreFooter } from "@/components/store/StoreFooter";
+import { WhatsAppMatixButton } from "@/components/store/WhatsAppMatixButton";
 import { useEffect, useLayoutEffect } from "react";
 import { AffiliateBuyerDiscountProvider } from "@/contexts/AffiliateBuyerDiscountContext";
 import { syncAffiliateWithUrlSearch } from "@/lib/affiliate";
@@ -49,6 +50,7 @@ export function StoreLayout() {
           <Outlet />
         </main>
         <StoreFooter />
+        <WhatsAppMatixButton />
       </div>
     </AffiliateBuyerDiscountProvider>
   );

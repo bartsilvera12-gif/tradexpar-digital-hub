@@ -144,3 +144,8 @@
     -webkit-backdrop-filter: blur(20px);
   }
 }
+/* Flotar suave para el botón flotante de WhatsApp (Matix) — llamativo pero sutil. */
+@keyframes matixFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
