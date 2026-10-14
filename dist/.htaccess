@@ -1,21 +1,68 @@
-# SPA (React Router): /products, /admin, etc. deben servir index.html
-# Apache + mod_rewrite (Hostinger). Copiado a dist/ desde public/ al hacer build.
+# SPA (React Router + Vite) en Hostinger. Copiado a dist/ desde public/ al hacer build.
 #
-# Evita que index.html quede cacheado: sin esto el navegador/CDN puede seguir sirviendo
-# un index viejo que apunta a JS antiguo aunque subas assets nuevos.
+# Problema que resuelve:
+#   Al hacer `git pull` en Hostinger, los archivos se reemplazan uno a uno. Durante
+#   la ventana del pull, el navegador puede pedir /assets/index-<hashVIEJO>.js:
+#     · si el fallback envía esos chunks a /index.html → el browser recibe HTML
+#       en lugar de JS y la página queda en blanco ("Unexpected token '<'").
+#     · si el index.html queda cacheado apuntando a hashes viejos → mismo síntoma.
+#
+#   Por eso: assets JS/CSS/map SIEMPRE devuelven 404 real (nunca index.html);
+#   index.html SIEMPRE se revalida (nunca se cachea); los demás assets con hash
+#   se cachean 1 año.
+
+# ---------------------------------------------------------------------------
+# Cache headers
+# ---------------------------------------------------------------------------
 <IfModule mod_headers.c>
+  # index.html NUNCA se cachea: así el browser siempre pide los chunks correctos.
   <Files "index.html">
     Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
+    Header set Expires "0"
   </Files>
+
+  # Assets con hash (Vite): cacheables 1 año (immutable).
+  <FilesMatch "\.(js|mjs|css|map|woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
 </IfModule>
 
+# ---------------------------------------------------------------------------
+# MIME + compresión
+# ---------------------------------------------------------------------------
+<IfModule mod_mime.c>
+  AddType application/javascript        .js .mjs
+  AddType text/css                      .css
+  AddType application/json              .map .json
+  AddType font/woff2                    .woff2
+  AddType image/svg+xml                 .svg
+  AddType image/webp                    .webp
+  AddType image/avif                    .avif
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/javascript application/json image/svg+xml
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# Rewrite SPA
+# ---------------------------------------------------------------------------
 RewriteEngine On
 RewriteBase /
 
+# No reescribir index.html.
 RewriteRule ^index\.html$ - [L]
 
+# CRÍTICO: assets JS/CSS/mapa/fuente/imagen que no existen deben devolver 404
+# real (no HTML). Si Vite pide un chunk con hash viejo durante el deploy, el
+# browser verá 404 y podrá recuperarse; si recibe HTML, el bundle rompe y la
+# página queda en blanco.
+RewriteCond %{REQUEST_URI} \.(js|mjs|css|map|woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif|ico|json|txt)$ [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ - [R=404,L]
+
+# Fallback SPA: cualquier ruta que no sea un archivo o carpeta real → index.html.
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-
 RewriteRule . /index.html [L]
