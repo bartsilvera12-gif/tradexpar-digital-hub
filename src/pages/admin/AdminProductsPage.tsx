@@ -80,6 +80,7 @@ const emptyForm: Partial<Product> = {
   discount_ends_at: "",
   is_featured: false,
   is_viral: false,
+  video_url: "",
 };
 
 function imageUrlsForForm(p: Partial<Product>): string[] {
@@ -230,6 +231,7 @@ export default function AdminProductsPage() {
       discount_type: product.discount_type || null,
       is_featured: product.is_featured === true,
       is_viral: product.is_viral === true,
+      video_url: product.video_url || "",
     });
     setOpenForm(true);
   };
@@ -256,6 +258,7 @@ export default function AdminProductsPage() {
         stock_max: smax,
         is_featured: form.is_featured === true,
         is_viral: form.is_viral === true,
+        video_url: form.video_url?.trim() ? form.video_url.trim() : null,
       };
       if (editingId) {
         await tradexpar.adminUpdateProduct(editingId, payload);
@@ -733,6 +736,22 @@ export default function AdminProductsPage() {
                 onCheckedChange={(v) => setForm({ ...form, is_viral: v === true })}
                 aria-label="Marcar como producto viral"
               />
+            </div>
+            <div className={ADMIN_FORM_FIELD}>
+              <Label htmlFor="prod-video" className={ADMIN_FORM_LABEL}>
+                🎬 Link de video (solo destacados/virales)
+              </Label>
+              <Input
+                id="prod-video"
+                type="url"
+                className={ADMIN_FORM_CONTROL}
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={form.video_url || ""}
+                onChange={(e) => setForm({ ...form, video_url: e.target.value })}
+              />
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Pegá el link del video (YouTube u otro). Solo se muestra en la tienda si el producto está marcado como destacado o viral.
+              </p>
             </div>
             <div className="grid md:grid-cols-2 gap-3">
               <div className={ADMIN_FORM_FIELD}>

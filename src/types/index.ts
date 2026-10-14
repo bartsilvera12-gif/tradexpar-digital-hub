@@ -34,6 +34,8 @@ export interface Product {
   is_featured?: boolean;
   /** Si es true, aparece en la sección "Los más virales" del home. Manual, independiente del origen. */
   is_viral?: boolean;
+  /** Link de video (YouTube u otra plataforma). Solo se muestra en productos destacados o virales. */
+  video_url?: string | null;
 }
 
 export interface CartItem {

@@ -22,6 +22,7 @@ import { resolveProductImageSrc } from "@/lib/productImageUrl";
 import { productDescriptionPlainText } from "@/lib/productDescriptionText";
 import { parseFastraxDescription } from "@/lib/fastraxDescriptionParser";
 import { FastraxTechnicalSpecs } from "@/components/store/FastraxTechnicalSpecs";
+import { ProductVideoEmbed } from "@/components/store/ProductVideoEmbed";
 import { withAffiliateRef } from "@/lib/affiliate";
 
 function getProductImages(product: Product): string[] {
@@ -345,6 +346,9 @@ export default function ProductDetailPage() {
             </a>
           </div>
         </div>
+        {(product.is_featured || product.is_viral) && product.video_url ? (
+          <ProductVideoEmbed url={product.video_url} className="mt-8 sm:mt-10 lg:mt-12" />
+        ) : null}
       </motion.div>
     </div>
   );
