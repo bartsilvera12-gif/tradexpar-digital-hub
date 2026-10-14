@@ -6,6 +6,7 @@ import processStep2 from "@/assets/process-step2.jpg";
 import processStep3 from "@/assets/process-step3.jpg";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ViralProductRotatingSection } from "@/components/store/ViralProductRotatingSection";
+import { MatixFinanciacionSection } from "@/components/store/MatixFinanciacionSection";
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
@@ -139,6 +140,9 @@ export default function HomePage() {
           />
         ))}
       </section>
+
+      {/* Financiación con Matix (Ueno Bank / Financiera Paraguayo Japonesa) */}
+      <MatixFinanciacionSection />
 
       {/* Benefits */}
       <section className="relative overflow-hidden">
