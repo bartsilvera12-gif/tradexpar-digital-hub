@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CreditCard, CalendarClock, Sparkles, MessageCircle, Headphones } from "lucide-react";
+import { Sparkles, MessageCircle, Headphones } from "lucide-react";
 import { getWhatsAppDigits } from "@/config/whatsapp";
 
 /** Matix, personaje de Tradexpar (PNG transparente en public/images/matix). */
@@ -23,7 +23,6 @@ const planes = [
     logo: UENO_LOGO,
     titulo: "12 cuotas sin intereses",
     desc: "Pagá en 12 cuotas fijas con tu tarjeta Ueno, sin recargos ni intereses.",
-    icon: CreditCard,
     badge: "Sin intereses",
   },
   {
@@ -31,7 +30,6 @@ const planes = [
     logo: FPJ_LOGO,
     titulo: "Hasta 24 meses",
     desc: "Financiá tu compra hasta en 24 cuotas y empezá a pagar recién a los 60 días.",
-    icon: CalendarClock,
     badge: "1ª cuota a los 60 días",
   },
 ];
@@ -45,7 +43,7 @@ function BankLogo({ src, name }: { src: string; name: string }) {
         src={src}
         alt={name}
         onError={() => setOk(false)}
-        className="h-6 w-auto object-contain sm:h-7"
+        className="h-9 w-auto rounded-lg object-contain shadow-sm sm:h-10"
         loading="lazy"
       />
     );
@@ -142,11 +140,8 @@ export function MatixFinanciacionSection() {
                   transition={{ duration: 0.5 }}
                   className="group rounded-2xl border border-primary-foreground/10 bg-primary-foreground/[0.04] p-5 text-left backdrop-blur-md transition-all duration-500 hover:border-primary/40 hover:bg-primary-foreground/[0.08] sm:p-6"
                 >
-                  {/* Logo del banco (o nombre estilizado) */}
-                  <div className="flex h-8 items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl gradient-celeste text-primary-foreground">
-                      <p.icon className="h-5 w-5" />
-                    </span>
+                  {/* Logo del banco (o nombre estilizado si falta el PNG) */}
+                  <div className="flex items-center">
                     <BankLogo src={p.logo} name={p.banco} />
                   </div>
                   <p className="mt-4 text-xl font-bold text-primary-foreground sm:text-2xl">
