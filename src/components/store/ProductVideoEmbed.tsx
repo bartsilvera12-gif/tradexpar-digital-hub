@@ -8,6 +8,15 @@ function youtubeId(url: string): string | null {
   return m ? m[1] : null;
 }
 
+/** Extrae el ID de un archivo de Google Drive (link de compartir /file/d/ID/...). */
+function driveId(url: string): string | null {
+  const s = String(url);
+  const m = s.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/) ||
+    s.match(/drive\.google\.com\/open\?id=([A-Za-z0-9_-]+)/) ||
+    s.match(/drive\.google\.com\/uc\?(?:[^#]*&)?id=([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
 /**
  * Muestra el video del producto. Si el link es de YouTube, lo embebe (reproductor
  * 16:9 responsive). Si es de otra plataforma, muestra un botón "Ver video".
@@ -15,7 +24,13 @@ function youtubeId(url: string): string | null {
  * quien lo invoca).
  */
 export function ProductVideoEmbed({ url, className = "" }: { url: string; className?: string }) {
-  const id = youtubeId(url);
+  const ytId = youtubeId(url);
+  const gdId = ytId ? null : driveId(url);
+  const embedSrc = ytId
+    ? `https://www.youtube-nocookie.com/embed/${ytId}`
+    : gdId
+      ? `https://drive.google.com/file/d/${gdId}/preview`
+      : null;
 
   return (
     <section className={className}>
@@ -24,13 +39,13 @@ export function ProductVideoEmbed({ url, className = "" }: { url: string; classN
         Video del producto
       </h2>
 
-      {id ? (
+      {embedSrc ? (
         <div className="relative w-full overflow-hidden rounded-2xl border border-border bg-black shadow-sm [aspect-ratio:16/9]">
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${id}`}
+            src={embedSrc}
             title="Video del producto"
             loading="lazy"
-            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             className="absolute inset-0 h-full w-full"
           />
