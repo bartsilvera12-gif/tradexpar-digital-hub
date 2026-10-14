@@ -160,7 +160,7 @@ export function registerFastraxRoutes(app) {
     });
   });
 
-  app.get("/api/fastrax/version", requireApiKey, async (_req, res) => {
+  app.get("/api/fastrax/version", requireAdmin, async (_req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -171,7 +171,7 @@ export function registerFastraxRoutes(app) {
     return res.json({ ok: true, ope: 10, data: r.parsed });
   });
 
-  app.get("/api/fastrax/products/page", requireApiKey, async (req, res) => {
+  app.get("/api/fastrax/products/page", requireAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -213,7 +213,7 @@ export function registerFastraxRoutes(app) {
     return res.status(200).send(r.body);
   });
 
-  app.get("/api/admin/fastrax/products/search", requireApiKeyOrAdmin, async (req, res) => {
+  app.get("/api/admin/fastrax/products/search", requireAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -243,7 +243,7 @@ export function registerFastraxRoutes(app) {
    * Útil para paginar rápido en el admin; los detalles se cargan después con
    * `/products/details-batch` cuando el admin lo pida.
    */
-  app.get("/api/admin/fastrax/products/list-fast", requireApiKeyOrAdmin, async (req, res) => {
+  app.get("/api/admin/fastrax/products/list-fast", requireAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -266,7 +266,7 @@ export function registerFastraxRoutes(app) {
    * recibidos (max 500 por request). No persiste nada.
    * Body: { skus: string[], batch_size?: number, concurrency?: number }
    */
-  app.post("/api/admin/fastrax/products/details-batch", requireApiKeyOrAdmin, async (req, res) => {
+  app.post("/api/admin/fastrax/products/details-batch", requireAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -296,7 +296,7 @@ export function registerFastraxRoutes(app) {
    * GET /api/admin/fastrax/products/search-global — recorre páginas ope=4 (cap
    * duro 30) buscando q/sku, y enriquece con un único batch ope=2 final.
    */
-  app.get("/api/admin/fastrax/products/search-global", requireApiKeyOrAdmin, async (req, res) => {
+  app.get("/api/admin/fastrax/products/search-global", requireAdmin, async (req, res) => {
     if (!fastraxEnabled() || !fastraxConfigured()) {
       return res.status(503).json({ ok: false, error: "Fastrax no habilitado o no configurado" });
     }
@@ -438,7 +438,7 @@ export function registerFastraxRoutes(app) {
    * API de Fastrax). Sirve para arreglar en bulk despues de cambiar el mapper.
    * Body opcional: { fields: ["name","brand","category"] } (default: los 3).
    */
-  app.post("/api/admin/fastrax/reprocess-metadata", requireApiKeyOrAdmin, async (req, res) => {
+  app.post("/api/admin/fastrax/reprocess-metadata", requireAdmin, async (req, res) => {
     try {
       const sb = supabaseService();
       const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -505,7 +505,7 @@ export function registerFastraxRoutes(app) {
    * devuelve tamaños de respuesta, si el SKU aparece en cada una, y la fila
    * cruda si aparece. Útil para depurar credenciales/depósitos con soporte.
    */
-  app.get("/api/admin/fastrax/sync/probe", requireApiKeyOrAdmin, async (req, res) => {
+  app.get("/api/admin/fastrax/sync/probe", requireAdmin, async (req, res) => {
     const sku = String(req.query?.sku ?? "").trim();
     try {
       const [one, b, two] = await Promise.all([
@@ -599,7 +599,7 @@ export function registerFastraxRoutes(app) {
    * Estado de la sincronización automática para el panel: última corrida
    * (fecha/hora, estado, contadores), si hay una en curso y la marca "desde".
    */
-  app.get("/api/admin/fastrax/sync/status", requireApiKeyOrAdmin, async (_req, res) => {
+  app.get("/api/admin/fastrax/sync/status", requireAdmin, async (_req, res) => {
     try {
       const sb = supabaseService();
       const [{ run }, since] = await Promise.all([

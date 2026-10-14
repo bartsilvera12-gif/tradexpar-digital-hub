@@ -28,6 +28,22 @@ const headers: HeadersInit = {
   "Content-Type": "application/json",
 };
 
+/**
+ * JWT de la sesión admin (si existe). Permite que los endpoints administrativos
+ * exijan autenticación real del admin (Bearer) en vez de confiar solo en la
+ * `x-api-key` pública del bundle. Si no hay sesión (tienda pública), no agrega
+ * nada: las peticiones públicas siguen igual que antes.
+ */
+function adminAuthHeaders(): Record<string, string> {
+  try {
+    if (typeof sessionStorage === "undefined") return {};
+    const t = sessionStorage.getItem("tradexpar_admin_token")?.trim();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 function buildPaymentsUrl(path: string): string {
   const rel = path.startsWith("/") ? path : `/${path}`;
   if (RAW_PAYMENTS_API_BASE) {
@@ -128,7 +144,7 @@ async function apiFetch<T>(
   try {
     res = await fetch(url, {
       ...options,
-      headers: { ...headers, ...options?.headers },
+      headers: { ...headers, ...adminAuthHeaders(), ...options?.headers },
       signal,
     });
   } catch (e) {
