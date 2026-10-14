@@ -74,7 +74,7 @@ export default function HomePage() {
               <span className="text-gradient">de alto rendimiento</span>
             </h1>
             <p className="mb-5 sm:mb-6 max-w-md text-sm leading-relaxed text-muted-foreground [text-wrap:balance] sm:text-base sm:text-primary-foreground/70">
-              Accede a productos digitales premium con la confianza y tecnología de Tradexpar.
+              Accede a nuestra tienda digital con la confianza y tecnología de Tradexpar.
             </p>
             <Link
               to={withAffiliateRef("/products", refForLink)}
