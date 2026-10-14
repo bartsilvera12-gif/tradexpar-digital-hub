@@ -76,7 +76,15 @@ export function StoreFooter() {
 
         <div className="pt-6 border-t border-secondary-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-secondary-foreground/40">
-            Desarrollado por Neura
+            Desarrollado por{" "}
+            <a
+              href="https://neura.com.py"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-2 hover:underline hover:text-secondary-foreground/70 transition-colors"
+            >
+              Neura
+            </a>
           </p>
           <div className="flex items-center">
             <img
