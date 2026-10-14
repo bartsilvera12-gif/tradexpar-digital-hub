@@ -4,7 +4,7 @@ import { Sparkles, MessageCircle, Headphones } from "lucide-react";
 import { getWhatsAppDigits } from "@/config/whatsapp";
 
 /** Matix, personaje de Tradexpar (PNG transparente en public/images/matix). */
-const MATIX_SALUDANDO = "/images/matix/matix-saludando.png";
+const MATIX_SALUDANDO = "/images/matix/matix-saludando-v2.png";
 
 /**
  * Logos de los bancos aliados. Dejá los PNG (fondo transparente o blanco) en
