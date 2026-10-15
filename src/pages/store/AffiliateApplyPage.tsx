@@ -11,17 +11,28 @@ import { useAffiliatePortalLinkVisible } from "@/hooks/useAffiliatePortalLinkVis
 import { DDI } from "@/lib/ddiLabels";
 import { affiliatesAvailable, submitAffiliateRequest } from "@/services/affiliateTradexparService";
 
+/** Estilo de los <select> nativos, alineado al Input de la UI. */
+const selectClass =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
 export default function AffiliateApplyPage() {
   const { user } = useCustomerAuth();
   const showAffiliatePanel = useAffiliatePortalLinkVisible(user?.id);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    full_name: "",
+  const emptyForm = {
+    nombre: "",
+    apellido: "",
     email: "",
     phone: "",
-    document_id: "",
-    message: "",
-  });
+    cedula: "",
+    ruc: "",
+    ciudad: "",
+    instagram: "",
+    como_vende: "",
+    metodo_cobro: "",
+    motivo: "",
+  };
+  const [form, setForm] = useState(emptyForm);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,23 +40,36 @@ export default function AffiliateApplyPage() {
       toast.error(`El ${DDI.programa} no está configurado (Supabase).`);
       return;
     }
-    if (!form.full_name.trim() || !form.email.trim()) {
+    if (!form.nombre.trim() || !form.email.trim()) {
       toast.error("Nombre y correo son obligatorios.");
       return;
     }
     setLoading(true);
     try {
+      const fullName = [form.nombre.trim(), form.apellido.trim()].filter(Boolean).join(" ");
+      // Los campos extra (que el backend aún no guarda por columna) van en el mensaje,
+      // así el admin los recibe sin necesidad de migrar la base.
+      const extras = [
+        form.ruc.trim() && `RUC: ${form.ruc.trim()}`,
+        form.ciudad.trim() && `Ciudad: ${form.ciudad.trim()}`,
+        form.instagram.trim() && `Instagram: ${form.instagram.trim()}`,
+        form.como_vende && `¿Cómo planea vender?: ${form.como_vende}`,
+        form.metodo_cobro && `Método de cobro: ${form.metodo_cobro}`,
+        form.motivo.trim() && `Motivo: ${form.motivo.trim()}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
       await submitAffiliateRequest({
-        full_name: form.full_name,
+        full_name: fullName,
         email: form.email,
         phone: form.phone || undefined,
-        document_id: form.document_id || undefined,
-        message: form.message || undefined,
+        document_id: form.cedula || undefined,
+        message: extras || undefined,
       });
       toast.success(
         "Solicitud enviada. Cuando te aprueben, creá cuenta o entrá con el mismo correo en la tienda para abrir el panel."
       );
-      setForm({ full_name: "", email: "", phone: "", document_id: "", message: "" });
+      setForm(emptyForm);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "No se pudo enviar la solicitud.");
     } finally {
@@ -245,17 +269,27 @@ export default function AffiliateApplyPage() {
         <p className="text-sm text-destructive">Por el momento no se aceptan solicitudes en línea.</p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="full_name">Nombre completo</Label>
-            <Input
-              id="full_name"
-              value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              required
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="nombre">Nombre</Label>
+              <Input
+                id="nombre"
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="apellido">Apellido</Label>
+              <Input
+                id="apellido"
+                value={form.apellido}
+                onChange={(e) => setForm({ ...form, apellido: e.target.value })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Correo</Label>
+            <Label htmlFor="email">Correo electrónico</Label>
             <Input
               id="email"
               type="email"
@@ -265,29 +299,79 @@ export default function AffiliateApplyPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">Teléfono</Label>
+            <Label htmlFor="phone">WhatsApp / Teléfono</Label>
             <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="document_id">Documento de identidad</Label>
-            <Input
-              id="document_id"
-              value={form.document_id}
-              onChange={(e) => setForm({ ...form, document_id: e.target.value })}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cedula">Cédula de identidad</Label>
+              <Input
+                id="cedula"
+                value={form.cedula}
+                onChange={(e) => setForm({ ...form, cedula: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ruc">RUC</Label>
+              <Input id="ruc" value={form.ruc} onChange={(e) => setForm({ ...form, ruc: e.target.value })} />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="message">Mensaje (opcional)</Label>
+            <Label htmlFor="ciudad">Ciudad (Paraguay)</Label>
+            <Input id="ciudad" value={form.ciudad} onChange={(e) => setForm({ ...form, ciudad: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="instagram">Link de perfil de Instagram</Label>
+            <Input
+              id="instagram"
+              placeholder="https://instagram.com/tu_usuario"
+              value={form.instagram}
+              onChange={(e) => setForm({ ...form, instagram: e.target.value })}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="como_vende">¿Cómo planeás vender?</Label>
+              <select
+                id="como_vende"
+                value={form.como_vende}
+                onChange={(e) => setForm({ ...form, como_vende: e.target.value })}
+                className={selectClass}
+              >
+                <option value="">Seleccioná una opción</option>
+                <option>Redes sociales</option>
+                <option>WhatsApp</option>
+                <option>Sitio web propio</option>
+                <option>Presencial</option>
+                <option>Otro</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="metodo_cobro">Método de cobro preferido</Label>
+              <select
+                id="metodo_cobro"
+                value={form.metodo_cobro}
+                onChange={(e) => setForm({ ...form, metodo_cobro: e.target.value })}
+                className={selectClass}
+              >
+                <option value="">Seleccioná una opción</option>
+                <option>Transferencia bancaria</option>
+                <option>Billetera electrónica</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="motivo">¿Por qué querés ser D2? (opcional)</Label>
             <Textarea
-              id="message"
+              id="motivo"
               rows={3}
-              value={form.message}
-              onChange={(e) => setForm({ ...form, message: e.target.value })}
+              value={form.motivo}
+              onChange={(e) => setForm({ ...form, motivo: e.target.value })}
             />
           </div>
           <Button type="submit" className="w-full gradient-celeste" disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-            Enviar solicitud
+            Quiero ser D2
           </Button>
         </form>
       )}
