@@ -36,12 +36,17 @@ function expandAuriCase(match: string): string {
 }
 
 /**
- * Arregla "mojibake" (mala codificación) que trae Fastrax en algunos nombres:
- * la Ñ a veces llega como "¥" ("A¥O" → "AÑO", "DISE¥O" → "DISEÑO"). Solo de
- * presentación; no toca lo guardado en la base.
+ * Arregla "mojibake" (mala codificación) que trae Fastrax en algunos nombres.
+ * En estos nombres (casi todo en mayúsculas) la Ñ llega como "¥" o "¤"
+ * ("A¥O"/"ESTA¤O" → "AÑO"/"ESTAÑO") y el grado ° como "§" ("180§" → "180°").
+ * Solo de presentación; no toca lo guardado en la base.
  */
+const ENCODING_FIXES: Array<[RegExp, string]> = [
+  [/[¥¤]/g, "Ñ"],
+  [/§/g, "°"],
+];
 function fixEncoding(s: string): string {
-  return s.replace(/¥/g, "Ñ");
+  return ENCODING_FIXES.reduce((acc, [re, to]) => acc.replace(re, to), s);
 }
 
 /** Nombre del producto tal como se muestra al cliente en la tienda. */
