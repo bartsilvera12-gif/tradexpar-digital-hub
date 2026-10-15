@@ -71,15 +71,15 @@ export function MatixFinanciacionSection() {
             "radial-gradient(circle at 15% 50%, hsl(195 89% 47%) 0%, transparent 45%), radial-gradient(circle at 85% 30%, hsl(195 89% 60%) 0%, transparent 40%)",
         }}
       />
-      <div className="container mx-auto relative z-10 max-w-full py-12 sm:py-16 md:py-20">
-        <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,320px),1fr] lg:gap-12">
+      <div className="container mx-auto relative z-10 max-w-full py-8 sm:py-10 md:py-12">
+        <div className="grid items-center gap-5 lg:grid-cols-[minmax(0,260px),1fr] lg:gap-10">
           {/* Matix (saludo animado) */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.6 }}
-            className="relative mx-auto w-[210px] shrink-0 sm:w-[250px] lg:mx-0 lg:w-full lg:max-w-[340px]"
+            className="relative mx-auto w-[150px] shrink-0 sm:w-[180px] lg:mx-0 lg:w-full lg:max-w-[250px]"
           >
             <div className="pointer-events-none absolute inset-x-6 bottom-2 h-6 rounded-[50%] bg-black/30 blur-xl" />
             <img
@@ -102,35 +102,35 @@ export function MatixFinanciacionSection() {
               Asesor inteligente
             </motion.span>
 
-            <h2 className="mt-4 text-[clamp(1.35rem,3.5vw+0.4rem,2.75rem)] font-bold leading-tight text-primary-foreground [text-wrap:balance] sm:text-3xl lg:text-4xl">
+            <h2 className="mt-3 text-[clamp(1.2rem,2.6vw+0.4rem,2rem)] font-bold leading-tight text-primary-foreground [text-wrap:balance] sm:text-2xl lg:text-3xl">
               Conocé a <span className="text-gradient">Matix</span>, tu asesor
               siempre listo para ayudarte
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm text-primary-foreground/60 [text-wrap:balance] sm:text-base lg:mx-0">
+            <p className="mx-auto mt-2 max-w-xl text-sm text-primary-foreground/60 [text-wrap:balance] lg:mx-0">
               Matix te acompaña y asiste en todo: te ayuda a elegir, responde tus
               dudas y te muestra cómo financiar tu compra en cuotas con nuestros
               bancos aliados. 😄
             </p>
 
             {/* CTA para hablar con Matix */}
-            <div className="mt-5 flex flex-wrap justify-center gap-3 lg:justify-start">
+            <div className="mt-4 flex flex-wrap justify-center gap-2.5 lg:justify-start">
               <a
                 href={waHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-primary-foreground gradient-celeste shadow-brand transition-opacity hover:opacity-90"
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-primary-foreground gradient-celeste shadow-brand transition-opacity hover:opacity-90"
               >
                 <MessageCircle className="h-4 w-4" />
                 Consultá con Matix
               </a>
-              <span className="inline-flex items-center gap-2 rounded-xl border border-primary-foreground/15 px-4 py-3 text-sm font-medium text-primary-foreground/70">
+              <span className="inline-flex items-center gap-2 rounded-xl border border-primary-foreground/15 px-4 py-2.5 text-sm font-medium text-primary-foreground/70">
                 <Headphones className="h-4 w-4" />
                 Atención 24/7
               </span>
             </div>
 
             {/* Beneficios de financiación con los bancos aliados */}
-            <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {planes.map((p) => (
                 <motion.div
                   key={p.banco}
@@ -138,26 +138,26 @@ export function MatixFinanciacionSection() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-60px" }}
                   transition={{ duration: 0.5 }}
-                  className="group rounded-2xl border border-primary-foreground/10 bg-primary-foreground/[0.04] p-5 text-left backdrop-blur-md transition-all duration-500 hover:border-primary/40 hover:bg-primary-foreground/[0.08] sm:p-6"
+                  className="group rounded-2xl border border-primary-foreground/10 bg-primary-foreground/[0.04] p-4 text-left backdrop-blur-md transition-all duration-500 hover:border-primary/40 hover:bg-primary-foreground/[0.08] sm:p-5"
                 >
                   {/* Logo del banco (o nombre estilizado si falta el PNG) */}
                   <div className="flex items-center">
                     <BankLogo src={p.logo} name={p.banco} />
                   </div>
-                  <p className="mt-4 text-xl font-bold text-primary-foreground sm:text-2xl">
+                  <p className="mt-3 text-lg font-bold text-primary-foreground sm:text-xl">
                     {p.titulo}
                   </p>
                   <span className="mt-2 inline-block rounded-full bg-primary/15 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-wide text-primary-foreground/90">
                     {p.badge}
                   </span>
-                  <p className="mt-3 text-sm leading-relaxed text-primary-foreground/55">
+                  <p className="mt-2 text-sm leading-relaxed text-primary-foreground/55">
                     {p.desc}
                   </p>
                 </motion.div>
               ))}
             </div>
 
-            <p className="mt-5 text-xs text-primary-foreground/40 [text-wrap:balance]">
+            <p className="mt-4 text-xs text-primary-foreground/40 [text-wrap:balance]">
               Consultá las condiciones vigentes al finalizar tu compra. Sujeto a
               aprobación de cada entidad.
             </p>
