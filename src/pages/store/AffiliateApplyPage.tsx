@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Send, Wallet, Tag, Rocket, LayoutDashboard, ArrowRight } from "lucide-react";
+import { Loader2, Send, Percent, CalendarClock, Package, LayoutDashboard, Gift, Flame, ArrowRight, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,53 +55,73 @@ export default function AffiliateApplyPage() {
 
   const beneficios = [
     {
-      icon: Wallet,
-      title: "Ganá comisiones",
-      desc: "Cobrás una comisión por cada venta que llegue con tu enlace. Sin tope.",
+      icon: Percent,
+      title: "Bonificación de hasta 10%",
+      desc: "Ganás hasta el 10% por cada venta efectiva con tu enlace, según la categoría del producto. Sin tope.",
     },
     {
-      icon: Tag,
-      title: "Beneficio para tus clientes",
-      desc: "Quien compra con tu enlace accede a un precio especial. Todos ganan.",
+      icon: CalendarClock,
+      title: "Pagos quincenales",
+      desc: "Cobrás tus bonificaciones 2 veces al mes, por transferencia a tu cuenta bancaria.",
     },
     {
-      icon: Rocket,
-      title: "Sin inversión ni stock",
-      desc: "No comprás mercadería ni manejás envíos. Trabajás 100% online.",
+      icon: Package,
+      title: "+1.000 productos seleccionados",
+      desc: "Catálogo curado respaldado por +28.000 unidades en stock, con descuentos exclusivos para tus clientes.",
     },
     {
       icon: LayoutDashboard,
-      title: "Tu propio panel",
-      desc: "Seguí tus ventas, comisiones y enlaces desde un panel personal.",
+      title: "Panel D2",
+      desc: "Seguí tus ventas, bonificaciones y tu ranking D2 en tiempo real.",
+    },
+    {
+      icon: Gift,
+      title: "Caja TRADEXPAR Selection",
+      desc: "Los D2 seleccionados reciben cada mes una caja con un producto nuevo que se suma a su catálogo.",
+    },
+    {
+      icon: Flame,
+      title: "Productos virales",
+      desc: "Acceso a la sección de productos en tendencia en redes, listos para que los promociones.",
     },
   ];
 
   const pasos = [
-    { n: 1, title: "Completá el formulario", desc: "Dejanos tus datos acá abajo. Toma un minuto." },
-    { n: 2, title: "Te aprobamos", desc: "Revisamos tu solicitud y te damos tu código único." },
-    { n: 3, title: "Compartí tus enlaces", desc: "Usás tu enlace con ?ref=tu_codigo en redes, WhatsApp, donde quieras." },
-    { n: 4, title: "Ganá por cada compra", desc: "Cada venta con tu enlace suma tu comisión." },
+    { n: 1, title: "Registrate", desc: "Completá el formulario y activá tu cuenta como D2." },
+    { n: 2, title: "Recibí tu enlace", desc: "Obtenés un enlace único con seguimiento automático sobre +1.000 productos." },
+    { n: 3, title: "Compartí y vendé", desc: "Promocioná los productos en tus redes y contactos." },
+    { n: 4, title: "Cobrá tu bonificación", desc: "Recibí hasta el 10% por cada venta confirmada, quincenalmente." },
+  ];
+
+  const bonificacion = [
+    "Hasta 10% por venta efectiva y pagada (según categoría)",
+    "Pagos quincenales (2 veces al mes) por transferencia",
+    "Panel D2 con el detalle de tus bonificaciones",
+    "Sin tope de ganancias",
+    "12 cuotas sin intereses para tus clientes (ueno bank)",
+    "Requisito: emitir factura legal electrónica para cobrar",
   ];
 
   return (
     <div className="container mx-auto px-4 py-12 sm:py-16 max-w-5xl">
       {/* Intro */}
       <div className="text-center max-w-2xl mx-auto">
-        <span className="inline-block px-3.5 py-1.5 rounded-full text-[0.7rem] sm:text-xs font-semibold tracking-widest uppercase gradient-celeste text-primary-foreground mb-4">
-          {DDI.singular}
+        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[0.7rem] sm:text-xs font-semibold tracking-widest uppercase gradient-celeste text-primary-foreground mb-4">
+          ⚡ Powered by ueno bank · 12 cuotas sin intereses
         </span>
         <h1 className="text-[clamp(1.6rem,4vw+0.4rem,3rem)] font-bold text-foreground leading-tight [text-wrap:balance] mb-3">
-          Sumate y ganá compartiendo lo que ya te gusta
+          D2 by Tradexpar — <span className="text-gradient">Ingresos al cuadrado</span>
         </h1>
         <p className="text-muted-foreground text-sm sm:text-base [text-wrap:balance]">
-          Convertite en Distribuidor Digital Independiente de Tradexpar: compartís tus enlaces y
-          cobrás una comisión por cada venta. Sin invertir ni manejar stock.
+          D2 (D al cuadrado) = Distribuidores Digitales. Ganá hasta el <strong className="text-foreground">10% de bonificación</strong> por
+          cada venta con tu enlace personalizado. No es colaboración, es negocio: promocioná
+          tecnología premium y generá ingresos reales desde cualquier lugar.
         </p>
         <a
           href="#solicitud"
           className="mt-6 inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-primary-foreground gradient-celeste shadow-brand transition-opacity hover:opacity-90"
         >
-          Quiero sumarme
+          Quiero ser D2
           <ArrowRight className="h-4 w-4" />
         </a>
       </div>
@@ -109,9 +129,9 @@ export default function AffiliateApplyPage() {
       {/* Beneficios */}
       <div className="mt-12 sm:mt-16">
         <h2 className="text-center text-xl sm:text-2xl font-bold text-foreground mb-6 sm:mb-8">
-          ¿Por qué sumarte?
+          ¿Por qué ser D2?
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {beneficios.map((b) => (
             <div
               key={b.title}
@@ -142,6 +162,51 @@ export default function AffiliateApplyPage() {
               <p className="text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Bonificación + ejemplo */}
+      <div className="mt-12 sm:mt-16 grid gap-5 lg:grid-cols-[1fr,auto] lg:items-stretch">
+        <div className="rounded-2xl border border-border bg-card p-6 sm:p-7 shadow-sm">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-1">
+            Bonificación de hasta <span className="text-gradient">10%</span>
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Por cada venta efectiva y pagada a través de tu enlace. El porcentaje varía según la
+            categoría del producto.
+          </p>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {bonificacion.map((b) => (
+              <li key={b} className="flex items-start gap-2 text-sm text-foreground">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Ejemplo de monetización */}
+        <div className="rounded-2xl gradient-hero text-primary-foreground p-6 sm:p-7 flex flex-col justify-center lg:min-w-[260px]">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary-foreground/60 mb-3">
+            Ejemplo de monetización
+          </p>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-primary-foreground/60">Venta mensual</p>
+              <p className="text-lg font-bold">₲ 30.000.000</p>
+            </div>
+            <div>
+              <p className="text-xs text-primary-foreground/60">Tu bonificación (hasta 10%)</p>
+              <p className="text-2xl font-extrabold text-gradient">₲ 3.000.000</p>
+            </div>
+            <div>
+              <p className="text-xs text-primary-foreground/60">Estimado anual</p>
+              <p className="text-lg font-bold">₲ 36.000.000</p>
+            </div>
+          </div>
+          <p className="mt-4 text-[0.7rem] text-primary-foreground/50 leading-relaxed">
+            Cifras de ejemplo, no garantizadas. Dependen de tus ventas y de la categoría.
+          </p>
         </div>
       </div>
 
