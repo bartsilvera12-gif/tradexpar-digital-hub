@@ -7,7 +7,7 @@ import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
 import { searchProducts } from "@/lib/productSearch";
 import { isDisplayableCategory } from "@/lib/productHelpers";
-import { useIsMdUp } from "@/hooks/use-mobile";
+import { useIsXlUp } from "@/hooks/use-mobile";
 import logoIcon from "@/assets/logo-icon.png";
 import { CartDropdown } from "@/components/store/CartDropdown";
 import { useWishlist } from "@/contexts/WishlistContext";
@@ -47,8 +47,8 @@ export function StoreNavbar() {
   const cartAnchorDesktopRef = useRef<HTMLButtonElement>(null);
   const cartAnchorMobileRef = useRef<HTMLButtonElement>(null);
   const closeCart = useCallback(() => setCartOpen(false), []);
-  const mdUp = useIsMdUp();
-  const cartAnchorRef = mdUp ? cartAnchorDesktopRef : cartAnchorMobileRef;
+  const xlUp = useIsXlUp();
+  const cartAnchorRef = xlUp ? cartAnchorDesktopRef : cartAnchorMobileRef;
 
   const categories = [...new Set(allProducts.map((p) => p.category).filter(isDisplayableCategory))];
   const viralNavActive =
@@ -129,8 +129,8 @@ export function StoreNavbar() {
 
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 pt-[env(safe-area-inset-top)]">
-      <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 md:gap-0 md:flex-row md:items-center md:h-16 px-3 sm:px-5 md:px-8 lg:px-10 xl:px-12 py-2.5 md:py-0 md:gap-4 lg:gap-5 xl:gap-6 max-w-full">
-        <div className="flex w-full min-h-11 items-center justify-between gap-3 shrink-0 md:contents md:min-h-0">
+      <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-2 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between px-3 sm:px-5 md:px-8 lg:px-10 xl:px-12 py-2.5 xl:gap-x-6 xl:gap-y-2.5 max-w-full">
+        <div className="flex w-full min-h-11 items-center justify-between gap-3 shrink-0 xl:contents xl:min-h-0">
         {/* Logo */}
         <Link
           to={withAffiliateRef("/", refForNav)}
@@ -145,9 +145,9 @@ export function StoreNavbar() {
         {/* Search bar — desktop */}
         <div
           ref={searchRefDesktop}
-          className="hidden md:flex flex-1 min-w-0 justify-center px-2 lg:px-4 xl:px-6"
+          className="hidden xl:flex xl:order-last xl:basis-full min-w-0 justify-center px-2"
         >
-          <div className="w-full min-w-[17rem] max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
+          <div className="w-full max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
             <form
               onSubmit={handleSearchSubmit}
               className="flex w-full min-w-0 border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow"
@@ -224,7 +224,7 @@ export function StoreNavbar() {
         </div>
 
         {/* Escritorio: enlaces + separador + iconos pegados (sin hueco intermedio) */}
-        <div className="hidden md:flex shrink-0 items-center gap-2 lg:gap-3 min-w-0">
+        <div className="hidden xl:flex shrink-0 items-center gap-2 lg:gap-3 min-w-0">
           <nav className="flex items-center gap-4 lg:gap-5 xl:gap-6 min-w-0">
             <Link
               to={withAffiliateRef("/", refForNav)}
@@ -354,15 +354,15 @@ export function StoreNavbar() {
                   {totalItems}
                 </span>
               </button>
-              {mdUp ? (
+              {xlUp ? (
                 <CartDropdown open={cartOpen} onClose={closeCart} anchorRef={cartAnchorRef} />
               ) : null}
             </div>
           </div>
         </div>
 
-        {/* Móvil: iconos + menú (misma fila que el logo) */}
-        <div className="flex md:hidden items-center gap-0.5 sm:gap-2 shrink-0 ml-auto touch-manipulation">
+        {/* Móvil/tablet: iconos + menú (misma fila que el logo) */}
+        <div className="flex xl:hidden items-center gap-0.5 sm:gap-2 shrink-0 ml-auto touch-manipulation">
           {showAffiliateNav && (
             <Link
               to={withAffiliateRef("/afiliados/panel", refForNav)}
@@ -407,7 +407,7 @@ export function StoreNavbar() {
                 {totalItems}
               </span>
             </button>
-            {!mdUp ? (
+            {!xlUp ? (
               <CartDropdown open={cartOpen} onClose={closeCart} anchorRef={cartAnchorRef} />
             ) : null}
           </div>
@@ -424,10 +424,10 @@ export function StoreNavbar() {
         </div>
         </div>
 
-        {/* Búsqueda siempre visible en móvil (evita duplicar en el panel) */}
+        {/* Búsqueda siempre visible en móvil/tablet (evita duplicar en el panel) */}
         <div
           ref={searchRefMobile}
-          className="w-full md:hidden shrink-0"
+          className="w-full xl:hidden shrink-0"
         >
           <div className="relative">
             <form
@@ -513,7 +513,7 @@ export function StoreNavbar() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden border-t bg-card overflow-hidden"
+            className="xl:hidden border-t bg-card overflow-hidden"
           >
             <div className="max-h-[min(72vh,calc(100dvh-7rem))] overflow-y-auto overscroll-y-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <nav className="flex flex-col gap-1">

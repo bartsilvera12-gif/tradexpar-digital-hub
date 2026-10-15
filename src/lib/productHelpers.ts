@@ -50,16 +50,32 @@ function fixEncoding(s: string): string {
 }
 
 /**
+ * Algunos nombres llegaron URL-encodeados a la base ("A+B+C", "%2F" por "/").
+ * Los detectamos (tienen %XX, o "+" sin ningún espacio real) y los decodificamos.
+ */
+function maybeUrlDecode(s: string): string {
+  const looksEncoded = /%[0-9A-Fa-f]{2}/.test(s) || (s.includes("+") && !s.includes(" "));
+  if (!looksEncoded) return s;
+  try {
+    return decodeURIComponent(s.replace(/\+/g, " "));
+  } catch {
+    return s.replace(/\+/g, " ");
+  }
+}
+
+/**
  * Quita "ruido" de Fastrax de los nombres (solo presentación):
- *  - códigos internos: números SUELTOS de 6 dígitos (no pegados a letras, para
- *    no tocar modelos como "ST4000VX016"); van al final o en el medio.
+ *  - código interno: número de 6 dígitos SUELTO (entre espacios o bordes). No
+ *    toca modelos alfanuméricos ("ST4000VX016") ni referencias en paréntesis o
+ *    con guion ("(143142)", "71-(115043)"), que SÍ identifican al producto.
  *  - leyenda "N AÑO(S) GARANTIA".
- * Luego colapsa espacios dobles y limpia espacios antes de "," o "/".
+ *  - paréntesis que hubieran quedado vacíos.
  */
 function stripFastraxNoise(s: string): string {
   return s
-    .replace(/(^|[^0-9A-Za-z])\d{6}(?=[^0-9A-Za-z]|$)/g, "$1")
+    .replace(/(^|\s)\d{6}(?=\s|$)/g, "$1")
     .replace(/\s*\b\d+\s*AÑOS?\s+GARANTIA\b/gi, "")
+    .replace(/\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([,/])/g, "$1")
     .trim();
@@ -67,7 +83,8 @@ function stripFastraxNoise(s: string): string {
 
 /** Nombre del producto tal como se muestra al cliente en la tienda. */
 export function getDisplayProductName(name: string | null | undefined): string {
-  const fixed = fixEncoding(String(name ?? "")).replace(AURI_ABBREV_RE, expandAuriCase);
+  const decoded = maybeUrlDecode(String(name ?? ""));
+  const fixed = fixEncoding(decoded).replace(AURI_ABBREV_RE, expandAuriCase);
   return stripFastraxNoise(fixed);
 }
 
