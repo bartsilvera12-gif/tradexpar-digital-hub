@@ -55,7 +55,7 @@ export default function HomePage() {
         <img
           src={HERO_IMAGE_URL}
           alt="Tradexpar — Distribuidora digital"
-          className="relative z-0 block h-auto w-full max-w-full shrink-0 sm:max-h-[clamp(340px,52vh,560px)] sm:object-cover sm:object-top"
+          className="relative z-0 block h-auto w-full max-w-full shrink-0"
           sizes="100vw"
           fetchPriority="high"
           decoding="async"
