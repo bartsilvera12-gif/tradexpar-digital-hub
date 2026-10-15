@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Zap, Shield, Globe, TrendingUp, ChevronRight, ShoppingCart, Warehouse, Truck } from "lucide-react";
+import { ArrowRight, Shield, CreditCard, TrendingUp, ChevronRight, ShoppingCart, Warehouse, Truck } from "lucide-react";
 import processStep1 from "@/assets/process-step1.jpg";
 import processStep2 from "@/assets/process-step2.jpg";
 import processStep3 from "@/assets/process-step3.jpg";
@@ -10,6 +10,7 @@ import { MatixFinanciacionSection } from "@/components/store/MatixFinanciacionSe
 import { Loader, ErrorState, EmptyState } from "@/components/shared/Loader";
 import type { Product } from "@/types";
 import { useStoreCatalog } from "@/hooks/useStoreCatalog";
+import { isDisplayableCategory } from "@/lib/productHelpers";
 import { withAffiliateRef } from "@/lib/affiliate";
 
 /** Hero principal inicio — Cloudinary (ancho completo, altura natural: se ve el encuadre completo). */
@@ -21,9 +22,9 @@ const PROMO_BANNER_URL =
   "https://res.cloudinary.com/drupicep5/image/upload/v1777730635/a17a78c3-5f91-418e-bb92-93a45739fad2.png";
 
 const benefits = [
-  { icon: Zap, title: "Entrega inmediata", desc: "Productos digitales al instante" },
+  { icon: Truck, title: "Entrega a domicilio", desc: "Coordinamos el envío a la puerta de tu casa" },
   { icon: Shield, title: "100% Seguro", desc: "Pagos protegidos y verificados" },
-  { icon: Globe, title: "Acceso global", desc: "Disponible en cualquier momento" },
+  { icon: CreditCard, title: "Financiación en cuotas", desc: "Con Ueno Bank y Financiera Paraguayo Japonesa" },
   { icon: TrendingUp, title: "Soporte dedicado", desc: "Atención profesional continua" },
 ];
 
@@ -38,7 +39,7 @@ export default function HomePage() {
 
   const categoryMap = new Map<string, Product[]>();
   products.forEach((p) => {
-    if (!p.category) return;
+    if (!isDisplayableCategory(p.category)) return;
     if (!categoryMap.has(p.category)) categoryMap.set(p.category, []);
     categoryMap.get(p.category)!.push(p);
   });
@@ -54,7 +55,7 @@ export default function HomePage() {
         <img
           src={HERO_IMAGE_URL}
           alt="Tradexpar — Distribuidora digital"
-          className="relative z-0 block h-auto w-full max-w-full shrink-0"
+          className="relative z-0 block h-auto w-full max-w-full shrink-0 sm:max-h-[clamp(300px,46vh,480px)] sm:object-cover sm:object-center"
           sizes="100vw"
           fetchPriority="high"
           decoding="async"

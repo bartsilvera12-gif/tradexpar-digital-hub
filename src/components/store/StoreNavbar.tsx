@@ -147,7 +147,7 @@ export function StoreNavbar() {
           ref={searchRefDesktop}
           className="hidden md:flex flex-1 min-w-0 justify-center px-2 lg:px-4 xl:px-6"
         >
-          <div className="w-full max-w-md lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
+          <div className="w-full min-w-[17rem] max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-3xl relative">
             <form
               onSubmit={handleSearchSubmit}
               className="flex w-full min-w-0 border border-border/80 rounded-lg overflow-hidden bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring transition-shadow"

@@ -7,10 +7,14 @@ import type { CartItem, Product } from "@/types";
  */
 const CATEGORY_CODE_RE = /^\d+(?:[.,\s]+\d+)*$/;
 
-/** True si la categoría es un nombre mostrable (no vacío y no un código numérico de Fastrax). */
+/** Valores basura que a veces llegan como categoría (booleanos/nulos serializados). */
+const CATEGORY_JUNK = new Set(["false", "true", "null", "undefined", "nan", "none", "n/a", "-"]);
+
+/** True si la categoría es un nombre mostrable (no vacío, no un código numérico de Fastrax ni un valor basura). */
 export function isDisplayableCategory(category: string | null | undefined): boolean {
   const c = String(category ?? "").trim();
   if (!c) return false;
+  if (CATEGORY_JUNK.has(c.toLowerCase())) return false;
   return !CATEGORY_CODE_RE.test(c.replace(/\s+/g, ""));
 }
 
@@ -31,9 +35,18 @@ function expandAuriCase(match: string): string {
   return "Auricular";
 }
 
+/**
+ * Arregla "mojibake" (mala codificación) que trae Fastrax en algunos nombres:
+ * la Ñ a veces llega como "¥" ("A¥O" → "AÑO", "DISE¥O" → "DISEÑO"). Solo de
+ * presentación; no toca lo guardado en la base.
+ */
+function fixEncoding(s: string): string {
+  return s.replace(/¥/g, "Ñ");
+}
+
 /** Nombre del producto tal como se muestra al cliente en la tienda. */
 export function getDisplayProductName(name: string | null | undefined): string {
-  return String(name ?? "").replace(AURI_ABBREV_RE, expandAuriCase);
+  return fixEncoding(String(name ?? "")).replace(AURI_ABBREV_RE, expandAuriCase);
 }
 
 /**
