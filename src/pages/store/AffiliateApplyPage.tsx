@@ -20,8 +20,7 @@ export default function AffiliateApplyPage() {
   const showAffiliatePanel = useAffiliatePortalLinkVisible(user?.id);
   const [loading, setLoading] = useState(false);
   const emptyForm = {
-    nombre: "",
-    apellido: "",
+    razon_social: "",
     email: "",
     phone: "",
     cedula: "",
@@ -29,7 +28,6 @@ export default function AffiliateApplyPage() {
     ciudad: "",
     instagram: "",
     como_vende: "",
-    metodo_cobro: "",
     motivo: "",
   };
   const [form, setForm] = useState(emptyForm);
@@ -40,13 +38,13 @@ export default function AffiliateApplyPage() {
       toast.error(`El ${DDI.programa} no está configurado (Supabase).`);
       return;
     }
-    if (!form.nombre.trim() || !form.email.trim()) {
-      toast.error("Nombre y correo son obligatorios.");
+    if (!form.razon_social.trim() || !form.email.trim()) {
+      toast.error("Razón social y correo son obligatorios.");
       return;
     }
     setLoading(true);
     try {
-      const fullName = [form.nombre.trim(), form.apellido.trim()].filter(Boolean).join(" ");
+      const fullName = form.razon_social.trim();
       // Los campos extra (que el backend aún no guarda por columna) van en el mensaje,
       // así el admin los recibe sin necesidad de migrar la base.
       const extras = [
@@ -54,7 +52,7 @@ export default function AffiliateApplyPage() {
         form.ciudad.trim() && `Ciudad: ${form.ciudad.trim()}`,
         form.instagram.trim() && `Instagram: ${form.instagram.trim()}`,
         form.como_vende && `¿Cómo planea vender?: ${form.como_vende}`,
-        form.metodo_cobro && `Método de cobro: ${form.metodo_cobro}`,
+        "Método de cobro: Transferencia bancaria",
         form.motivo.trim() && `Motivo: ${form.motivo.trim()}`,
       ]
         .filter(Boolean)
@@ -111,7 +109,7 @@ export default function AffiliateApplyPage() {
   ];
 
   const pasos = [
-    { n: 1, title: "Registrate", desc: "Completá el formulario y activá tu cuenta como D2." },
+    { n: 1, title: "Solicitá tu acceso", desc: "Completá el formulario. Revisamos y aprobamos tu solicitud para activarte como D2." },
     { n: 2, title: "Recibí tu enlace", desc: "Obtenés un enlace único con seguimiento automático sobre +1.000 productos." },
     { n: 3, title: "Compartí y vendé", desc: "Promocioná los productos en tus redes y contactos." },
     { n: 4, title: "Cobrá tu bonificación", desc: "Recibí hasta el 10% por cada venta confirmada, quincenalmente." },
@@ -269,24 +267,15 @@ export default function AffiliateApplyPage() {
         <p className="text-sm text-destructive">Por el momento no se aceptan solicitudes en línea.</p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre</Label>
-              <Input
-                id="nombre"
-                value={form.nombre}
-                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="apellido">Apellido</Label>
-              <Input
-                id="apellido"
-                value={form.apellido}
-                onChange={(e) => setForm({ ...form, apellido: e.target.value })}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="razon_social">Razón social</Label>
+            <Input
+              id="razon_social"
+              placeholder="Nombre y apellido tal como figura en tu registro legal"
+              value={form.razon_social}
+              onChange={(e) => setForm({ ...form, razon_social: e.target.value })}
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Correo electrónico</Label>
@@ -329,35 +318,27 @@ export default function AffiliateApplyPage() {
               onChange={(e) => setForm({ ...form, instagram: e.target.value })}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="como_vende">¿Cómo planeás vender?</Label>
-              <select
-                id="como_vende"
-                value={form.como_vende}
-                onChange={(e) => setForm({ ...form, como_vende: e.target.value })}
-                className={selectClass}
-              >
-                <option value="">Seleccioná una opción</option>
-                <option>Redes sociales</option>
-                <option>WhatsApp</option>
-                <option>Sitio web propio</option>
-                <option>Presencial</option>
-                <option>Otro</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="metodo_cobro">Método de cobro preferido</Label>
-              <select
-                id="metodo_cobro"
-                value={form.metodo_cobro}
-                onChange={(e) => setForm({ ...form, metodo_cobro: e.target.value })}
-                className={selectClass}
-              >
-                <option value="">Seleccioná una opción</option>
-                <option>Transferencia bancaria</option>
-                <option>Billetera electrónica</option>
-              </select>
+          <div className="space-y-2">
+            <Label htmlFor="como_vende">¿Cómo planeás vender?</Label>
+            <select
+              id="como_vende"
+              value={form.como_vende}
+              onChange={(e) => setForm({ ...form, como_vende: e.target.value })}
+              className={selectClass}
+            >
+              <option value="">Seleccioná una opción</option>
+              <option>Redes sociales</option>
+              <option>WhatsApp</option>
+              <option>Sitio web propio</option>
+              <option>Presencial</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label>Método de cobro</Label>
+            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              Los pagos a los D2 se realizan únicamente por{" "}
+              <strong className="text-foreground font-medium">transferencia bancaria</strong>.
             </div>
           </div>
           <div className="space-y-2">
