@@ -49,9 +49,26 @@ function fixEncoding(s: string): string {
   return ENCODING_FIXES.reduce((acc, [re, to]) => acc.replace(re, to), s);
 }
 
+/**
+ * Quita "ruido" de Fastrax de los nombres (solo presentación):
+ *  - códigos internos: números SUELTOS de 6 dígitos (no pegados a letras, para
+ *    no tocar modelos como "ST4000VX016"); van al final o en el medio.
+ *  - leyenda "N AÑO(S) GARANTIA".
+ * Luego colapsa espacios dobles y limpia espacios antes de "," o "/".
+ */
+function stripFastraxNoise(s: string): string {
+  return s
+    .replace(/(^|[^0-9A-Za-z])\d{6}(?=[^0-9A-Za-z]|$)/g, "$1")
+    .replace(/\s*\b\d+\s*AÑOS?\s+GARANTIA\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,/])/g, "$1")
+    .trim();
+}
+
 /** Nombre del producto tal como se muestra al cliente en la tienda. */
 export function getDisplayProductName(name: string | null | undefined): string {
-  return fixEncoding(String(name ?? "")).replace(AURI_ABBREV_RE, expandAuriCase);
+  const fixed = fixEncoding(String(name ?? "")).replace(AURI_ABBREV_RE, expandAuriCase);
+  return stripFastraxNoise(fixed);
 }
 
 /**
