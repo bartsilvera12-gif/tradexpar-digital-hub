@@ -80,6 +80,7 @@ const emptyForm: Partial<Product> = {
   discount_ends_at: "",
   is_featured: false,
   is_viral: false,
+  price_locked: false,
 };
 
 function imageUrlsForForm(p: Partial<Product>): string[] {
@@ -230,6 +231,7 @@ export default function AdminProductsPage() {
       discount_type: product.discount_type || null,
       is_featured: product.is_featured === true,
       is_viral: product.is_viral === true,
+      price_locked: product.price_locked === true,
     });
     setOpenForm(true);
   };
@@ -256,6 +258,7 @@ export default function AdminProductsPage() {
         stock_max: smax,
         is_featured: form.is_featured === true,
         is_viral: form.is_viral === true,
+        price_locked: form.price_locked === true,
       };
       if (editingId) {
         await tradexpar.adminUpdateProduct(editingId, payload);
@@ -782,8 +785,39 @@ export default function AdminProductsPage() {
                   autoComplete="off"
                   placeholder="0"
                   value={formatGuaraniesInteger(form.price ?? 0)}
-                  onChange={(e) => setForm({ ...form, price: parseGuaraniesInput(e.target.value) })}
+                  onChange={(e) => {
+                    const nextPrice = parseGuaraniesInput(e.target.value);
+                    // Si es un producto Fastrax y el admin editó el precio a mano,
+                    // auto-bloqueamos para que el sync no lo pise cada 10 min.
+                    const autoLock =
+                      form.product_source_type === "fastrax" &&
+                      nextPrice !== (form.price ?? 0) &&
+                      form.price_locked !== true;
+                    setForm({
+                      ...form,
+                      price: nextPrice,
+                      ...(autoLock ? { price_locked: true } : null),
+                    });
+                  }}
                 />
+                {form.product_source_type === "fastrax" && (
+                  <label className="mt-1.5 flex items-start gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-3.5 w-3.5 accent-primary cursor-pointer"
+                      checked={form.price_locked === true}
+                      onChange={(e) => setForm({ ...form, price_locked: e.target.checked })}
+                      aria-label="Bloquear precio del sync automático de Fastrax"
+                    />
+                    <span>
+                      🔒 Bloquear este precio del sync automático de Fastrax
+                      <span className="block text-[11px] opacity-80">
+                        Si está activo, el sync sigue trayendo stock pero no toca el precio
+                        (se marca solo cuando editás el precio a mano).
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
               <div className={ADMIN_FORM_FIELD}>
                 <Label htmlFor="prod-stock" className={ADMIN_FORM_LABEL}>

@@ -363,7 +363,9 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   // 'tradexpar' o 'dropi' (stock propio del negocio, no dropshipping de Fastrax),
   // la sync automática NO debe tocar el stock. Cuando el admin vuelve a poner
   // origen 'fastrax', la sync vuelve a actualizar.
-  const sel = "id, external_sync_crc, product_source_type";
+  // Y price_locked: si está en true, el sync igual actualiza stock pero NO
+  // pisa price/cost (el admin fijó el precio manual y debe prevalecer).
+  const sel = "id, external_sync_crc, product_source_type, price_locked";
   let existing = null;
   if (opts.index) {
     // Mismo orden que las consultas de abajo: primero external_sku, después
@@ -422,13 +424,15 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
   }
 
   const now = new Date().toISOString();
-  // La sync automática AHORA refresca cost/price desde Fastrax (pedido del
-  // cliente: la lista nueva debe reflejarse en los precios). cost = costo Fastrax;
+  // La sync automática refresca cost/price desde Fastrax (pedido del cliente:
+  // la lista nueva debe reflejarse en los precios). cost = costo Fastrax;
   // price = precio de venta con margen (priceFromCost). Solo si Fastrax informó
-  // precio (>0), para no pisar un precio bueno con el 0 de una fila de saldo sin
-  // precio. Nota: esto sobrescribe ediciones manuales de precio en productos de
-  // origen 'fastrax'; para blindar un precio, cambiá el origen a 'tradexpar' (el
-  // filtro .or de abajo evita que la sync toque esos productos).
+  // precio (>0), para no pisar un precio bueno con el 0 de una fila de saldo
+  // sin precio. Para blindar un precio editado manualmente desde el panel, el
+  // admin puede: (a) marcar `price_locked=true` en el producto (sigue trayendo
+  // stock pero no toca precio), o (b) cambiar el origen a 'tradexpar'/'dropi'
+  // (el filtro .or de abajo evita que la sync toque esos productos).
+  const priceLocked = existing.price_locked === true;
   const patch = {
     stock: m.stock,
     external_active: active,
@@ -437,7 +441,7 @@ export async function upsertFastraxStockOnly(sb, m, opts = {}) {
     external_payload: m.external_payload,
     updated_at: now,
   };
-  if (Number(m.price) > 0) {
+  if (!priceLocked && Number(m.price) > 0) {
     patch.cost = m.price;
     patch.price = priceFromCost(m.price);
   }

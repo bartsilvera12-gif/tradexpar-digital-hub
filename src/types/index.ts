@@ -34,6 +34,8 @@ export interface Product {
   is_featured?: boolean;
   /** Si es true, aparece en la sección "Los más virales" del home. Manual, independiente del origen. */
   is_viral?: boolean;
+  /** Si es true, el sync automático de Fastrax NO pisa price/cost (sí stock). */
+  price_locked?: boolean;
 }
 
 export interface CartItem {

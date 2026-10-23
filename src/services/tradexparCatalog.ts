@@ -44,6 +44,7 @@ export function mapProductRow(row: Record<string, unknown>): Product {
     discount_value: row.discount_value != null ? Number(row.discount_value) : null,
     discount_starts_at: (row.discount_starts_at as string) ?? null,
     discount_ends_at: (row.discount_ends_at as string) ?? null,
+    price_locked: row.price_locked === true,
   };
 }
 
@@ -76,6 +77,7 @@ function toDbPatch(p: Partial<Product>): Record<string, unknown> {
   if (p.discount_ends_at !== undefined) {
     out.discount_ends_at = p.discount_ends_at === "" ? null : p.discount_ends_at;
   }
+  if (p.price_locked !== undefined) out.price_locked = p.price_locked === true;
   out.updated_at = new Date().toISOString();
   return out;
 }
