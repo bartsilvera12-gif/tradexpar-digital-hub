@@ -149,3 +149,10 @@
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
+
+/* Matix saludando en la portada: leve balanceo + flote (lee como un saludo). */
+@keyframes matixWave {
+  0%   { transform: translateY(0) rotate(-2deg); }
+  50%  { transform: translateY(-7px) rotate(2.5deg); }
+  100% { transform: translateY(0) rotate(-2deg); }
+}

@@ -1,7 +1,7 @@
 import { getWhatsAppDigits } from "@/config/whatsapp";
 
-/** Avatar de Matix (PNG transparente). */
-const MATIX_AVATAR = "/images/matix/matix-pulgar.png";
+/** Avatar de Matix recortado (cara + pulgar, sin la mano suelta de la secuencia). */
+const MATIX_AVATAR = "/images/matix/matix-avatar.png";
 
 const GREETING = "¡Hola Matix! 👋 Vengo desde la web de Tradexpar y quería hacer una consulta.";
 
@@ -27,20 +27,20 @@ export function WhatsAppMatixButton() {
       </span>
 
       {/* Burbuja con Matix + glifo WhatsApp */}
-      <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] shadow-[0_8px_24px_-4px_rgba(37,211,102,0.6)] transition-transform duration-300 group-hover:scale-105 group-active:scale-95 sm:h-16 sm:w-16">
+      <span className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-[#25D366] shadow-[0_8px_24px_-4px_rgba(37,211,102,0.6)] transition-transform duration-300 group-hover:scale-105 group-active:scale-95 sm:h-24 sm:w-24">
         {/* Anillo pulsante */}
         <span className="absolute inset-0 animate-ping rounded-full bg-[#25D366] opacity-30" />
-        {/* Avatar de Matix (cabeza visible con object-top) */}
+        {/* Avatar de Matix (ya recortado a cara + pulgar) */}
         <img
           src={MATIX_AVATAR}
           alt=""
           aria-hidden="true"
           loading="lazy"
-          className="relative h-full w-full rounded-full object-cover object-top"
+          className="relative h-full w-full rounded-full object-cover object-center"
         />
         {/* Glifo WhatsApp */}
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow sm:h-7 sm:w-7">
-          <svg viewBox="0 0 32 32" className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true">
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow sm:h-10 sm:w-10">
+          <svg viewBox="0 0 32 32" className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true">
             <path
               fill="#25D366"
               d="M16 3C9.4 3 4 8.4 4 15c0 2.1.6 4.1 1.6 5.9L4 29l8.3-1.6c1.7.9 3.6 1.4 5.7 1.4 6.6 0 12-5.4 12-12S22.6 3 16 3z"

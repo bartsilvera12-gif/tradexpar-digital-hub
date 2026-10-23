@@ -17,11 +17,13 @@ import {
   getStockLabel,
   buildWhatsAppProductLink,
   isNewProduct,
+  isDisplayableCategory,
 } from "@/lib/productHelpers";
 import { resolveProductImageSrc } from "@/lib/productImageUrl";
 import { productDescriptionPlainText } from "@/lib/productDescriptionText";
 import { parseFastraxDescription } from "@/lib/fastraxDescriptionParser";
 import { FastraxTechnicalSpecs } from "@/components/store/FastraxTechnicalSpecs";
+import { ProductVideoEmbed } from "@/components/store/ProductVideoEmbed";
 import { withAffiliateRef } from "@/lib/affiliate";
 
 function getProductImages(product: Product): string[] {
@@ -245,9 +247,11 @@ export default function ProductDetailPage() {
 
         {/* Details */}
         <div className="flex flex-col justify-center min-w-0 pt-1 sm:pt-0">
-          <p className="text-[10px] sm:text-xs uppercase tracking-wider text-primary font-semibold mb-2 line-clamp-1">
-            {product.category}
-          </p>
+          {isDisplayableCategory(product.category) && (
+            <p className="text-[10px] sm:text-xs uppercase tracking-wider text-primary font-semibold mb-2 line-clamp-1">
+              {product.category}
+            </p>
+          )}
           {isNewProduct(product) && (
             <span className="inline-flex w-fit mb-2 items-center rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/15 via-primary/10 to-transparent px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary shadow-sm backdrop-blur-sm">
               Nuevo
@@ -345,6 +349,9 @@ export default function ProductDetailPage() {
             </a>
           </div>
         </div>
+        {(product.is_featured || product.is_viral) && product.video_url ? (
+          <ProductVideoEmbed url={product.video_url} className="mt-8 sm:mt-10 lg:mt-12" />
+        ) : null}
       </motion.div>
     </div>
   );

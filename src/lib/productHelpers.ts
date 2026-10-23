@@ -7,10 +7,14 @@ import type { CartItem, Product } from "@/types";
  */
 const CATEGORY_CODE_RE = /^\d+(?:[.,\s]+\d+)*$/;
 
-/** True si la categoría es un nombre mostrable (no vacío y no un código numérico de Fastrax). */
+/** Valores basura que a veces llegan como categoría (booleanos/nulos serializados). */
+const CATEGORY_JUNK = new Set(["false", "true", "null", "undefined", "nan", "none", "n/a", "-"]);
+
+/** True si la categoría es un nombre mostrable (no vacío, no un código numérico de Fastrax ni un valor basura). */
 export function isDisplayableCategory(category: string | null | undefined): boolean {
   const c = String(category ?? "").trim();
   if (!c) return false;
+  if (CATEGORY_JUNK.has(c.toLowerCase())) return false;
   return !CATEGORY_CODE_RE.test(c.replace(/\s+/g, ""));
 }
 
@@ -31,9 +35,57 @@ function expandAuriCase(match: string): string {
   return "Auricular";
 }
 
+/**
+ * Arregla "mojibake" (mala codificación) que trae Fastrax en algunos nombres.
+ * En estos nombres (casi todo en mayúsculas) la Ñ llega como "¥" o "¤"
+ * ("A¥O"/"ESTA¤O" → "AÑO"/"ESTAÑO") y el grado ° como "§" ("180§" → "180°").
+ * Solo de presentación; no toca lo guardado en la base.
+ */
+const ENCODING_FIXES: Array<[RegExp, string]> = [
+  [/[¥¤]/g, "Ñ"],
+  [/§/g, "°"],
+];
+function fixEncoding(s: string): string {
+  return ENCODING_FIXES.reduce((acc, [re, to]) => acc.replace(re, to), s);
+}
+
+/**
+ * Algunos nombres llegaron URL-encodeados a la base ("A+B+C", "%2F" por "/").
+ * Los detectamos (tienen %XX, o "+" sin ningún espacio real) y los decodificamos.
+ */
+function maybeUrlDecode(s: string): string {
+  const looksEncoded = /%[0-9A-Fa-f]{2}/.test(s) || (s.includes("+") && !s.includes(" "));
+  if (!looksEncoded) return s;
+  try {
+    return decodeURIComponent(s.replace(/\+/g, " "));
+  } catch {
+    return s.replace(/\+/g, " ");
+  }
+}
+
+/**
+ * Quita "ruido" de Fastrax de los nombres (solo presentación):
+ *  - código interno: número de 6 dígitos SUELTO (entre espacios o bordes). No
+ *    toca modelos alfanuméricos ("ST4000VX016") ni referencias en paréntesis o
+ *    con guion ("(143142)", "71-(115043)"), que SÍ identifican al producto.
+ *  - leyenda "N AÑO(S) GARANTIA".
+ *  - paréntesis que hubieran quedado vacíos.
+ */
+function stripFastraxNoise(s: string): string {
+  return s
+    .replace(/(^|\s)\d{6}(?=\s|$)/g, "$1")
+    .replace(/\s*\b\d+\s*AÑOS?\s+GARANTIA\b/gi, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,/])/g, "$1")
+    .trim();
+}
+
 /** Nombre del producto tal como se muestra al cliente en la tienda. */
 export function getDisplayProductName(name: string | null | undefined): string {
-  return String(name ?? "").replace(AURI_ABBREV_RE, expandAuriCase);
+  const decoded = maybeUrlDecode(String(name ?? ""));
+  const fixed = fixEncoding(decoded).replace(AURI_ABBREV_RE, expandAuriCase);
+  return stripFastraxNoise(fixed);
 }
 
 /**
