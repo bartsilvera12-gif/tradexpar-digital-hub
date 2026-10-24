@@ -243,6 +243,12 @@ export default function ProductDetailPage() {
               ))}
             </div>
           )}
+
+          {/* Video justo debajo de las fotos: antes quedaba al final de la grilla
+           *  (en celular, después del precio y el botón de comprar) y casi nadie lo veía. */}
+          {(product.is_featured || product.is_viral) && product.video_url ? (
+            <ProductVideoEmbed url={product.video_url} className="mt-6 sm:mt-8" />
+          ) : null}
         </div>
 
         {/* Details */}
@@ -349,9 +355,6 @@ export default function ProductDetailPage() {
             </a>
           </div>
         </div>
-        {(product.is_featured || product.is_viral) && product.video_url ? (
-          <ProductVideoEmbed url={product.video_url} className="mt-8 sm:mt-10 lg:mt-12" />
-        ) : null}
       </motion.div>
     </div>
   );
