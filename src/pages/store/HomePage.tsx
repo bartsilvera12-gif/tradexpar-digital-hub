@@ -24,7 +24,7 @@ const PROMO_BANNER_URL =
 const benefits = [
   { icon: Truck, title: "Entrega a domicilio", desc: "Coordinamos el envío a la puerta de tu casa" },
   { icon: Shield, title: "100% Seguro", desc: "Pagos protegidos y verificados" },
-  { icon: CreditCard, title: "Financiación en cuotas", desc: "Con Ueno Bank y Financiera Paraguayo Japonesa" },
+  { icon: CreditCard, title: "Financiación en cuotas", desc: "Con Financiera Paraguayo Japonesa" },
   { icon: TrendingUp, title: "Soporte dedicado", desc: "Atención profesional continua" },
 ];
 
@@ -89,7 +89,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Financiación con Matix EN PORTADA (Ueno Bank / Financiera Paraguayo Japonesa) */}
+      {/* Financiación con Matix EN PORTADA (Financiera Paraguayo Japonesa) */}
       <MatixFinanciacionSection />
 
       {/* Banner promocional */}

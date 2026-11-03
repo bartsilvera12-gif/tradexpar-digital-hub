@@ -120,7 +120,7 @@ export default function AffiliateApplyPage() {
     "Pagos quincenales (2 veces al mes) por transferencia",
     "Panel D2 con el detalle de tus bonificaciones",
     "Sin tope de ganancias",
-    "12 cuotas sin intereses para tus clientes (ueno bank)",
+    "Financiación hasta 24 meses para tus clientes (Financiera Paraguayo Japonesa)",
     "Requisito: emitir factura legal electrónica para cobrar",
   ];
 
@@ -129,7 +129,7 @@ export default function AffiliateApplyPage() {
       {/* Intro */}
       <div className="text-center max-w-2xl mx-auto">
         <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[0.7rem] sm:text-xs font-semibold tracking-widest uppercase gradient-celeste text-primary-foreground mb-4">
-          ⚡ Powered by ueno bank · 12 cuotas sin intereses
+          ⚡ Financiación con Financiera Paraguayo Japonesa · hasta 24 meses
         </span>
         <h1 className="text-[clamp(1.6rem,4vw+0.4rem,3rem)] font-bold text-foreground leading-tight [text-wrap:balance] mb-3">
           D2 by Tradexpar — <span className="text-gradient">Ingresos al cuadrado</span>

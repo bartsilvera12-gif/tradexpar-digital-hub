@@ -7,24 +7,16 @@ import { getWhatsAppDigits } from "@/config/whatsapp";
 const MATIX_SALUDANDO = "/images/matix/matix-saludando-v2.png";
 
 /**
- * Logos de los bancos aliados. Dejá los PNG (fondo transparente o blanco) en
- * public/images/bancos/ con estos nombres y se muestran solos. Si el archivo
+ * Logo del banco aliado. Dejá el PNG (fondo transparente o blanco) en
+ * public/images/bancos/ con este nombre y se muestra solo. Si el archivo
  * no existe todavía, se muestra el nombre del banco estilizado.
  */
-const UENO_LOGO = "/images/bancos/ueno-bank.png";
 const FPJ_LOGO = "/images/bancos/financiera-paraguayo-japonesa.png";
 
 const GREETING =
   "¡Hola Matix! 👋 Vengo desde la web de Tradexpar y quería una recomendación.";
 
 const planes = [
-  {
-    banco: "Ueno Bank",
-    logo: UENO_LOGO,
-    titulo: "12 cuotas sin intereses",
-    desc: "Pagá en 12 cuotas fijas con tu tarjeta Ueno, sin recargos ni intereses.",
-    badge: "Sin intereses",
-  },
   {
     banco: "Financiera Paraguayo Japonesa",
     logo: FPJ_LOGO,
@@ -55,8 +47,8 @@ function BankLogo({ src, name }: { src: string; name: string }) {
 
 /**
  * Sección de portada con Matix como asesor inteligente de Tradexpar: acompaña,
- * asiste y recomienda (incluida la financiación con los bancos aliados —
- * Ueno Bank y Financiera Paraguayo Japonesa). Estilo de marca (gradiente azul).
+ * asiste y recomienda (incluida la financiación con el aliado financiero —
+ * Financiera Paraguayo Japonesa). Estilo de marca (gradiente azul).
  */
 export function MatixFinanciacionSection() {
   const waHref = `https://wa.me/${getWhatsAppDigits()}?text=${encodeURIComponent(GREETING)}`;
@@ -108,8 +100,8 @@ export function MatixFinanciacionSection() {
             </h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-primary-foreground/60 [text-wrap:balance] lg:mx-0">
               Matix te acompaña y asiste en todo: te ayuda a elegir, responde tus
-              dudas y te muestra cómo financiar tu compra en cuotas con nuestros
-              bancos aliados. 😄
+              dudas y te muestra cómo financiar tu compra en cuotas con nuestro
+              aliado financiero. 😄
             </p>
 
             {/* CTA para hablar con Matix */}
@@ -129,8 +121,8 @@ export function MatixFinanciacionSection() {
               </span>
             </div>
 
-            {/* Beneficios de financiación con los bancos aliados */}
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {/* Beneficios de financiación con el banco aliado */}
+            <div className="mt-5 grid gap-3 sm:max-w-md lg:mx-0 mx-auto">
               {planes.map((p) => (
                 <motion.div
                   key={p.banco}
