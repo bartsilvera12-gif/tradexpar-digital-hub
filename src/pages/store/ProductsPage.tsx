@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Flame, Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
@@ -40,6 +40,19 @@ export default function ProductsPage() {
   });
   /** Con término de búsqueda, ordena por relevancia (coincidencia en el nombre primero). */
   const filtered = search.trim() ? sortByRelevance(matched, search) : matched;
+
+  /**
+   * Paginación en el cliente: renderizar las ~1200 tarjetas de una vez trababa el
+   * celular (el panel de filtros no abría). Mostramos de a tandas con "Ver más".
+   */
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // Al cambiar cualquier filtro o la búsqueda, volvemos a mostrar desde el inicio.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, category, source, offersOnly, viralOnly]);
+  const visible = filtered.slice(0, visibleCount);
+  const hasMore = filtered.length > visible.length;
 
   const setCategory = (cat: string) => {
     if (cat === "all") searchParams.delete("category");
@@ -201,11 +214,24 @@ export default function ProductsPage() {
         </div>
       )}
       {!loading && !error && filtered.length > 0 && (
-        <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 xs:gap-3 sm:gap-4 md:gap-5 min-w-0">
-          {filtered.map((p, i) => (
-            <ProductCard key={p.id} product={p} index={i} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 xs:gap-3 sm:gap-4 md:gap-5 min-w-0">
+            {visible.map((p, i) => (
+              <ProductCard key={p.id} product={p} index={i} />
+            ))}
+          </div>
+          {hasMore && (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-primary-foreground gradient-celeste shadow-brand transition-opacity hover:opacity-90"
+              >
+                Ver más productos ({filtered.length - visible.length})
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { ShoppingCart, Plus, Minus, Heart } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { useCart } from "@/contexts/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { toastCartAdded } from "@/lib/cartToast";
 import { useWishlist } from "@/contexts/WishlistContext";
 import {
@@ -27,7 +27,7 @@ interface ProductCardProps {
   index?: number;
 }
 
-export function ProductCard({ product, index = 0 }: ProductCardProps) {
+function ProductCardBase({ product, index = 0 }: ProductCardProps) {
   const { addItem } = useCart();
   const { has, toggle } = useWishlist();
   useTrackAffiliateBuyerProduct(product.id);
@@ -59,7 +59,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.04 }}
+      transition={{ duration: 0.3, delay: Math.min(index, 8) * 0.03 }}
       className="group relative bg-card rounded-lg sm:rounded-xl overflow-hidden border hover:shadow-card-hover transition-shadow duration-300 h-full min-w-0 flex flex-col"
     >
       {/* Image area */}
@@ -209,3 +209,10 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     </motion.div>
   );
 }
+
+/**
+ * Memoizada: el catálogo renderiza muchas tarjetas; sin memo, abrir el panel de
+ * filtros (u otro cambio de estado del padre) re-renderizaba todas y trababa el
+ * celular. Con props estables (product, index) React las saltea.
+ */
+export const ProductCard = memo(ProductCardBase);
