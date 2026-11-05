@@ -63,7 +63,18 @@ export default function ProductsPage() {
     setSearchParams(searchParams);
   };
 
-  const hasActiveFilters = category !== "all" || source !== "all" || offersOnly || viralOnly;
+  const hasActiveFilters =
+    category !== "all" || source !== "all" || offersOnly || viralOnly || search.trim() !== "";
+
+  /** Resetea TODOS los filtros, incluida la búsqueda, para volver al catálogo completo. */
+  const clearAllFilters = () => {
+    searchParams.delete("category");
+    searchParams.delete("source");
+    searchParams.delete("offers");
+    searchParams.delete("viral");
+    searchParams.delete("q");
+    setSearchParams(searchParams);
+  };
 
   return (
     <div className="container mx-auto py-5 sm:py-8 min-w-0 max-w-full pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
@@ -163,13 +174,7 @@ export default function ProductsPage() {
           </div>
           {hasActiveFilters && (
             <button
-              onClick={() => {
-                searchParams.delete("category");
-                searchParams.delete("source");
-                searchParams.delete("offers");
-                searchParams.delete("viral");
-                setSearchParams(searchParams);
-              }}
+              onClick={clearAllFilters}
               className="text-sm text-primary hover:underline flex items-center gap-1"
             >
               <X className="h-3.5 w-3.5" /> Limpiar filtros
@@ -182,7 +187,18 @@ export default function ProductsPage() {
       {loading && <Loader text="Cargando productos..." />}
       {error && <ErrorState message={error} onRetry={fetchProducts} />}
       {!loading && !error && filtered.length === 0 && (
-        <EmptyState title="Sin resultados" description="No se encontraron productos con esos filtros." />
+        <div className="flex flex-col items-center">
+          <EmptyState title="Sin resultados" description="No se encontraron productos con esos filtros." />
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="-mt-2 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-primary-foreground gradient-celeste shadow-brand transition-opacity hover:opacity-90"
+            >
+              <X className="h-4 w-4" /> Limpiar filtros y ver todo
+            </button>
+          )}
+        </div>
       )}
       {!loading && !error && filtered.length > 0 && (
         <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 xs:gap-3 sm:gap-4 md:gap-5 min-w-0">
